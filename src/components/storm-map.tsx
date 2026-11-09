@@ -3,23 +3,30 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Check } from "lucide-react";
 import { toast } from "sonner";
+import { StormCellPopup } from "@/components/storm-popup/cell-popup";
 import { HailPointPopup, type CanvassPin } from "@/components/storm-popup/hail-point-popup";
-import { JobPinPopup, type StormJobPin } from "@/components/storm-popup/job-pin-popup";
+import { JobPinPopup, type CrewOnSite, type StormJobPin } from "@/components/storm-popup/job-pin-popup";
 import { RadarCellPopup } from "@/components/storm-popup/radar-popup";
+import { StormReportPopup } from "@/components/storm-popup/report-popup";
+import { PopupPill, type PopupArrow } from "@/components/storm-popup/shell";
+import { WarningPopup } from "@/components/storm-popup/warning-popup";
 import { clusterJobPins, crewMapLabel, PROJECT_MAP_CENTER, type CrewFreshness } from "@/lib/project-map";
 import { loadRadarCell } from "@/lib/weather/client";
 import { alertDrawRank, alertKind, alertPaint } from "@/lib/weather/alerts";
-import { geometryBBox, pointInGeometry } from "@/lib/weather/geometry";
+import { cellGrowthNote, cellKind, cellMoving, projectCell, snapshotCell, type CellSnapshot } from "@/lib/weather/cells";
+import { geometryBBox, milesBetween, pointInGeometry } from "@/lib/weather/geometry";
 import { HAIL_BINS, hailBin } from "@/lib/weather/hail";
-import type { OutlookArea, OutlookProduct, StormReport, WeatherAlert } from "@/lib/weather/types";
+import { hailReports, jobsWithin, nearestReportTo, warningsAt } from "@/lib/weather/overlays";
+import type { OutlookArea, OutlookProduct, StormCell, StormReport, WeatherAlert } from "@/lib/weather/types";
 import { RadarDeskChrome, type RadarAlertCard } from "@/components/radar-desk-chrome";
 import {
+  formatChicagoShortClock,
   formatChipDate,
   formatHailInches,
   hailAtPoint,
   hoverReadout,
-  outerBand,
   popupPanDelta,
   toPopupHit,
   type HailPopupHit,
@@ -37,6 +44,9 @@ const STAGE_LEGEND = [
 
 const PAD_TOP = 112;
 const PAD_BOTTOM = 72;
+const POPUP_GAP = 14;
+const FLASH_MS = 3000;
+const FORECAST_MINUTES = [15, 30, 45] as const;
 
 type MapCrewMarker = {
   staffId: string;
@@ -51,14 +61,23 @@ const NO_STORMS: HailStorm[] = [];
 const NO_OUTLOOKS: OutlookArea[] = [];
 const NO_ALERTS: WeatherAlert[] = [];
 const NO_REPORTS: StormReport[] = [];
+const NO_CELLS: StormCell[] = [];
 const NO_CREW: MapCrewMarker[] = [];
+const NO_SITES: Record<string, CrewOnSite> = {};
 
 type OpenPopup =
   | { kind: "loading"; lat: number; lng: number }
   | { kind: "error"; lat: number; lng: number; message: string }
   | { kind: "hail"; lat: number; lng: number; hits: HailPopupHit[] }
   | { kind: "job"; id: string }
-  | { kind: "radar"; lat: number; lng: number; dbz: number; site: string; hailChance: string };
+  | { kind: "radar"; lat: number; lng: number; dbz: number; site: string; scanAt: string }
+  | { kind: "cell"; id: string }
+  | { kind: "warning"; id: string; lat: number; lng: number }
+  | { kind: "report"; id: string };
+
+type Placement = { left: number; top: number; arrow: PopupArrow };
+
+type Flash = { text: string; coords: string; tone: "clear" | "note" };
 
 const OUTLOOK_NAME: Record<OutlookProduct, string> = {
   hail: "Hail",
@@ -73,18 +92,25 @@ export function StormMap({
   focusId,
   rotation,
   onDropLead,
-  onLogVisit,
+  onOpenJob,
+  onWarnCrew,
+  onNotifyWarning,
+  onAttachHail,
   outlooks = NO_OUTLOOKS,
   alerts = NO_ALERTS,
   reports = NO_REPORTS,
+  cells = NO_CELLS,
   showHail = true,
   showOutlook = false,
   showWarnings = true,
   showPins = true,
+  showCells = true,
   crew = NO_CREW,
+  crewSites = NO_SITES,
   showCrew = false,
   selectedStaffId = null,
   onSelectCrew,
+  canNotify = false,
   embedded = false,
   fitTo = "storms",
   fitKey = "",
@@ -102,19 +128,31 @@ export function StormMap({
   focusId?: string | null;
   rotation?: { url: string; bounds: { west: number; south: number; east: number; north: number } } | null;
   onDropLead: (lat: number, lng: number) => Promise<void>;
-  onLogVisit: (jobId: string) => Promise<void>;
+  onOpenJob: (jobId: string) => void;
+  /** Office text to the crew that is out on a roof right now. */
+  onWarnCrew: () => Promise<void>;
+  /** Office text to everyone with a job inside the warning polygon. */
+  onNotifyWarning: (alertId: string) => Promise<void>;
+  /** Save the radar hail estimate on the job as a claim note. */
+  onAttachHail: (jobId: string, hit: HailPopupHit) => Promise<void>;
   outlooks?: OutlookArea[];
   alerts?: WeatherAlert[];
   reports?: StormReport[];
+  /** Latest NEXRAD storm cells. Tags, forecast points, and job-card threats come from these. */
+  cells?: StormCell[];
   showHail?: boolean;
   showOutlook?: boolean;
   /** County watches and warning polygons. Independent of the SPC outlook. */
   showWarnings?: boolean;
   showPins?: boolean;
+  showCells?: boolean;
   crew?: MapCrewMarker[];
+  /** Jobs with a crew phone checked in on site, by job id. */
+  crewSites?: Record<string, CrewOnSite>;
   showCrew?: boolean;
   selectedStaffId?: string | null;
   onSelectCrew?: (id: string) => void;
+  canNotify?: boolean;
   /** Field map: no "Storm Map" title, fit to jobs instead of swaths. */
   embedded?: boolean;
   fitTo?: "storms" | "pins";
@@ -125,7 +163,7 @@ export function StormMap({
   swathReady?: boolean;
   fullscreen?: boolean;
   onToggleFullscreen?: () => void;
-  onLayer?: (layer: "radar" | "warnings" | "hail" | "pins" | "outlook", next: boolean) => void;
+  onLayer?: (layer: "radar" | "warnings" | "hail" | "pins" | "outlook" | "cells", next: boolean) => void;
   onPopupChange?: (open: boolean) => void;
   radarSite?: string;
 }) {
@@ -136,11 +174,13 @@ export function StormMap({
   const moveAt = useRef(0);
   const showRadarRef = useRef(showRadar);
   const showHailRef = useRef(showHail);
+  const showWarningsRef = useRef(showWarnings);
   const fitToRef = useRef(fitTo);
   const embeddedRef = useRef(embedded);
   const onSelectCrewRef = useRef(onSelectCrew);
   const hiddenRef = useRef<string[]>([]);
   const stormsRef = useRef<HailStorm[]>([]);
+  const alertsRef = useRef<WeatherAlert[]>([]);
   const pinsRef = useRef<StormJobPin[]>([]);
   const swathReadyRef = useRef(swathReady);
   const onPopupChangeRef = useRef(onPopupChange);
@@ -155,16 +195,28 @@ export function StormMap({
   const [zoom, setZoom] = useState(9);
   const [hover, setHover] = useState<{ text: string; coords: string } | null>(null);
   const [popup, setPopup] = useState<OpenPopup | null>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [pos, setPos] = useState<Placement | null>(null);
+  const [flash, setFlash] = useState<Flash | null>(null);
   const [dropping, setDropping] = useState(false);
-  const [logging, setLogging] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [watched, setWatched] = useState<Record<string, CellSnapshot>>({});
+  const watchedRef = useRef(watched);
+  const lookupToken = useRef(0);
   const storms = liveStorms ?? NO_STORMS;
   const hiddenSet = new Set(hidden);
   const anchor = useMemo(() => {
     if (!popup) return null;
     if (popup.kind === "job") return pinPoint(pins, popup.id);
+    if (popup.kind === "cell") {
+      const cell = cells.find((item) => cellKey(item) === popup.id);
+      return cell ? { lat: cell.lat, lng: cell.lng } : null;
+    }
+    if (popup.kind === "report") {
+      const report = reports.find((item) => item.id === popup.id);
+      return report ? { lat: report.lat, lng: report.lng } : null;
+    }
     return { lat: popup.lat, lng: popup.lng };
-  }, [pins, popup]);
+  }, [cells, pins, popup, reports]);
   const anchorKey = anchor ? `${anchor.lat.toFixed(5)},${anchor.lng.toFixed(5)}` : "";
   const placeRef = useRef<() => void>(() => undefined);
   const pannedKey = useRef("");
@@ -183,36 +235,68 @@ export function StormMap({
     }).map(toPopupHit);
   }, []);
 
-  const lookup = useCallback(async (lat: number, lng: number) => {
-    if (!showHailRef.current) return;
-    if (!swathReadyRef.current) {
-      setPopup({ kind: "error", lat, lng, message: "The NOAA hail grid is still loading." });
-      return;
-    }
-    setPopup({ kind: "loading", lat, lng });
-    const zoomNow = mapRef.current?.getZoom() ?? 8;
-    const hits = lookupHail(lat, lng);
-    const radar = showRadarRef.current ? await loadRadarCell(lat, lng, zoomNow).catch(() => null) : null;
-    const hiddenNow = new Set(hiddenRef.current);
-    const visible = hits.some((hit) => !hiddenNow.has(hit.stormId));
-    const covered = hits.some((hit) => hiddenNow.has(hit.stormId));
-    if (visible || covered || !radar?.active || radar.dbz == null) {
-      setPopup({ kind: "hail", lat, lng, hits });
-      return;
-    }
-    setPopup({
-      kind: "radar",
-      lat,
-      lng,
-      dbz: radar.dbz,
-      site: radar.radarSite || "KFWS",
-      hailChance: radar.hailChance || "Low",
-    });
-  }, [lookupHail]);
+  const warningsHere = useCallback((lat: number, lng: number) => {
+    return warningsAt(alertsRef.current, (alert) => pointInGeometry(lng, lat, alert.geometry));
+  }, []);
+
+  const lookup = useCallback(
+    async (lat: number, lng: number) => {
+      const coords = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      if (showWarningsRef.current) {
+        const warning = warningsHere(lat, lng)[0];
+        if (warning) {
+          setPopup({ kind: "warning", id: warning.id, lat, lng });
+          return;
+        }
+      }
+      const wantHail = showHailRef.current;
+      const wantRadar = showRadarRef.current;
+      if (!wantHail && !wantRadar) return;
+      if (wantHail && !swathReadyRef.current && !wantRadar) {
+        setFlash({ text: "The NOAA hail grid is still loading.", coords, tone: "note" });
+        return;
+      }
+      const token = ++lookupToken.current;
+      const hits = wantHail && swathReadyRef.current ? lookupHail(lat, lng) : [];
+      const hiddenNow = new Set(hiddenRef.current);
+      const visible = hits.some((hit) => !hiddenNow.has(hit.stormId));
+      const covered = hits.some((hit) => hiddenNow.has(hit.stormId));
+      if (visible || covered) {
+        setPopup({ kind: "hail", lat, lng, hits });
+        return;
+      }
+      if (!wantRadar) {
+        setPopup(null);
+        setFlash({ text: "No hail here", coords, tone: "clear" });
+        return;
+      }
+      setPopup({ kind: "loading", lat, lng });
+      const zoomNow = mapRef.current?.getZoom() ?? 8;
+      const sampledAt = new Date().toISOString();
+      const radar = await loadRadarCell(lat, lng, zoomNow).catch(() => null);
+      if (token !== lookupToken.current) return;
+      if (radar?.active && radar.dbz != null) {
+        setPopup({ kind: "radar", lat, lng, dbz: radar.dbz, site: radar.radarSite || "KFWS", scanAt: sampledAt });
+        return;
+      }
+      setPopup(null);
+      if (!radar) {
+        setFlash({ text: "Couldn't read the radar here · try again", coords, tone: "note" });
+        return;
+      }
+      setFlash({
+        text: wantHail && !swathReadyRef.current ? "No precip here · hail grid still loading" : wantHail ? "No precip or hail here" : "No precip here",
+        coords,
+        tone: "clear",
+      });
+    },
+    [lookupHail, warningsHere],
+  );
 
   useLayoutEffect(() => {
     showRadarRef.current = showRadar;
     showHailRef.current = showHail;
+    showWarningsRef.current = showWarnings;
     fitToRef.current = fitTo;
     embeddedRef.current = embedded;
     onSelectCrewRef.current = onSelectCrew;
@@ -220,10 +304,12 @@ export function StormMap({
     frameIndexRef.current = frameIndex;
     hiddenRef.current = hidden;
     stormsRef.current = storms;
+    alertsRef.current = alerts;
     pinsRef.current = pins;
     swathReadyRef.current = swathReady;
     anchorRef.current = anchor;
     lookupRef.current = lookup;
+    watchedRef.current = watched;
     placeRef.current = () => {
       const map = mapRef.current;
       const node = popupRef.current;
@@ -231,20 +317,35 @@ export function StormMap({
       if (!map || !current) return;
       const point = map.latLngToContainerPoint([current.lat, current.lng]);
       const size = map.getSize();
-      const width = node?.offsetWidth ?? Math.min(320, size.x - 48);
-      const height = node?.offsetHeight ?? 420;
+      const width = node?.offsetWidth ?? Math.min(300, size.x - 48);
+      const height = node?.offsetHeight ?? 400;
       let left = point.x - width / 2;
-      let top = point.y - height - 14;
-      if (top < PAD_TOP) top = point.y + 14;
+      let top = point.y - height - POPUP_GAP;
+      let side: PopupArrow["side"] = "bottom";
+      if (top < PAD_TOP) {
+        top = point.y + POPUP_GAP;
+        side = "top";
+      }
       left = Math.max(12, Math.min(left, size.x - width - 12));
-      const next = { left: Math.round(left), top: Math.round(top) };
-      setPos((currentPos) => (currentPos && currentPos.left === next.left && currentPos.top === next.top ? currentPos : next));
+      const arrowLeft = Math.max(16, Math.min(point.x - left, width - 16));
+      const next: Placement = { left: Math.round(left), top: Math.round(top), arrow: { side, left: Math.round(arrowLeft) } };
+      setPos((currentPos) =>
+        currentPos && currentPos.left === next.left && currentPos.top === next.top && currentPos.arrow.side === next.arrow.side && currentPos.arrow.left === next.arrow.left
+          ? currentPos
+          : next,
+      );
     };
-  }, [anchor, embedded, fitTo, frameIndex, hidden, lookup, onPopupChange, onSelectCrew, pins, showHail, showRadar, storms, swathReady]);
+  }, [alerts, anchor, embedded, fitTo, frameIndex, hidden, lookup, onPopupChange, onSelectCrew, pins, showHail, showRadar, showWarnings, storms, swathReady, watched]);
 
   useEffect(() => {
     onPopupChangeRef.current?.(Boolean(popup));
   }, [popup]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const timer = window.setTimeout(() => setFlash(null), FLASH_MS);
+    return () => window.clearTimeout(timer);
+  }, [flash]);
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -269,6 +370,8 @@ export function StormMap({
     const radarPane = map.createPane("radar");
     radarPane.style.zIndex = "350";
     radarPane.style.pointerEvents = "none";
+    const cellPane = map.createPane("cells");
+    cellPane.style.zIndex = "420";
     mapRef.current = map;
     const onZoom = () => setZoom(map.getZoom());
     const onMove = () => placeRef.current();
@@ -348,6 +451,17 @@ export function StormMap({
     };
   }, [showHail, storms, hidden]);
 
+  const warnedPinIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (!showWarnings) return ids;
+    const warnings = alerts.filter((alert) => alert.geometry && (alert.kind ?? alertKind(alert.event)) === "warning");
+    if (!warnings.length) return ids;
+    for (const pin of pins) {
+      if (warnings.some((alert) => pointInGeometry(pin.lng, pin.lat, alert.geometry))) ids.add(pin.id);
+    }
+    return ids;
+  }, [alerts, pins, showWarnings]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !showPins) return;
@@ -360,11 +474,12 @@ export function StormMap({
     for (const cluster of clusters) {
       const members = pins.filter((pin) => cluster.jobIds.includes(pin.id));
       if (members.length > 1) {
+        const warnedCount = members.filter((pin) => warnedPinIds.has(pin.id)).length;
         const icon = L.divIcon({
           className: "project-map-cluster",
           iconSize: [36, 36],
           iconAnchor: [18, 18],
-          html: `<button type="button" class="project-map-cluster-btn" aria-label="${members.length} jobs">${members.length}</button>`,
+          html: `<button type="button" class="project-map-cluster-btn${warnedCount ? " is-warned" : ""}" aria-label="${members.length} jobs${warnedCount ? `, ${warnedCount} in a warning` : ""}">${members.length}</button>`,
         });
         const marker = L.marker([cluster.lat, cluster.lng], { icon, zIndexOffset: 200 });
         marker.on("click", (event) => {
@@ -379,11 +494,12 @@ export function StormMap({
       const pin = members[0];
       if (!pin) continue;
       const selected = popup?.kind === "job" && popup.id === pin.id;
+      const warned = warnedPinIds.has(pin.id);
       const icon = L.divIcon({
-        className: "project-map-pin",
+        className: `project-map-pin${warned ? " is-warned" : ""}`,
         iconSize: [18, 18],
         iconAnchor: [9, 9],
-          html: `<button type="button" aria-label="${escapeAttr(pin.code || pin.name)}" style="width:18px;height:18px;border-radius:999px;border:${selected ? `3px solid ${pinBorder}` : "2px solid #fff"};background:${pin.color};box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer"></button>`,
+        html: `<button type="button" aria-label="${escapeAttr(pin.customer || pin.code || pin.name)}${warned ? " (in a warning)" : ""}" class="project-map-pin-btn" style="border:${selected ? `3px solid ${pinBorder}` : "2px solid #fff"};background:${pin.color}"></button>`,
       });
       const marker = L.marker([pin.lat, pin.lng], { icon, zIndexOffset: selected ? 400 : 100 });
       marker.on("click", (event) => {
@@ -396,7 +512,7 @@ export function StormMap({
     return () => {
       map.removeLayer(group);
     };
-  }, [pins, popup, showPins, zoom]);
+  }, [pins, popup, showPins, warnedPinIds, zoom]);
 
   const rotationUrl = rotation?.url ?? null;
   const rotationSouth = rotation?.bounds.south;
@@ -445,12 +561,12 @@ export function StormMap({
       }).addTo(group);
     }
     for (const report of reports) {
-      const hail = report.kind === "hail";
+      if (report.kind === "hail") continue;
       L.circleMarker([report.lat, report.lng], {
-        radius: hail ? 5 : 4,
+        radius: 4,
         color: "#181818",
         weight: 1,
-        fillColor: hail ? "#7e22ce" : report.kind === "tornado" ? "#7f1d1d" : "#2563eb",
+        fillColor: report.kind === "tornado" ? "#7f1d1d" : "#2563eb",
         fillOpacity: 0.9,
         interactive: false,
       }).addTo(group);
@@ -459,6 +575,89 @@ export function StormMap({
       map.removeLayer(group);
     };
   }, [outlooks, reports, showOutlook]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !(showHail || showOutlook)) return;
+    const group = L.layerGroup().addTo(map);
+    for (const report of hailReports(reports)) {
+      const selected = popup?.kind === "report" && popup.id === report.id;
+      const icon = L.divIcon({
+        className: "storm-report",
+        iconSize: [18, 18],
+        iconAnchor: [9, 12],
+        html: `<button type="button" class="storm-report-btn${selected ? " is-selected" : ""}" aria-label="${escapeAttr(`Hail report ${report.inches?.toFixed(2) ?? ""} in${report.city ? ` near ${report.city}` : ""}`)}"><span class="storm-report-tri"></span></button>`,
+      });
+      const marker = L.marker([report.lat, report.lng], { icon, zIndexOffset: selected ? 450 : 150 });
+      marker.on("click", (event) => {
+        L.DomEvent.stopPropagation(event);
+        ignoreUntil.current = Date.now() + 450;
+        setPopup({ kind: "report", id: report.id });
+      });
+      marker.addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [popup, reports, showHail, showOutlook]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !showCells || !cells.length) return;
+    const group = L.layerGroup().addTo(map);
+    const towns = pins.filter((pin) => pin.city.trim());
+    for (const cell of cells) {
+      const key = cellKey(cell);
+      const kind = cellKind(cell);
+      const selected = popup?.kind === "cell" && popup.id === key;
+      if (cellMoving(cell)) {
+        const path = [L.latLng(cell.lat, cell.lng), ...FORECAST_MINUTES.map((minutes) => {
+          const point = projectCell(cell, minutes);
+          return L.latLng(point.lat, point.lng);
+        })];
+        L.polyline(path, { pane: "cells", color: "#ffffff", weight: 1.5, opacity: 0.7, dashArray: "4 5", interactive: false }).addTo(group);
+        for (const minutes of FORECAST_MINUTES) {
+          const point = projectCell(cell, minutes);
+          const at = formatChicagoShortClock(new Date(Date.parse(cell.valid) + minutes * 60_000).toISOString());
+          const near = nearestTown(towns, point.lat, point.lng);
+          const dot = L.circleMarker([point.lat, point.lng], {
+            pane: "cells",
+            radius: 4,
+            color: "#ffffff",
+            weight: 1.5,
+            fillColor: "#171a21",
+            fillOpacity: 1,
+          });
+          dot.bindTooltip(
+            `<span class="storm-forecast-line">${escapeHtml(cell.id)} · +${minutes} min · ${escapeHtml(at)}</span><span class="storm-forecast-sub">${near ? `Near ${escapeHtml(near)} · ` : ""}cone ±3 mi</span>`,
+            { direction: "top", offset: [0, -6], className: "storm-forecast-tip", opacity: 1 },
+          );
+          dot.on("click", (event) => {
+            L.DomEvent.stopPropagation(event);
+            ignoreUntil.current = Date.now() + 450;
+            dot.openTooltip();
+          });
+          dot.addTo(group);
+        }
+      }
+      const icon = L.divIcon({
+        className: "storm-cell",
+        iconSize: [34, 22],
+        iconAnchor: [17, 11],
+        html: `<button type="button" class="storm-cell-tag${kind === "supercell" ? " is-rotating" : kind === "multicell" ? " is-hail" : ""}${selected ? " is-selected" : ""}" aria-label="${escapeAttr(`Storm cell ${cell.id}`)}">${escapeHtml(cell.id)}</button>`,
+      });
+      const marker = L.marker([cell.lat, cell.lng], { icon, zIndexOffset: selected ? 700 : 500 });
+      marker.on("click", (event) => {
+        L.DomEvent.stopPropagation(event);
+        ignoreUntil.current = Date.now() + 450;
+        setPopup({ kind: "cell", id: key });
+      });
+      marker.addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [cells, pins, popup, showCells]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -475,12 +674,13 @@ export function StormMap({
         style: (feature) => {
           const alert = feature?.properties as WeatherAlert | undefined;
           const paint = alertPaint(alert ?? { event: "" });
+          const selected = popup?.kind === "warning" && popup.id === alert?.id;
           return {
             color: paint.stroke,
-            weight: paint.weight,
+            weight: selected ? paint.weight + 1.5 : paint.weight,
             opacity: 0.95,
             fillColor: paint.fill,
-            fillOpacity: paint.fillOpacity,
+            fillOpacity: selected ? Math.min(0.6, paint.fillOpacity + 0.12) : paint.fillOpacity,
             dashArray: paint.dash,
           };
         },
@@ -489,7 +689,7 @@ export function StormMap({
     return () => {
       map.removeLayer(group);
     };
-  }, [alerts, showWarnings]);
+  }, [alerts, popup, showWarnings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -590,7 +790,7 @@ export function StormMap({
     const current = anchorRef.current;
     const key = popup && current ? `${popup.kind}:${anchorKey}` : "";
     if (!map || !node || !current || !key) return;
-    if (pannedKey.current !== key) {
+    if (pannedKey.current !== key && popup?.kind !== "loading") {
       pannedKey.current = key;
       const point = map.latLngToContainerPoint([current.lat, current.lng]);
       const size = map.getSize();
@@ -636,6 +836,43 @@ export function StormMap({
     map.flyTo([pin.lat, pin.lng], Math.max(map.getZoom(), fitTo === "pins" ? 14 : 12), { duration: 0.45 });
   }, [fitTo, focusId, pins]);
 
+  useEffect(() => {
+    const saved = watchedRef.current;
+    const keys = Object.keys(saved);
+    if (!keys.length || !cells.length) return;
+    let changed = false;
+    const next = { ...saved };
+    for (const key of keys) {
+      const cell = cells.find((item) => cellKey(item) === key);
+      const before = saved[key];
+      if (!cell || !before) continue;
+      const note = cellGrowthNote(before, cell);
+      if (note) {
+        toast.warning(note);
+        next[key] = snapshotCell(cell);
+        changed = true;
+      }
+    }
+    if (changed) setWatched(next);
+  }, [cells]);
+
+  const toggleWatch = useCallback((cell: StormCell | null) => {
+    if (!cell) {
+      toast.message("No storm cell is tracked near this point yet.");
+      return;
+    }
+    const key = cellKey(cell);
+    setWatched((current) => {
+      if (current[key]) {
+        const { [key]: _gone, ...rest } = current;
+        void _gone;
+        return rest;
+      }
+      return { ...current, [key]: snapshotCell(cell) };
+    });
+    if (!watchedRef.current[key]) toast.message(`Watching cell ${cell.id}. You'll get a note here if it grows.`);
+  }, []);
+
   const alertCards = useMemo(() => {
     const cards: RadarAlertCard[] = [];
     for (const alert of alerts) {
@@ -666,11 +903,24 @@ export function StormMap({
     );
   }, [alerts]);
 
+  const run = useCallback((task: () => Promise<void>, then?: () => void) => {
+    setBusy(true);
+    void task()
+      .then(() => then?.())
+      .catch(() => undefined)
+      .finally(() => setBusy(false));
+  }, []);
+
   const job = popup?.kind === "job" ? pins.find((pin) => pin.id === popup.id) : undefined;
+  const openCell = popup?.kind === "cell" ? cells.find((cell) => cellKey(cell) === popup.id) : undefined;
+  const openWarning = popup?.kind === "warning" ? alerts.find((alert) => alert.id === popup.id) : undefined;
+  const openReport = popup?.kind === "report" ? reports.find((report) => report.id === popup.id) : undefined;
   const ordered = [...storms].sort((a, b) => b.stormDate.localeCompare(a.stormDate));
   const outlookRows = outlookLegend(outlooks);
   const desk = embedded || fullscreen;
   const hailDock = fullscreen ? "top-16 left-48" : "top-[22rem] left-3 lg:top-3 lg:left-48";
+  const crewJobIds = useMemo(() => new Set(Object.keys(crewSites)), [crewSites]);
+  const arrow = pos?.arrow ?? null;
 
   return (
     <div className={`relative h-full min-h-0 w-full ${embedded && !fullscreen ? "" : "bg-[#0e1116] text-white"}`}>
@@ -684,6 +934,8 @@ export function StormMap({
           showHail={showHail}
           showPins={showPins}
           showOutlook={showOutlook}
+          showCells={showCells}
+          cellCount={cells.length}
           onLayer={onLayer}
           frames={radarFramesMemo}
           frameIndex={frameIndex}
@@ -719,6 +971,10 @@ export function StormMap({
                       </span>
                     </li>
                   ))}
+                  <li className="flex items-center gap-2">
+                    <span className="storm-report-tri is-legend" />
+                    <span>Spotter hail report</span>
+                  </li>
                 </ul>
                 {swathNote ? <p className="mt-2 text-white/45">{swathNote}</p> : null}
               </>
@@ -785,23 +1041,69 @@ export function StormMap({
         ))}
       </ul>
       )}
+      {flash ? (
+        <div className={`pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 ${desk ? (fullscreen ? "bottom-24" : "bottom-[18.5rem] lg:bottom-24") : "bottom-14"}`}>
+          <PopupPill live icon={flash.tone === "clear" ? <Check className="size-3.5" /> : undefined}>
+            <span className="font-medium">{flash.text}</span>
+            <span className="ml-2 font-mono text-white/55">{flash.coords}</span>
+          </PopupPill>
+        </div>
+      ) : null}
       {popup && anchor ? (
-        <div ref={popupRef} className="absolute z-30" style={{ left: pos?.left ?? 16, top: pos?.top ?? 120 }}>
+        <div ref={popupRef} className="absolute z-30" style={{ left: pos?.left ?? 16, top: pos?.top ?? 120, visibility: pos ? "visible" : "hidden" }}>
+          {popup.kind === "loading" ? (
+            <PopupPill spinning live>
+              Looking up radar & hail…
+            </PopupPill>
+          ) : null}
           {popup.kind === "job" && job ? (
             <JobPinPopup
               key={job.id}
               pin={job}
-              logging={logging}
+              warnings={showWarnings ? warningsHere(job.lat, job.lng) : []}
+              cells={showCells ? cells : NO_CELLS}
+              hits={lookupHail(job.lat, job.lng)}
+              crewOnSite={crewSites[job.id] ?? null}
+              arrow={arrow}
+              busy={busy}
               onClose={() => setPopup(null)}
               onInteract={arm}
-              onLogVisit={() => {
-                setLogging(true);
-                void onLogVisit(job.id)
-                  .catch(() => undefined)
-                  .finally(() => setLogging(false));
-              }}
-              lookupHail={lookupHail}
+              onOpenJob={() => onOpenJob(job.id)}
+              onWarnCrew={() => run(onWarnCrew)}
+              onAttachHail={(hit) => run(() => onAttachHail(job.id, hit), () => setPopup(null))}
             />
+          ) : null}
+          {popup.kind === "cell" && openCell ? (
+            <StormCellPopup
+              key={popup.id}
+              cell={openCell}
+              jobs={pins}
+              crewJobIds={crewJobIds}
+              watching={Boolean(watched[popup.id])}
+              arrow={arrow}
+              busy={busy}
+              onClose={() => setPopup(null)}
+              onInteract={arm}
+              onWarnCrew={() => run(onWarnCrew)}
+              onWatch={() => toggleWatch(openCell)}
+            />
+          ) : null}
+          {popup.kind === "warning" && openWarning ? (
+            <WarningPopup
+              key={popup.id}
+              alert={openWarning}
+              jobsInside={pins.filter((pin) => pointInGeometry(pin.lng, pin.lat, openWarning.geometry))}
+              canNotify={canNotify}
+              arrow={arrow}
+              busy={busy}
+              onClose={() => setPopup(null)}
+              onInteract={arm}
+              onNotify={() => run(() => onNotifyWarning(openWarning.id))}
+              onOpenJob={(id) => setPopup({ kind: "job", id })}
+            />
+          ) : null}
+          {popup.kind === "report" && openReport ? (
+            <StormReportPopup key={popup.id} report={openReport} arrow={arrow} onClose={() => setPopup(null)} onInteract={arm} />
           ) : null}
           {popup.kind === "radar" ? (
             <RadarCellPopup
@@ -809,22 +1111,37 @@ export function StormMap({
               lng={popup.lng}
               dbz={popup.dbz}
               radarSite={popup.site}
-              hailChance={popup.hailChance}
+              scanAt={popup.scanAt}
+              cells={showCells ? cells : NO_CELLS}
+              hits={showHail ? lookupHail(popup.lat, popup.lng) : []}
+              warnings={showWarnings ? warningsHere(popup.lat, popup.lng) : []}
+              watching={Boolean(nearestWatched(cells, popup.lat, popup.lng, watched))}
+              dropping={dropping}
+              arrow={arrow}
               onClose={() => setPopup(null)}
               onInteract={arm}
-              onAlert={() => toast.message("We'll watch this cell once radar volumes are wired.")}
+              onWatch={toggleWatch}
+              onDropLead={() => {
+                setDropping(true);
+                void onDropLead(popup.lat, popup.lng)
+                  .then(() => setPopup(null))
+                  .catch(() => undefined)
+                  .finally(() => setDropping(false));
+              }}
             />
           ) : null}
-          {popup.kind === "loading" || popup.kind === "error" || popup.kind === "hail" ? (
+          {popup.kind === "error" || popup.kind === "hail" ? (
             <HailPointPopup
               lat={popup.lat}
               lng={popup.lng}
-              status={popup.kind === "hail" ? "ready" : popup.kind}
+              status={popup.kind === "hail" ? "ready" : "error"}
               message={popup.kind === "error" ? popup.message : ""}
               hits={popup.kind === "hail" ? popup.hits : []}
               hiddenIds={hiddenSet}
+              nearestReportMi={nearestReportMiles(reports, storms, popup.lat, popup.lng)}
+              nearbyPins={canvassPins(pins, popup.lat, popup.lng)}
               dropping={dropping}
-              pinsForStorm={(stormId) => canvassPins(storms, pins, stormId)}
+              arrow={arrow}
               onRetry={() => void lookup(popup.lat, popup.lng)}
               onClose={() => setPopup(null)}
               onInteract={arm}
@@ -844,18 +1161,53 @@ export function StormMap({
   );
 }
 
+function cellKey(cell: StormCell) {
+  return `${cell.radarSite}:${cell.id}`;
+}
+
 function pinPoint(pins: StormJobPin[], id: string) {
   const pin = pins.find((item) => item.id === id);
   return pin ? { lat: pin.lat, lng: pin.lng } : null;
 }
 
-function canvassPins(storms: HailStorm[], pins: StormJobPin[], stormId: string): CanvassPin[] {
-  const storm = storms.find((item) => item.id === stormId);
-  if (!storm) return [];
-  const outer = outerBand(storm);
-  return pins
-    .filter((pin) => pointInGeometry(pin.lng, pin.lat, outer.geometry))
-    .map((pin) => ({ id: pin.id, code: pin.code, name: pin.name, address: pin.address, color: pin.color }));
+function nearestWatched(cells: StormCell[], lat: number, lng: number, watched: Record<string, CellSnapshot>) {
+  let best: { key: string; miles: number } | null = null;
+  for (const cell of cells) {
+    const miles = milesBetween(cell, { lat, lng });
+    if (!best || miles < best.miles) best = { key: cellKey(cell), miles };
+  }
+  return best ? watched[best.key] ?? null : null;
+}
+
+function nearestTown(pins: StormJobPin[], lat: number, lng: number) {
+  let best: { city: string; miles: number } | null = null;
+  for (const pin of pins) {
+    const miles = milesBetween(pin, { lat, lng });
+    if (miles <= 10 && (!best || miles < best.miles)) best = { city: pin.city.trim(), miles };
+  }
+  return best?.city ?? "";
+}
+
+/** Closest spotter hail report: the LSR feed first, then the report pinned on a swath. */
+function nearestReportMiles(reports: StormReport[], storms: HailStorm[], lat: number, lng: number) {
+  let best = nearestReportTo(reports, lat, lng)?.miles ?? null;
+  for (const storm of storms) {
+    if (!storm.report) continue;
+    const miles = milesBetween({ lat, lng }, storm.report);
+    if (best == null || miles < best) best = miles;
+  }
+  return best;
+}
+
+function canvassPins(pins: StormJobPin[], lat: number, lng: number): CanvassPin[] {
+  return jobsWithin(pins, lat, lng, 1).map(({ job, miles }) => ({
+    id: job.id,
+    code: job.code,
+    name: job.customer || job.name,
+    address: job.address,
+    color: job.color,
+    miles,
+  }));
 }
 
 function outlookLegend(areas: OutlookArea[]) {
@@ -878,11 +1230,5 @@ function escapeHtml(value: string) {
 }
 
 function escapeAttr(value: string) {
-  return value.replace(/[&<>"']/g, (ch) => {
-    if (ch === "&") return "&amp;";
-    if (ch === "<") return "&lt;";
-    if (ch === ">") return "&gt;";
-    if (ch === '"') return "&quot;";
-    return "&#39;";
-  });
+  return escapeHtml(value);
 }
