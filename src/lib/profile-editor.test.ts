@@ -99,6 +99,22 @@ assert.deepEqual(
   ],
 );
 
+const teamChange = profileChanges(
+  { ...brady, teamIds: ["field", "office"] },
+  { ...brady, teamIds: ["field"] },
+  {
+    teams: [
+      { id: "field", name: "Field", leadStaffId: "" },
+      { id: "office", name: "Office", leadStaffId: "" },
+    ],
+    locations: [],
+  },
+);
+assert.deepEqual(
+  teamChange.map((change) => [change.label, change.from, change.to]),
+  [["Teams", "Field", "Field, Office"]],
+);
+
 assert.equal(
   fillSignature("Best,\n{name}\n{phone}", {
     name: "Brady Jones",

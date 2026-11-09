@@ -159,7 +159,8 @@ export async function sendLeadAssignEmailsForOpportunity(
     return { ok: true, sent: 0, failed: 0, skipped: 1 };
   }
 
-  const [{ data: company }, { data: staffRows }, { data: teamRows }, contactResult] = await Promise.all([
+  const [{ data: company }, { data: staffRows }, { data: teamRows }, contactResult, membershipsResult] =
+    await Promise.all([
     supabase.from("companies").select("name, email").eq("id", input.companyId).maybeSingle(),
     supabase
       .from("team_members")
@@ -173,9 +174,22 @@ export async function sendLeadAssignEmailsForOpportunity(
           .eq("id", opportunity.primary_contact_id)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    supabase.from("team_memberships").select("staff_id, team_id").eq("company_id", input.companyId),
   ]);
 
-  const staff = (staffRows ?? []).map(asStaff);
+  const teamsByStaff = new Map<string, string[]>();
+  if (!membershipsResult.error) {
+    for (const row of membershipsResult.data ?? []) {
+      const list = teamsByStaff.get(row.staff_id) ?? [];
+      if (!list.includes(row.team_id)) list.push(row.team_id);
+      teamsByStaff.set(row.staff_id, list);
+    }
+  }
+  const staff = (staffRows ?? []).map((row) => {
+    const member = asStaff(row);
+    const teamIds = teamsByStaff.get(row.id);
+    return teamIds ? { ...member, teamIds } : member;
+  });
   const assignee = staff.find((member) => member.id === ownerId);
   const recipients = leadAssignRecipients({
     assignee,

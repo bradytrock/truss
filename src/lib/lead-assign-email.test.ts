@@ -137,6 +137,25 @@ assert.deepEqual(
   [{ role: "assignee", staffId: "staff_luis", name: "Luis Chen", email: "luis@company.test" }],
 );
 
+const maya = {
+  id: "staff_maya",
+  name: "Maya Ortiz",
+  email: "maya@company.test",
+  teamId: "team_office",
+  role: "team_lead",
+};
+assert.deepEqual(
+  leadAssignRecipients({
+    assignee: { ...alex, teamIds: ["team_field", "team_office"] },
+    staff: [alex, luis, maya],
+    teams: [
+      { id: "team_field", leadStaffId: "staff_luis" },
+      { id: "team_office", leadStaffId: "staff_maya" },
+    ],
+  }).map((person) => person.staffId),
+  ["staff_alex", "staff_luis", "staff_maya"],
+);
+
 assert.deepEqual(
   leadAssignRecipients({
     assignee: { ...alex, locked: true },

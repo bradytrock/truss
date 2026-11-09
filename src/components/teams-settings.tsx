@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { MoreHorizontal, Plus, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -31,11 +32,18 @@ import {
 import Link from "next/link";
 import { SettingsCard, SettingsPageHeader } from "@/components/settings-chrome";
 import { TeamPeopleTabs } from "@/components/people-settings-chrome";
-import { membersOnTeam, NO_TEAM, parseTeamSelect, selectValueForTeam, teamName } from "@/lib/teams";
+import {
+  memberTeamIds,
+  membersOnTeam,
+  NO_TEAM,
+  normalizeTeamIds,
+  parseTeamSelect,
+  selectValueForTeam,
+  staffTeamNames,
+} from "@/lib/teams";
 import type { StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { initials } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 const TEAM_SETUPS: Array<{ name: string; description: string; roles: StaffMember["role"][] }> = [
   {
@@ -77,7 +85,7 @@ export function TeamsSettings({
     [teams],
   );
   const unassigned = useMemo(
-    () => staff.filter((member) => !member.teamId && !member.locked),
+    () => staff.filter((member) => memberTeamIds(member).length === 0 && !member.locked),
     [staff],
   );
   const [applying, setApplying] = useState<string | null>(null);
@@ -109,7 +117,7 @@ export function TeamsSettings({
       <SettingsPageHeader
         eyebrow="Team"
         title="Teams"
-        description="Group people for lead routing, ring groups, and reporting. Each person sits on one team."
+        description="Group people for lead routing, ring groups, and reporting. A person can belong to more than one team."
         actions={
           <Button type="button" className="rounded-lg" onClick={() => setEditor({ mode: "add" })}>
             <Plus />
@@ -254,8 +262,8 @@ export function TeamsSettings({
           <DialogHeader>
             <DialogTitle>Remove {removeTarget?.name}?</DialogTitle>
             <DialogDescription>
-              People on this team are unassigned. Their jobs stay with them. Team leads on this crew
-              will only see their own book until you put them on another team.
+              People lose this team. Anyone who still belongs to another team stays there. Their jobs
+              stay with them. A team lead who no longer has a team only sees their own book.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -277,60 +285,6 @@ export function TeamsSettings({
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-export function TeamSelect({
-  id,
-  value,
-  teams,
-  onChange,
-  full,
-  allowNone = true,
-  disabled = false,
-  triggerClassName,
-}: {
-  id?: string;
-  value: string | null | undefined;
-  teams: Team[];
-  onChange: (teamId: string) => void;
-  full?: boolean;
-  allowNone?: boolean;
-  disabled?: boolean;
-  triggerClassName?: string;
-}) {
-  const items = [
-    ...(allowNone ? [{ value: NO_TEAM, label: "No team" }] : []),
-    ...[...teams]
-      .sort((left, right) => left.name.localeCompare(right.name))
-      .map((team) => ({ value: team.id, label: team.name })),
-  ];
-  return (
-    <Select
-      value={selectValueForTeam(value)}
-      onValueChange={(next) => onChange(parseTeamSelect(String(next ?? "")) )}
-      items={items}
-      disabled={disabled}
-    >
-      <SelectTrigger
-        id={id}
-        disabled={disabled}
-        className={cn(full ? "w-full" : "w-44", triggerClassName)}
-        size={full ? "default" : "sm"}
-      >
-        <SelectValue placeholder="No team" />
-      </SelectTrigger>
-      <SelectContent>
-        {allowNone ? <SelectItem value={NO_TEAM}>No team</SelectItem> : null}
-        {[...teams]
-          .sort((left, right) => left.name.localeCompare(right.name))
-          .map((team) => (
-            <SelectItem key={team.id} value={team.id}>
-              {team.name}
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -393,7 +347,8 @@ function TeamEditorDialog({
           <DialogHeader>
             <DialogTitle>{team ? `Edit ${team.name}` : "Add team"}</DialogTitle>
             <DialogDescription>
-              Naming a lead puts them on this team. They can still have a different seat role.
+              Naming a lead adds this team and makes them the lead here. They stay on their other
+              teams, and they stop leading those.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -443,5 +398,50 @@ function TeamEditorDialog({
 }
 
 export function staffTeamLabel(teams: Team[], member: StaffMember) {
-  return teamName(teams, member.teamId) || "No team";
+  return staffTeamNames(teams, member).join(", ") || "No team";
+}
+
+export function TeamMultiSelect({
+  id,
+  value,
+  teams,
+  onChange,
+  disabled = false,
+}: {
+  id?: string;
+  value: readonly string[];
+  teams: Team[];
+  onChange: (teamIds: string[]) => void;
+  disabled?: boolean;
+}) {
+  const selected = normalizeTeamIds(value);
+  const sorted = [...teams].sort((left, right) => left.name.localeCompare(right.name));
+  if (sorted.length === 0) {
+    return <p className="text-sm text-muted-foreground">No teams yet. Create one under Teams.</p>;
+  }
+  return (
+    <div
+      id={id}
+      role="group"
+      className="grid max-h-40 gap-2 overflow-y-auto rounded-lg border border-[#f0ece8] bg-white p-2"
+    >
+      {sorted.map((team) => {
+        const checked = selected.includes(team.id);
+        return (
+          <label key={team.id} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={checked}
+              disabled={disabled}
+              onCheckedChange={(next) => {
+                const on = next === true;
+                onChange(on ? [...selected, team.id] : selected.filter((item) => item !== team.id));
+              }}
+              aria-label={team.name}
+            />
+            {team.name}
+          </label>
+        );
+      })}
+    </div>
+  );
 }

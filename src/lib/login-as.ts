@@ -1,3 +1,4 @@
+import { staffTeamNames } from "@/lib/teams";
 import type { StaffMember, Team } from "@/lib/types";
 
 export const LOGIN_AS_RECENT_LIMIT = 5;
@@ -43,12 +44,10 @@ export function recentLoginAsTargets(options: StaffMember[], recentIds: string[]
 }
 
 export function groupLoginAsTargets(staff: StaffMember[], teams: Team[]) {
-  const nameFor = (teamId: string | null) =>
-    teams.find((team) => team.id === teamId)?.name.trim() || "No team";
   const groups = new Map<string, StaffMember[]>();
   const sorted = [...staff].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   for (const member of sorted) {
-    const heading = nameFor(member.teamId);
+    const heading = staffTeamNames(teams, member).join(", ") || "No team";
     const list = groups.get(heading) ?? [];
     list.push(member);
     groups.set(heading, list);

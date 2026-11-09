@@ -1,4 +1,5 @@
 import { preferLocalChartAccounts, preferLocalExpenseCategories } from "@/lib/expense-categories";
+import { attachTeamMemberships } from "@/lib/teams";
 import { mapPhotoAuditEvent } from "@/lib/photo-trash";
 import { mapCompanyAuditEvent } from "@/lib/company-audit";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
@@ -496,7 +497,11 @@ function emptyDeferred(): DeferredRows {
   return Array.from({ length: 41 }, () => blank) as unknown as DeferredRows;
 }
 
-function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
+function assembleBook(
+  core: CoreRows,
+  deferred: DeferredRows,
+  memberships: readonly { staff_id: string; team_id: string | null }[] = [],
+): CompanyBook {
   const [
     clientsRes,
     contactsRes,
@@ -578,6 +583,7 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
         title: row.title,
         role: inferRole(row.title),
         teamId: row.team_id ?? null,
+        teamIds: row.team_id ? [row.team_id] : [],
         initials: initialsFromName(row.name),
         email: "",
         phone: "",
@@ -595,7 +601,11 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
   const signedInStaffIds = (profilesRes.error ? [] : (profilesRes.data ?? []))
     .map((row) => row.staff_id)
     .filter((id): id is string => Boolean(id));
-  const staffWithInvites = attachAccountInvites(staff, invites, signedInStaffIds);
+  const staffWithInvites = attachAccountInvites(
+    attachTeamMemberships(staff, memberships),
+    invites,
+    signedInStaffIds,
+  );
 
   const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
   const googleLocations = googleLocationsRes.error
@@ -732,10 +742,20 @@ export function loadCompanyBook(supabase: Client, companyId: string) {
   const messagesPromise = loadMessages(supabase, companyId);
   const corePromise = queryCore(supabase, companyId);
   const deferredPromise = queryDeferred(supabase, companyId, messagesPromise);
+  const membershipsPromise = selectAllRows(() =>
+    supabase
+      .from("team_memberships")
+      .select("staff_id, team_id")
+      .eq("company_id", companyId),
+  );
+  const withMemberships = Promise.all([corePromise, membershipsPromise]).then(([core, memberships]) => ({
+    core,
+    memberships: memberships.error ? [] : (memberships.data ?? []),
+  }));
   return {
-    core: corePromise.then((core) => assembleBook(core, emptyDeferred())),
-    full: Promise.all([corePromise, deferredPromise]).then(([core, deferred]) =>
-      assembleBook(core, deferred),
+    core: withMemberships.then(({ core, memberships }) => assembleBook(core, emptyDeferred(), memberships)),
+    full: Promise.all([withMemberships, deferredPromise]).then(([{ core, memberships }, deferred]) =>
+      assembleBook(core, deferred, memberships),
     ),
   };
 }

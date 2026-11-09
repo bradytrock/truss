@@ -9,6 +9,7 @@ import type {
 import { SEAT_ROLE_LABELS, isNorthlineDemoName } from "@/lib/types";
 import { bdOpportunityIds, hasBusinessDevelopmentSeat, jobInBdBook, referralPartnerIds } from "@/lib/bd";
 import { documentOwnerStaff } from "@/lib/document-owner";
+import { memberTeamIds, sharesAnyTeam } from "@/lib/teams";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
 
@@ -59,7 +60,7 @@ export function staffForReports(viewer: StaffMember, staff: StaffMember[]) {
   const scope = accessScope(viewer.role);
   if (scope === "company") return staff;
   if (scope === "team") {
-    return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
+    return staff.filter((member) => member.id === viewer.id || sharesAnyTeam(viewer, member));
   }
   return staff.filter((member) => member.id === viewer.id);
 }
@@ -289,7 +290,7 @@ export function assignableStaff(
   const scope = accessScope(viewer.role, viewer.restricted);
   if (scope === "team") {
     return sortAssignable(
-      pool.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id),
+      pool.filter((member) => member.id === viewer.id || sharesAnyTeam(viewer, member)),
       viewer,
     );
   }
@@ -350,20 +351,18 @@ export function loginAsTargets(viewer: StaffMember, staff: StaffMember[]) {
   if (isCompanyLeader(viewer.role)) {
     return real.filter((member) => member.id !== viewer.id);
   }
-  if (!canLoginAs(viewer) || !viewer.teamId) return [];
-  return real.filter(
-    (member) => member.teamId === viewer.teamId && member.id !== viewer.id
-  );
+  if (!canLoginAs(viewer) || memberTeamIds(viewer).length === 0) return [];
+  return real.filter((member) => member.id !== viewer.id && sharesAnyTeam(viewer, member));
 }
 
 export function teamMemberIds(teamId: string | null, staff: StaffMember[]) {
   if (!teamId) return new Set<string>();
-  return new Set(staff.filter((member) => member.teamId === teamId).map((member) => member.id));
+  return new Set(staff.filter((member) => memberTeamIds(member).includes(teamId)).map((member) => member.id));
 }
 
 export function teamMemberNames(teamId: string | null, staff: StaffMember[]) {
   if (!teamId) return new Set<string>();
-  return new Set(staff.filter((member) => member.teamId === teamId).map((member) => member.name));
+  return new Set(staff.filter((member) => memberTeamIds(member).includes(teamId)).map((member) => member.name));
 }
 
 function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[]) {
@@ -371,7 +370,13 @@ function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[]) {
   if (scope === "company") {
     return new Set(staff.map((member) => member.id));
   }
-  if (scope === "team") return teamMemberIds(effective.teamId, staff);
+  if (scope === "team") {
+    const ids = new Set<string>([effective.id]);
+    for (const teamId of memberTeamIds(effective)) {
+      for (const memberId of teamMemberIds(teamId, staff)) ids.add(memberId);
+    }
+    return ids;
+  }
   return new Set([effective.id]);
 }
 

@@ -253,6 +253,7 @@ export function mapStaff(row: StaffRow): StaffMember {
     title: row.title,
     role: row.role ?? "project_manager",
     teamId: row.team_id,
+    teamIds: row.team_id ? [row.team_id] : [],
     initials: row.initials || row.name.slice(0, 2).toUpperCase(),
     email: row.email ?? "",
     phone: storedPhone(row.phone),

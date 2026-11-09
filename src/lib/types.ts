@@ -156,6 +156,7 @@ export interface CurrentUser {
   initials: string;
   role: SeatRole;
   teamId: string | null;
+  teamIds?: string[];
 }
 
 export interface CompanyContractType {
@@ -247,7 +248,10 @@ export interface StaffMember {
   name: string;
   title: string;
   role: SeatRole;
+  /** Primary team. Null when the person is on no team. */
   teamId: string | null;
+  /** Every team this person belongs to. Omitted means "use teamId". */
+  teamIds?: string[];
   initials: string;
   email: string;
   phone: string;
@@ -1389,6 +1393,7 @@ export interface ThreadViewer {
   role: SeatRole;
   profileRole?: SeatRole | null;
   teamId: string | null;
+  teamIds?: string[];
 }
 
 export type ReturningClientLeadStatus =

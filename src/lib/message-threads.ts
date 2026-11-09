@@ -8,6 +8,7 @@ import {
   type MessageThread,
 } from "@/lib/job-messages";
 import { namesMatch } from "@/lib/seats";
+import { memberTeamIds, sharesAnyTeam } from "@/lib/teams";
 import { isCompanyLeader } from "@/lib/visibility";
 import type {
   CompanyProfile,
@@ -50,6 +51,7 @@ export function viewerFromStaff(
     role: staff.role,
     profileRole: extras?.profileRole ?? profile?.role ?? null,
     teamId: staff.teamId,
+    teamIds: memberTeamIds(staff),
   };
 }
 
@@ -193,8 +195,8 @@ export function canSeeMessageThread(
   if (explicitlyAdded(thread.key, viewer.profileId, opts.members)) return true;
   if (threadHasSender(thread, viewer)) return true;
   if (viewerOnHomeownerProject(thread, viewer, opts.jobs, opts.opportunities)) return true;
-  if (!isMessageTeamLead(viewer) || !viewer.teamId) return false;
-  const roster = opts.staff.filter((member) => member.teamId === viewer.teamId && member.id !== viewer.staffId);
+  if (!isMessageTeamLead(viewer) || memberTeamIds(viewer).length === 0) return false;
+  const roster = opts.staff.filter((member) => member.id !== viewer.staffId && sharesAnyTeam(viewer, member));
   return roster.some((member) => {
     const person = viewerFromStaff(member, opts.profiles);
     if (explicitlyAdded(thread.key, person.profileId, opts.members)) return true;
@@ -259,6 +261,7 @@ export function implicitThreadCrew(
       role: member?.role ?? profile.role,
       profileRole: profile.role,
       teamId: member?.teamId ?? null,
+      teamIds: member ? memberTeamIds(member) : [],
     };
     return projects.some((project) => personOnProject(person, project.job, project.opportunity));
   });

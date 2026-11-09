@@ -1,6 +1,7 @@
 import { defaultTitleForRole, normalizeSeatEmail } from "@/lib/accounts";
 import { parseDelimited } from "@/lib/catalog-csv";
 import { looksLikeEmail } from "@/lib/share-text";
+import { normalizeTeamIds } from "@/lib/teams";
 import { SEAT_ROLE_LABELS, SEAT_ROLES, type SeatRole, type Team } from "@/lib/types";
 
 export const BULK_INVITE_START_ROWS = 5;
@@ -22,6 +23,7 @@ export type BulkInviteDraft = {
   role: SeatRole;
   title: string;
   teamId: string;
+  teamIds: string[];
 };
 
 export type BulkInviteReady = {
@@ -31,6 +33,7 @@ export type BulkInviteReady = {
   role: SeatRole;
   title: string;
   teamId: string;
+  teamIds: string[];
 };
 
 export type BulkInviteIssue = {
@@ -38,14 +41,20 @@ export type BulkInviteIssue = {
   message: string;
 };
 
-export function emptyBulkInviteRow(role: SeatRole = "project_manager", teamId = ""): BulkInviteDraft {
+export function emptyBulkInviteRow(
+  role: SeatRole = "project_manager",
+  teamId = "",
+  teamIds?: string[],
+): BulkInviteDraft {
+  const ids = normalizeTeamIds(teamIds && teamIds.length > 0 ? teamIds : teamId ? [teamId] : []);
   return {
     key: crypto.randomUUID(),
     name: "",
     email: "",
     role,
     title: defaultTitleForRole(role),
-    teamId,
+    teamId: ids[0] ?? "",
+    teamIds: ids,
   };
 }
 
@@ -91,13 +100,15 @@ export function parseBulkInviteRows(
       continue;
     }
     seen.add(email);
+    const teamIds = rowTeamIds(row);
     ready.push({
       key: row.key,
       name,
       email,
       role: row.role,
       title: row.title.trim() || defaultTitleForRole(row.role),
-      teamId: row.teamId.trim(),
+      teamId: teamIds[0] ?? "",
+      teamIds,
     });
   }
 
@@ -170,6 +181,10 @@ export function parseBulkInviteRole(raw: string): SeatRole | null {
   return ROLE_ALIASES[key] ?? null;
 }
 
+function rowTeamIds(row: Pick<BulkInviteDraft, "teamId" | "teamIds">) {
+  return normalizeTeamIds(row.teamIds.length > 0 ? row.teamIds : row.teamId ? [row.teamId] : []);
+}
+
 export function matchBulkInviteTeam(raw: string, teams: Team[]): Team | null | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -177,6 +192,22 @@ export function matchBulkInviteTeam(raw: string, teams: Team[]): Team | null | u
   if (byId) return byId;
   const key = normalizeCell(trimmed);
   return teams.find((team) => normalizeCell(team.name) === key);
+}
+
+/** One cell can name several teams, separated by a comma, semicolon, or pipe. */
+export function matchBulkInviteTeams(raw: string, teams: Team[]): { ids: string[]; unknown: string[] } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ids: [], unknown: [] };
+  const whole = matchBulkInviteTeam(trimmed, teams);
+  if (whole) return { ids: [whole.id], unknown: [] };
+  const ids: string[] = [];
+  const unknown: string[] = [];
+  for (const part of trimmed.split(/[,;|]/).map((item) => item.trim()).filter(Boolean)) {
+    const team = matchBulkInviteTeam(part, teams);
+    if (!team) unknown.push(part);
+    else if (!ids.includes(team.id)) ids.push(team.id);
+  }
+  return { ids, unknown };
 }
 
 function columnIndex(headers: string[], aliases: Set<string>) {
@@ -241,9 +272,12 @@ export function parseBulkInviteCsv(text: string, teams: Team[]): BulkInviteCsvRe
     }
 
     const teamRaw = cell(cols.team);
-    const team = matchBulkInviteTeam(teamRaw, teams);
-    if (team === undefined) {
-      issues.push({ line, message: `No team named “${teamRaw}”. Loaded without a team.` });
+    const matchedTeams = matchBulkInviteTeams(teamRaw, teams);
+    if (matchedTeams.unknown.length > 0) {
+      const named = matchedTeams.unknown.map((item) => `“${item}”`).join(", ");
+      const loaded =
+        matchedTeams.ids.length > 0 ? " Loaded on the teams that matched." : " Loaded without a team.";
+      issues.push({ line, message: `No team named ${named}.${loaded}` });
     }
 
     rows.push({
@@ -252,7 +286,8 @@ export function parseBulkInviteCsv(text: string, teams: Team[]): BulkInviteCsvRe
       email,
       role,
       title: cell(cols.title) || defaultTitleForRole(role),
-      teamId: team?.id ?? "",
+      teamId: matchedTeams.ids[0] ?? "",
+      teamIds: matchedTeams.ids,
     });
   });
 

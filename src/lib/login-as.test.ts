@@ -33,11 +33,14 @@ const staff = [
   seat("d", "Drew", "t-denver"),
 ];
 
-const groups = groupLoginAsTargets(staff, teams);
+const both = seat("e", "Eden", "t-austin");
+both.teamIds = ["t-austin", "t-denver"];
+const groups = groupLoginAsTargets([...staff, both], teams);
 assert.deepEqual(
   groups.map(([heading, members]) => [heading, members.map((member) => member.name)]),
   [
     ["Austin", ["Ava"]],
+    ["Austin, Denver", ["Eden"]],
     ["Denver", ["Chris", "Drew"]],
     ["No team", ["Ben"]],
   ],

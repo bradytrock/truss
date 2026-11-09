@@ -443,7 +443,15 @@ import { looksLikePhone, storedPhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLeadCompany, canLoginAs, canManageAutomations, canManageSettings, canViewProjectFinancials, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
-import { teamsAfterLeavingLead } from "@/lib/teams";
+import {
+  addTeamMembership,
+  memberTeamIds,
+  normalizeTeamIds,
+  sameTeamIds,
+  staffWithTeams,
+  teamsAfterLeavingLead,
+  teamsLedAfterMembershipChange,
+} from "@/lib/teams";
 
 export type LiveStatus = "offline" | "connecting" | "live";
 
@@ -548,6 +556,7 @@ function userFromStaff(
     initials: staff.initials || initialsFromName(staff.name),
     role: staff.role,
     teamId: staff.teamId,
+    teamIds: memberTeamIds(staff),
   };
 }
 
@@ -1620,6 +1629,76 @@ function mirrorCompanyCamPhoto(photoId: string, action: "push" | "remove") {
   }).catch(() => undefined);
 }
 
+function missingTeamMemberships(error: { message?: string; code?: string } | null) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toUpperCase();
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    code === "PGRST204" ||
+    (message.includes("team_memberships") &&
+      (message.includes("schema cache") ||
+        message.includes("does not exist") ||
+        message.includes("could not find")))
+  );
+}
+
+async function persistTeamMemberships(
+  supabase: ReturnType<typeof createClient>,
+  companyId: string,
+  member: StaffMember,
+) {
+  const ids = memberTeamIds(member).filter((id) => looksLikeUuid(id));
+  const replaceAll = Array.isArray(member.teamIds);
+  const existing = await supabase.from("team_memberships").select("team_id").eq("staff_id", member.id);
+  if (existing.error) {
+    if (missingTeamMemberships(existing.error)) return true;
+    toast.error("Could not save teams", { description: existing.error.message });
+    return false;
+  }
+  const have = new Set((existing.data ?? []).map((row) => row.team_id));
+  const want = new Set(ids);
+  const missing = ids.filter((id) => !have.has(id));
+  const extra = replaceAll ? [...have].filter((id) => !want.has(id)) : [];
+  if (missing.length > 0) {
+    const inserted = await supabase.from("team_memberships").insert(
+      missing.map((teamId) => ({
+        company_id: companyId,
+        staff_id: member.id,
+        team_id: teamId,
+      })),
+    );
+    if (inserted.error) {
+      if (missingTeamMemberships(inserted.error)) return true;
+      toast.error("Could not save teams", { description: inserted.error.message });
+      return false;
+    }
+  }
+  if (extra.length > 0) {
+    const removed = await supabase
+      .from("team_memberships")
+      .delete()
+      .eq("staff_id", member.id)
+      .in("team_id", extra);
+    if (removed.error) {
+      if (missingTeamMemberships(removed.error)) return true;
+      toast.error("Could not save teams", { description: removed.error.message });
+      return false;
+    }
+  }
+  return true;
+}
+
+function inviteTeamIds(
+  input: { teamId?: string | null; teamIds?: readonly (string | null)[] | null },
+  teams: { id: string }[],
+) {
+  const requested = normalizeTeamIds(input.teamIds != null ? input.teamIds : [input.teamId]);
+  if (requested.some((id) => !teams.some((team) => team.id === id))) return null;
+  return requested;
+}
+
 export function CrmProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const configured = isSupabaseConfigured();
@@ -1850,6 +1929,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         initials: profile.initials || initialsFromName(profile.full_name),
         role,
         teamId: matched?.teamId ?? null,
+        teamIds: matched ? memberTeamIds(matched) : [],
       });
       const stamped = backfillRecordCodes(
         book.state.opportunities,
@@ -2216,6 +2296,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       initials: effectiveStaff.initials,
       role: effectiveStaff.role,
       teamId: effectiveStaff.teamId,
+      teamIds: memberTeamIds(effectiveStaff),
     };
   }, [effectiveStaff, impersonatedStaff, user, viewer]);
 
@@ -15314,7 +15395,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (profileError && !isMissingAccountManagement(profileError) && profileError.code !== "PGRST116") {
         toast.error("Seat saved, login role did not update", { description: profileError.message });
       }
-      return true;
+      return persistTeamMemberships(supabase, user.companyId, member);
     },
     [user.companyId, user.id],
   );
@@ -15359,6 +15440,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       title?: string;
       phone?: string;
       teamId?: string | null;
+      teamIds?: string[] | null;
     }) => {
       if (!canEditCompany) {
         toast.error("Only a company admin can add people.");
@@ -15374,42 +15456,46 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("That email already belongs to someone on this company.");
         return null;
       }
-      const teamId = looksLikeUuid(input.teamId) ? input.teamId! : "";
-      if (teamId && !state.teams.some((team) => team.id === teamId)) {
+      const teamIds = inviteTeamIds(input, state.teams);
+      if (!teamIds) {
         toast.error("Pick a team that still exists.");
         return null;
       }
       const token = email ? newInviteToken() : null;
       const expires = email ? inviteExpiry() : null;
-      const member: StaffMember = {
-        id: crypto.randomUUID(),
-        name,
-        title: input.title?.trim() || defaultTitleForRole(input.role),
-        role: input.role,
-        teamId,
-        initials: initialsFromName(name),
-        email,
-        phone: storedPhone(input.phone),
-        cardSlug: mintPersonCardSlug(
+      const member: StaffMember = staffWithTeams(
+        {
+          id: crypto.randomUUID(),
           name,
-          "",
-          state.staff.map((item) => item.cardSlug),
-        ),
-        locked: false,
-        restricted: false,
-        inviteToken: token,
-        inviteExpiresAt: expires,
-        emailSignature: "",
-      };
+          title: input.title?.trim() || defaultTitleForRole(input.role),
+          role: input.role,
+          teamId: null,
+          initials: initialsFromName(name),
+          email,
+          phone: storedPhone(input.phone),
+          cardSlug: mintPersonCardSlug(
+            name,
+            "",
+            state.staff.map((item) => item.cardSlug),
+          ),
+          locked: false,
+          restricted: false,
+          inviteToken: token,
+          inviteExpiresAt: expires,
+          emailSignature: "",
+        },
+        teamIds,
+      );
       const ok = await persistStaffFields(member, { inviteToken: token, inviteExpiresAt: expires });
       if (!ok) return null;
       let nextTeams = state.teams;
-      if (teamId && member.role === "team_lead") {
-        const team = nextTeams.find((item) => item.id === teamId);
+      const primaryTeamId = member.teamId ?? "";
+      if (primaryTeamId && member.role === "team_lead") {
+        const team = nextTeams.find((item) => item.id === primaryTeamId);
         if (team && !team.leadStaffId) {
           const withLead = { ...team, leadStaffId: member.id };
           const saved = await persistTeam(withLead);
-          if (saved) nextTeams = nextTeams.map((item) => (item.id === teamId ? withLead : item));
+          if (saved) nextTeams = nextTeams.map((item) => (item.id === primaryTeamId ? withLead : item));
         }
       }
       setState((current) => ({
@@ -15417,7 +15503,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         staff: [...current.staff, member],
         teams: nextTeams,
       }));
-      if ((member.role === "team_lead" || member.role === "team_admin") && !teamId) {
+      if ((member.role === "team_lead" || member.role === "team_admin") && !primaryTeamId) {
         toast.message("Give that seat a team so they can see teammates’ books.");
       }
       const inviteUrl = token ? inviteSignupUrl(window.location.origin, token) : null;
@@ -15435,6 +15521,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         role: SeatRole;
         title?: string;
         teamId?: string | null;
+        teamIds?: string[] | null;
       }>,
     ) => {
       if (!canEditCompany) {
@@ -15458,39 +15545,43 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           toast.error(`${email} already belongs to someone on this company.`);
           break;
         }
-        const teamId = looksLikeUuid(input.teamId) ? input.teamId! : "";
-        if (teamId && !nextTeams.some((team) => team.id === teamId)) {
+        const teamIds = inviteTeamIds(input, nextTeams);
+        if (!teamIds) {
           toast.error("Pick a team that still exists.");
           break;
         }
         const token = newInviteToken();
         const expires = inviteExpiry();
-        const member: StaffMember = {
-          id: crypto.randomUUID(),
-          name,
-          title: input.title?.trim() || defaultTitleForRole(input.role),
-          role: input.role,
-          teamId,
-          initials: initialsFromName(name),
-          email,
-          phone: "",
-          cardSlug: mintPersonCardSlug(name, "", slugs),
-          locked: false,
-          restricted: false,
-          inviteToken: token,
-          inviteExpiresAt: expires,
-          emailSignature: "",
-        };
+        const member: StaffMember = staffWithTeams(
+          {
+            id: crypto.randomUUID(),
+            name,
+            title: input.title?.trim() || defaultTitleForRole(input.role),
+            role: input.role,
+            teamId: null,
+            initials: initialsFromName(name),
+            email,
+            phone: "",
+            cardSlug: mintPersonCardSlug(name, "", slugs),
+            locked: false,
+            restricted: false,
+            inviteToken: token,
+            inviteExpiresAt: expires,
+            emailSignature: "",
+          },
+          teamIds,
+        );
         slugs.push(member.cardSlug);
         const ok = await persistStaffFields(member, { inviteToken: token, inviteExpiresAt: expires });
         if (!ok) break;
         taken.add(email);
-        if (teamId && member.role === "team_lead") {
-          const team = nextTeams.find((item) => item.id === teamId);
+        const primaryTeamId = member.teamId ?? "";
+        if (primaryTeamId && member.role === "team_lead") {
+          const team = nextTeams.find((item) => item.id === primaryTeamId);
           if (team && !team.leadStaffId) {
             const withLead = { ...team, leadStaffId: member.id };
             const saved = await persistTeam(withLead);
-            if (saved) nextTeams = nextTeams.map((item) => (item.id === teamId ? withLead : item));
+            if (saved) nextTeams = nextTeams.map((item) => (item.id === primaryTeamId ? withLead : item));
           }
         }
         created.push({
@@ -15531,6 +15622,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           | "restricted"
           | "manageAutomations"
           | "teamId"
+          | "teamIds"
           | "cardSlug"
           | "cardSlugAliases"
         >
@@ -15587,7 +15679,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           patch.googleLocationId !== undefined
             ? (looksLikeUuid(patch.googleLocationId) ? patch.googleLocationId : null)
             : (current.googleLocationId ?? null),
-        teamId: patch.teamId !== undefined ? (looksLikeUuid(patch.teamId) ? patch.teamId : "") : current.teamId,
         cardSlug: requestedSlug
           ? requestedSlug
           : current.cardSlug ||
@@ -15599,6 +15690,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         initials:
           patch.name !== undefined ? initialsFromName(patch.name.trim() || current.name) : current.initials,
       };
+      const requestedTeamIds =
+        patch.teamIds !== undefined
+          ? normalizeTeamIds(patch.teamIds)
+          : patch.teamId !== undefined
+            ? normalizeTeamIds([patch.teamId])
+            : undefined;
+      const placed =
+        requestedTeamIds !== undefined ? staffWithTeams(next, requestedTeamIds, current.teamId) : next;
+      if (requestedTeamIds !== undefined) {
+        next.teamId = placed.teamId;
+        next.teamIds = placed.teamIds;
+      }
       if (!next.name) {
         toast.error("Name is required.");
         return false;
@@ -15625,14 +15728,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const ok = await persistStaffFields(next);
       if (!ok) return false;
       let nextTeams = state.teams;
-      if (next.teamId !== current.teamId) {
-        nextTeams = teamsAfterLeavingLead(nextTeams, id, next.teamId);
-        if (next.teamId && next.role === "team_lead") {
-          const team = nextTeams.find((item) => item.id === next.teamId);
-          if (team && !team.leadStaffId) {
-            nextTeams = nextTeams.map((item) =>
-              item.id === next.teamId ? { ...item, leadStaffId: id } : item,
-            );
+      if (requestedTeamIds !== undefined && !sameTeamIds(current, next)) {
+        nextTeams = teamsLedAfterMembershipChange(nextTeams, id, memberTeamIds(next));
+        if (next.role === "team_lead") {
+          const previous = new Set(memberTeamIds(current));
+          for (const teamId of memberTeamIds(next)) {
+            if (previous.has(teamId)) continue;
+            const team = nextTeams.find((item) => item.id === teamId);
+            if (team && !team.leadStaffId) {
+              nextTeams = nextTeams.map((item) => (item.id === teamId ? { ...item, leadStaffId: id } : item));
+              break;
+            }
           }
         }
         const savedLeads = await persistLeadClears(nextTeams, state.teams);
@@ -15650,9 +15756,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           title: next.title,
           role: next.role,
           teamId: next.teamId,
+          teamIds: memberTeamIds(next),
         }));
       }
-      if ((next.role === "team_lead" || next.role === "team_admin") && !next.teamId) {
+      if ((next.role === "team_lead" || next.role === "team_admin") && memberTeamIds(next).length === 0) {
         toast.message("Give that seat a team so they can see teammates’ books.");
       }
       toast.success(`${next.name} updated`);
@@ -16027,8 +16134,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (leadsOk) {
           nextTeams = proposed;
           const lead = nextStaff.find((member) => member.id === leadStaffId);
-          if (lead && lead.teamId !== team.id) {
-            const moved = { ...lead, teamId: team.id };
+          if (lead && !memberTeamIds(lead).includes(team.id)) {
+            const moved = addTeamMembership(lead, team.id);
             const ok = await persistStaffFields(moved);
             if (ok) nextStaff = nextStaff.map((member) => (member.id === leadStaffId ? moved : member));
           }
@@ -16080,8 +16187,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       let nextStaff = state.staff;
       if (leadStaffId) {
         const lead = nextStaff.find((member) => member.id === leadStaffId);
-        if (lead && lead.teamId !== id) {
-          const moved = { ...lead, teamId: id };
+        if (lead && !memberTeamIds(lead).includes(id)) {
+          const moved = addTeamMembership(lead, id);
           const ok = await persistStaffFields(moved);
           if (!ok) return false;
           nextStaff = nextStaff.map((member) => (member.id === leadStaffId ? moved : member));
@@ -16106,14 +16213,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         setState((currentBook) => ({
           ...currentBook,
           teams: currentBook.teams.filter((team) => team.id !== id),
-          staff: currentBook.staff.map((member) =>
-            member.teamId === id ? { ...member, teamId: "" } : member,
-          ),
+          staff: currentBook.staff.map((member) => {
+            const ids = memberTeamIds(member);
+            if (!ids.includes(id)) return member;
+            return staffWithTeams(member, ids.filter((teamId) => teamId !== id));
+          }),
         }));
       };
       if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
         apply();
-        toast.success(`${current.name} removed`);
+        toast.success(`${current.name} removed. People on it lose this team.`);
         return true;
       }
       const supabase = createClient();
@@ -16123,7 +16232,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return false;
       }
       apply();
-      toast.success(`${current.name} removed. People on it are unassigned.`);
+      toast.success(`${current.name} removed. People on it lose this team.`);
       return true;
     },
     [canEditCompany, state.teams, user.companyId],
