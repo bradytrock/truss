@@ -50,6 +50,9 @@ export const TRADES = ["fencing", "roofing", "gutters", "siding", "flooring", "o
 
 export type Trade = (typeof TRADES)[number];
 
+/** Order shown in the job-header trades menu. */
+export const TRADE_MENU_ORDER: Trade[] = ["roofing", "gutters", "siding", "fencing", "flooring", "other"];
+
 export const TRADE_LABELS: Record<Trade, string> = {
   fencing: "Fencing",
   roofing: "Roofing",
@@ -59,24 +62,80 @@ export const TRADE_LABELS: Record<Trade, string> = {
   other: "Other",
 };
 
+/** Stored in `jobs.trades` beside the `other` key when Other has a custom name. */
+export const OTHER_TRADE_PREFIX = "other:";
+
+const OTHER_TRADE_NAME_MAX = 48;
+
+export function cleanOtherTradeName(value: unknown) {
+  if (typeof value !== "string") return "";
+  return value.replace(/[\r\n\t]+/g, " ").replace(/\s{2,}/g, " ").trim().slice(0, OTHER_TRADE_NAME_MAX);
+}
+
+export function otherTradeNameFrom(value: unknown) {
+  if (!Array.isArray(value)) return "";
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    if (trimmed.toLowerCase().startsWith(OTHER_TRADE_PREFIX)) {
+      return cleanOtherTradeName(trimmed.slice(OTHER_TRADE_PREFIX.length));
+    }
+  }
+  return "";
+}
+
 export function parseTrades(value: unknown): Trade[] {
   if (!Array.isArray(value)) return [];
   const allowed = new Set<string>(TRADES);
   const seen = new Set<string>();
-  const next: Trade[] = [];
   for (const item of value) {
     if (typeof item !== "string") continue;
     const key = item.trim().toLowerCase();
+    if (key.startsWith(OTHER_TRADE_PREFIX)) {
+      seen.add("other");
+      continue;
+    }
     if (!allowed.has(key) || seen.has(key)) continue;
     seen.add(key);
-    next.push(key as Trade);
   }
   return TRADES.filter((trade) => seen.has(trade));
 }
 
-export function tradeSummary(value: unknown) {
-  const labels = parseTrades(value).map((trade) => TRADE_LABELS[trade]);
+export function tradeLabel(trade: Trade, otherName?: string) {
+  const name = cleanOtherTradeName(otherName);
+  if (trade === "other" && name) return name;
+  return TRADE_LABELS[trade];
+}
+
+export function tradeSummary(value: unknown, otherName?: string) {
+  const name = cleanOtherTradeName(otherName ?? otherTradeNameFrom(value));
+  const labels = parseTrades(value).map((trade) => tradeLabel(trade, name));
   return labels.length ? labels.join(", ") : "Trades involved";
+}
+
+/** Trade keys plus `other:Name` when Other is selected and named. */
+export function encodeStoredTrades(trades: readonly string[] | undefined, otherName?: string) {
+  const selected = parseTrades(trades ?? []);
+  const name = selected.includes("other")
+    ? cleanOtherTradeName(otherName ?? otherTradeNameFrom(trades))
+    : "";
+  return name ? [...selected, `${OTHER_TRADE_PREFIX}${name}`] : [...selected];
+}
+
+export function normalizeTradePatch(
+  before: { trades?: readonly string[]; otherTradeName?: string } | null | undefined,
+  patch: Partial<Job>,
+): Partial<Job> {
+  if (patch.trades === undefined && patch.otherTradeName === undefined) return patch;
+  const trades = parseTrades(patch.trades ?? before?.trades ?? []);
+  const otherTradeName = trades.includes("other")
+    ? cleanOtherTradeName(
+        patch.otherTradeName !== undefined
+          ? patch.otherTradeName
+          : (before?.otherTradeName ?? otherTradeNameFrom(before?.trades)),
+      )
+    : "";
+  return { ...patch, trades, otherTradeName };
 }
 
 export const DELIVERY_METHODS = [
@@ -404,8 +463,13 @@ export interface Job {
   customFields: JobCustomField[];
   projectType: ProjectType | "";
   market: JobMarket;
-  /** Work on this job: fencing, roofing, gutters, siding, flooring, or other. */
+  /** Work on this job: fencing, roofing, gutters, siding, flooring (Interior), or other. */
   trades: Trade[];
+  /**
+   * Custom name for the Other trade. Persisted in `trades` as `other:Name`
+   * and stripped back out when a job is loaded.
+   */
+  otherTradeName?: string;
   leadSource: LeadSource | "";
   /** Stable cover photo for the job header / front of the project page. */
   primaryPhotoId: string | null;

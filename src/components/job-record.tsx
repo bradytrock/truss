@@ -759,6 +759,7 @@ export function JobRecord({
         leadSource: job.leadSource,
         market: job.market,
         trades: job.trades,
+        otherTradeName: job.otherTradeName,
       });
       toast.success(`Duplicated as ${created.code}.`);
       router.replace(jobRecordHref(created.id), { scroll: false });
@@ -887,10 +888,11 @@ export function JobRecord({
             </Select>
             <TradesMenu
               value={job.trades}
+              otherName={job.otherTradeName ?? ""}
               disabled={deleted}
               emptyLabel="Add trades"
               separator=" · "
-              onChange={(trades) => patch({ trades })}
+              onChange={(trades, otherTradeName) => crm.updateJob(job.id, { trades, otherTradeName })}
             />
           </div>
           <div className="flex items-center gap-1">

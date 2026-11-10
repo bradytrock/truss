@@ -75,7 +75,7 @@ function preferredEstimate(estimates: CertificateEstimate[]) {
 }
 
 function scopeFromSources(
-  job: Pick<Job, "description" | "trades">,
+  job: Pick<Job, "description" | "trades" | "otherTradeName">,
   estimate: CertificateEstimate | undefined,
   lines: CertificateLine[],
 ) {
@@ -90,7 +90,7 @@ function scopeFromSources(
       .filter(Boolean);
     if (titles.length > 0) return titles.map((title) => `- ${title}`).join("\n");
   }
-  const trades = tradeSummary(job.trades);
+  const trades = tradeSummary(job.trades, job.otherTradeName);
   return trades === "Trades involved" ? "" : trades;
 }
 
@@ -109,6 +109,7 @@ export function completionCertificateDraft(input: {
     | "postalCode"
     | "location"
     | "trades"
+    | "otherTradeName"
   >;
   customerName: string;
   company: Pick<CompanySettings, "name" | "licenseNumber" | "phone">;
