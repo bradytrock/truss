@@ -283,6 +283,7 @@ import {
   LEGACY_CLOSEOUT_PAYOUT_TASK,
   closeoutHasVentRecord,
   closeoutReleaseBlock,
+  closeoutReviewAudience,
   closeoutTaskTitle,
   commissionCloseoutPayload,
   newCommissionCloseout,
@@ -10027,12 +10028,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         job,
         title: closeoutTaskTitle("review", job.code),
         notes: `${actor.name} submitted ${code} for closeout. Compare QuickBooks with the job expenses, then release it for commission payout.`,
-        // Closeout review notices stay with company admins, directors, and accounting.
-        audience: state.staff.filter(
-          (member) =>
-            !member.locked &&
-            (member.role === "company_admin" || member.role === "director" || member.role === "accountant"),
-        ),
+        audience: closeoutReviewAudience(state.staff),
         sms: `${actor.name} submitted ${code} for closeout. Review it in Accounting.`,
         activity: `${actor.name} submitted this project for closeout. Accounting has the commission sheet.`,
       });
