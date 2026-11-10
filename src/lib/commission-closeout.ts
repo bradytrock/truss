@@ -858,6 +858,11 @@ export function canReviewCloseout(role: SeatRole | undefined) {
   return role === "accountant" || role === "company_admin";
 }
 
+/** Company admins and accounting are asked to review a submitted closeout. */
+export function closeoutReviewAudience<T extends { role: SeatRole; locked?: boolean }>(staff: T[]) {
+  return staff.filter((member) => !member.locked && canReviewCloseout(member.role));
+}
+
 export function canMarkCommissionPayout(input: {
   closeout: CommissionCloseout;
   viewerStaffId: string;
