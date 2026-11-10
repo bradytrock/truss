@@ -97,7 +97,6 @@ const pdf = await buildMaterialOrderPdf({
   order,
   job: job(),
   company,
-  customer: "Campolo",
   orderedBy: "Brady Jones",
   orderedByPhone: "4697947701",
   orderedByEmail: "bjones@trockcontracting.com",
@@ -140,8 +139,9 @@ assert.match(text, /BJ3102726-B/);
 assert.match(text, /Beacon Roofing Supply/);
 assert.match(text, /\[BRANCH\]/);
 assert.match(text, /\[ACCOUNT #\]/);
-assert.match(text, /Campolo residence/);
+assert.doesNotMatch(text, /Campolo residence/);
 assert.match(text, /104 West Ash Lane/);
+assert.match(text, /Euless, TX 76039/);
 assert.match(text, /Brady Jones/);
 assert.match(text, /Thu, Nov 12/);
 assert.match(text, /Morning/);

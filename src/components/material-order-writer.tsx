@@ -134,7 +134,6 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
       lines: presented,
       job,
       company: letterhead,
-      customer,
       orderedBy,
       orderedByPhone,
       orderedByEmail,

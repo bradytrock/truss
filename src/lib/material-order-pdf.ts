@@ -106,18 +106,16 @@ async function createDoc() {
   return doc as unknown as Doc;
 }
 
-function shipLines(job: Job | null | undefined, customer: string) {
-  const title = job?.name?.trim() || customer.trim() || "Job site";
+function shipLines(job: Job | null | undefined) {
   const street = job?.street?.trim() ?? "";
   const cityLine = [[job?.city, job?.state].filter(Boolean).join(", "), job?.postalCode]
     .filter(Boolean)
     .join(" ")
     .trim();
-  if (!street && !cityLine) {
-    const location = job?.location?.trim() ?? "";
-    return [title, location].filter(Boolean);
-  }
-  return [title, street, cityLine].filter(Boolean);
+  if (street) return [street, cityLine].filter(Boolean);
+  const location = job?.location?.trim() ?? "";
+  if (location) return [location];
+  return cityLine ? [cityLine] : [];
 }
 
 export async function buildMaterialOrderPdf(input: {
@@ -125,7 +123,6 @@ export async function buildMaterialOrderPdf(input: {
   lines: PresentedMaterialLine[];
   job?: Job | null;
   company: CompanySettings;
-  customer: string;
   orderedBy?: string;
   orderedByPhone?: string;
   orderedByEmail?: string;
@@ -153,7 +150,7 @@ export async function buildMaterialOrderPdf(input: {
     vendor: input.order.vendor.trim() || "Supplier",
     branch: input.order.branch.trim(),
     account: input.order.accountNumber.trim(),
-    ship: shipLines(input.job, input.customer),
+    ship: shipLines(input.job),
     orderedBy: input.orderedBy?.trim() || "",
     phone,
     email: input.orderedByEmail?.trim() || "",
@@ -324,25 +321,26 @@ function drawParties(
       lines: [input.orderedBy || "—", input.phone, input.email].filter(Boolean),
     },
   ];
+  let bottom = y + 28;
   columns.forEach((column, index) => {
     const x = MARGIN + index * (width + 8);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7.5);
     paint(doc, MUTED);
     doc.text(column.label, x, y);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    paint(doc, INK);
-    doc.text(doc.splitTextToSize(column.lines[0] || "—", width), x, y + 14);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    paint(doc, MUTED);
-    column.lines.slice(1).forEach((line, lineIndex) => {
-      const wrapped = doc.splitTextToSize(line, width);
-      doc.text(wrapped, x, y + 28 + lineIndex * 12);
+    let lineY = y + 14;
+    column.lines.forEach((line, lineIndex) => {
+      const primary = lineIndex === 0;
+      doc.setFont("helvetica", primary ? "bold" : "normal");
+      doc.setFontSize(primary ? 10 : 9);
+      paint(doc, primary ? INK : MUTED);
+      const wrapped = doc.splitTextToSize(line || "—", width);
+      doc.text(wrapped, x, lineY);
+      lineY += Math.max(wrapped.length, 1) * (primary ? 12 : 11);
     });
+    bottom = Math.max(bottom, lineY);
   });
-  return y + 62;
+  return bottom + 10;
 }
 
 function drawDeliverBox(
