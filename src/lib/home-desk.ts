@@ -10,6 +10,7 @@ import {
   localYmd,
 } from "@/lib/format";
 import { isJobCodeReviewTask, type JobCodeReviewNotice } from "@/lib/job-code";
+import { formatTaskAssignees } from "@/lib/task-desk";
 import { dedupeJobsByOpportunity, duplicateLeadJobs, isDeletedJob, jobAddress, jobRecordHref } from "@/lib/job-record";
 import { messagesHref } from "@/lib/job-messages";
 import { pipelinePathTotals, unweightedContractValue } from "@/lib/pipeline-path";
@@ -739,7 +740,7 @@ function agenda(
           other.dueAt.slice(0, 10) === tomorrowKey &&
           (other.assignee === task.assignee || (other.relatedId && other.relatedId === task.relatedId)),
       ).length;
-      const who = task.assignee || "Unassigned";
+      const who = formatTaskAssignees(task);
       return {
         id: task.id,
         kind: "Task",

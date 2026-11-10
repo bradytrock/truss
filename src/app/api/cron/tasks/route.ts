@@ -58,6 +58,7 @@ export async function GET(request: Request) {
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  const grouped = new Map<string, NonNullable<ReturnType<typeof parseDueTaskReminder>>[]>();
 
   for (const raw of rows) {
     const reminder = parseDueTaskReminder(raw);
@@ -65,67 +66,80 @@ export async function GET(request: Request) {
       skipped += 1;
       continue;
     }
-    const overdue = taskIsOverdue({ completed: false, dueAt: reminder.dueAt });
-    const payload = {
-      title: reminder.title,
-      dueLabel: formatDate(reminder.dueAt),
-      notes: reminder.notes,
-      assigneeName: reminder.assigneeName,
-      companyName: reminder.companyName,
-      overdue,
-      deskUrl,
-    };
-    const builtinSubject = taskReminderSubject(reminder.title, overdue);
-    const builtinText = taskReminderText(payload);
-    const statusLine = overdue ? `${reminder.title} is overdue.` : `${reminder.title} is due today.`;
-    let detail = builtinText.startsWith(statusLine) ? builtinText.slice(statusLine.length).trim() : builtinText;
-    if (deskUrl && detail.endsWith(deskUrl)) detail = detail.slice(0, -deskUrl.length).trim();
-    let templates = templatesByCompany.get(reminder.companyId);
-    if (!templates) {
-      templates = await loadCompanyEmailTemplates(supabase, reminder.companyId);
-      templatesByCompany.set(reminder.companyId, templates);
-    }
-    const custom = emailTemplateHasOverride(templates, "task_reminder")
-      ? resolveSystemEmail("task_reminder", templates, {
-          name: firstName(reminder.assigneeName),
-          company: reminder.companyName,
-          title: reminder.title,
-          due: formatDate(reminder.dueAt),
-          subject: builtinSubject,
-          statusLine,
-          message: detail,
-        })
-      : null;
-    const result = await sendResendEmail({
-      to: reminder.assigneeEmail,
-      subject: custom?.subject || builtinSubject,
-      text: custom
-        ? systemEmailText({ headline: custom.headline, message: custom.message, url: deskUrl })
-        : builtinText,
-      html: custom
-        ? systemEmailHtml({
-            headline: custom.headline,
-            message: custom.message,
-            button: custom.button,
-            url: deskUrl,
+    const list = grouped.get(reminder.taskId) ?? [];
+    list.push(reminder);
+    grouped.set(reminder.taskId, list);
+  }
+
+  for (const [taskId, reminders] of grouped) {
+    let delivered = 0;
+    let groupFailed = false;
+    for (const reminder of reminders) {
+      const overdue = taskIsOverdue({ completed: false, dueAt: reminder.dueAt });
+      const payload = {
+        title: reminder.title,
+        dueLabel: formatDate(reminder.dueAt),
+        notes: reminder.notes,
+        assigneeName: reminder.assigneeName,
+        companyName: reminder.companyName,
+        overdue,
+        deskUrl,
+      };
+      const builtinSubject = taskReminderSubject(reminder.title, overdue);
+      const builtinText = taskReminderText(payload);
+      const statusLine = overdue ? `${reminder.title} is overdue.` : `${reminder.title} is due today.`;
+      let detail = builtinText.startsWith(statusLine) ? builtinText.slice(statusLine.length).trim() : builtinText;
+      if (deskUrl && detail.endsWith(deskUrl)) detail = detail.slice(0, -deskUrl.length).trim();
+      let templates = templatesByCompany.get(reminder.companyId);
+      if (!templates) {
+        templates = await loadCompanyEmailTemplates(supabase, reminder.companyId);
+        templatesByCompany.set(reminder.companyId, templates);
+      }
+      const custom = emailTemplateHasOverride(templates, "task_reminder")
+        ? resolveSystemEmail("task_reminder", templates, {
+            name: firstName(reminder.assigneeName),
+            company: reminder.companyName,
+            title: reminder.title,
+            due: formatDate(reminder.dueAt),
+            subject: builtinSubject,
+            statusLine,
+            message: detail,
           })
-        : taskReminderHtml(payload),
-      from: formatResendFrom({
-        senderName: "Office",
-        companyName: reminder.companyName || "Truss",
-      }),
-      replyTo: reminder.companyEmail,
-    });
-    if (!result.ok) {
-      failed += 1;
-      continue;
+        : null;
+      const result = await sendResendEmail({
+        to: reminder.assigneeEmail,
+        subject: custom?.subject || builtinSubject,
+        text: custom
+          ? systemEmailText({ headline: custom.headline, message: custom.message, url: deskUrl })
+          : builtinText,
+        html: custom
+          ? systemEmailHtml({
+              headline: custom.headline,
+              message: custom.message,
+              button: custom.button,
+              url: deskUrl,
+            })
+          : taskReminderHtml(payload),
+        from: formatResendFrom({
+          senderName: "Office",
+          companyName: reminder.companyName || "Truss",
+        }),
+        replyTo: reminder.companyEmail,
+      });
+      if (!result.ok) {
+        failed += 1;
+        groupFailed = true;
+        continue;
+      }
+      delivered += 1;
     }
-    const marked = await supabase.rpc("mark_task_reminded", { p_task_id: reminder.taskId });
+    if (groupFailed || delivered === 0) continue;
+    const marked = await supabase.rpc("mark_task_reminded", { p_task_id: taskId });
     if (marked.error) {
-      failed += 1;
+      failed += delivered;
       continue;
     }
-    sent += 1;
+    sent += delivered;
   }
 
   return NextResponse.json({

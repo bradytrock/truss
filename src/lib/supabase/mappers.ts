@@ -33,6 +33,7 @@ import { parseMarket } from "@/lib/market";
 import { storedPhone } from "@/lib/phone";
 import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
+import { taskAssignees } from "@/lib/task-desk";
 import { parseQbStatus, parseTrades } from "@/lib/types";
 import { storedExpenseAccount } from "@/lib/expense-categories";
 import {
@@ -471,6 +472,10 @@ export function mapActivity(row: ActivityRow): Activity {
 }
 
 export function mapTask(row: TaskRow): Task {
+  const stored = "assignees" in row && Array.isArray(row.assignees)
+    ? row.assignees.filter((name): name is string => typeof name === "string")
+    : [];
+  const people = taskAssignees({ assignee: row.assignee, assignees: stored });
   return {
     id: row.id,
     title: row.title,
@@ -478,7 +483,8 @@ export function mapTask(row: TaskRow): Task {
     completed: row.completed,
     relatedType: row.related_type,
     relatedId: row.related_id,
-    assignee: row.assignee,
+    assignee: people[0] ?? "",
+    assignees: people,
     notes: "notes" in row && typeof row.notes === "string" ? row.notes : "",
     remindedAt:
       "reminded_at" in row && typeof row.reminded_at === "string" ? row.reminded_at : null,
@@ -495,7 +501,14 @@ export function taskPatch(patch: Partial<Task>) {
   if (patch.completed !== undefined) row.completed = patch.completed;
   if (patch.relatedType !== undefined) row.related_type = patch.relatedType;
   if (patch.relatedId !== undefined) row.related_id = patch.relatedId;
-  if (patch.assignee !== undefined) row.assignee = patch.assignee;
+  if (patch.assignee !== undefined || patch.assignees !== undefined) {
+    const people =
+      patch.assignees !== undefined
+        ? taskAssignees({ assignees: patch.assignees, assignee: patch.assignee })
+        : taskAssignees({ assignee: patch.assignee });
+    row.assignee = people[0] ?? "";
+    row.assignees = people;
+  }
   if (patch.notes !== undefined) row.notes = patch.notes;
   if (patch.remindedAt !== undefined) row.reminded_at = patch.remindedAt;
   return row;

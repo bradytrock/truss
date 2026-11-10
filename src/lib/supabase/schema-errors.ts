@@ -1347,6 +1347,17 @@ export function missingTaskDeskMessage() {
   return `Saved without notes or reminders. Run ${TASK_DESK_SQL} in the SQL editor so task notes and due-date emails persist.`;
 }
 
+export const TASK_ASSIGNEES_SQL = "supabase/migrations/20261110200000_task_assignees.sql";
+
+export function isMissingTaskAssigneesColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  return (error.message ?? "").toLowerCase().includes("assignees");
+}
+
+export function missingTaskAssigneesMessage() {
+  return `Saved on one task. Run ${TASK_ASSIGNEES_SQL} in the SQL editor so several people can share it and each get the due-date email.`;
+}
+
 export const VOICE_AGENTS_SQL = "supabase/migrations/20260922190000_voice_agents.sql";
 
 export function isMissingVoiceAgents(error: { message?: string; code?: string } | null | undefined) {

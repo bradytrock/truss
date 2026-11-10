@@ -1,22 +1,15 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Bell, Calendar, CheckSquare } from "lucide-react";
+import { Bell, Calendar, Check, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { initials, localYmd } from "@/lib/format";
-import { taskNotes } from "@/lib/task-desk";
+import { formatTaskAssignees, normalizeTaskAssignees, taskAssignees, taskNotes } from "@/lib/task-desk";
 import type { Task } from "@/lib/types";
 import {
   QuickFooter,
@@ -65,7 +58,7 @@ export function CreateTaskDialog({
   const defaultAssignee = user.name || people[0] || "";
   const [title, setTitle] = useState("");
   const [dueAt, setDueAt] = useState(localYmd(new Date()));
-  const [assignee, setAssignee] = useState(defaultAssignee);
+  const [assignees, setAssignees] = useState<string[]>(defaultAssignee ? [defaultAssignee] : []);
   const [kind, setKind] = useState<RelatedKind>("none");
   const [relatedId, setRelatedId] = useState("");
   const [notes, setNotes] = useState("");
@@ -77,7 +70,7 @@ export function CreateTaskDialog({
     if (task) {
       setTitle(task.title);
       setDueAt(task.dueAt);
-      setAssignee(task.assignee || defaultAssignee);
+      setAssignees(taskAssignees(task).length ? taskAssignees(task) : defaultAssignee ? [defaultAssignee] : []);
       setKind(relatedKind(task));
       setRelatedId(task.relatedId ?? "");
       setNotes(taskNotes(task));
@@ -86,7 +79,7 @@ export function CreateTaskDialog({
     const preset = relatedKind({ relatedType: defaultRelatedType ?? null });
     setTitle(defaultTitle ?? "");
     setDueAt(localYmd(new Date()));
-    setAssignee(defaultAssignee);
+    setAssignees(defaultAssignee ? [defaultAssignee] : []);
     setKind(preset);
     setRelatedId(defaultRelatedId ?? "");
     setNotes("");
@@ -102,6 +95,11 @@ export function CreateTaskDialog({
       toast.error("Pick a deadline.");
       return;
     }
+    const people = normalizeTaskAssignees(assignees);
+    if (!people.length) {
+      toast.error("Assign at least one person.");
+      return;
+    }
     const relatedType = kind === "none" ? null : kind;
     const nextRelatedId = kind === "none" ? null : relatedId || null;
     setPending(true);
@@ -110,7 +108,8 @@ export function CreateTaskDialog({
         await updateTask(task.id, {
           title: title.trim(),
           dueAt,
-          assignee: assignee || defaultAssignee,
+          assignee: people[0] ?? "",
+          assignees: people,
           relatedType,
           relatedId: nextRelatedId,
           notes: notes.trim(),
@@ -120,7 +119,8 @@ export function CreateTaskDialog({
         const created = await addTask({
           title: title.trim(),
           dueAt,
-          assignee: assignee || defaultAssignee,
+          assignee: people[0] ?? "",
+          assignees: people,
           relatedType,
           relatedId: nextRelatedId,
           notes: notes.trim(),
@@ -196,7 +196,8 @@ export function CreateTaskDialog({
         ? `${kind}:${relatedId}`
         : "";
   const duePreset = matchingDuePreset(dueAt);
-  const assigneeName = assignee || defaultAssignee;
+  const selected = normalizeTaskAssignees(assignees);
+  const roster = normalizeTaskAssignees([...people, ...selected]);
 
   function chooseTie(value: string) {
     const splitAt = value.indexOf(":");
@@ -230,7 +231,7 @@ export function CreateTaskDialog({
           tone="slate"
           icon={<CheckSquare className="size-5" />}
           title={editing ? "Edit task" : "New task"}
-          description="Lands on the Tasks desk for whoever you assign."
+          description="One task on the desk, shared by everyone you assign."
         />
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className={`${quickDialogBodyClass} flex-1 space-y-4 px-5 py-4`}>
@@ -291,30 +292,52 @@ export function CreateTaskDialog({
             </div>
             <div>
               <QuickLabel>Assign to</QuickLabel>
-              <Select
-                value={assigneeName}
-                onValueChange={(value) => setAssignee(String(value ?? defaultAssignee))}
-                items={people.map((name) => ({
-                  value: name,
-                  label: name === user.name ? `${name} (you)` : name,
-                }))}
-              >
-                <SelectTrigger className="h-10 w-full rounded-lg bg-white data-[size=default]:h-10">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-medium text-white">
-                      {initials(assigneeName)}
-                    </span>
-                    <SelectValue />
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {people.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name === user.name ? `${name} (you)` : name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="max-h-44 overflow-y-auto rounded-lg border bg-white p-1">
+                {roster.map((name) => {
+                  const on = selected.some((person) => person.toLowerCase() === name.toLowerCase());
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => {
+                        setAssignees((current) => {
+                          const has = current.some((person) => person.toLowerCase() === name.toLowerCase());
+                          if (has) {
+                            const next = current.filter((person) => person.toLowerCase() !== name.toLowerCase());
+                            if (!next.length) {
+                              toast.message("A task needs at least one person.");
+                              return current;
+                            }
+                            return next;
+                          }
+                          return normalizeTaskAssignees([...current, name]);
+                        });
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${
+                        on ? "bg-[#f4f4f5]" : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <span
+                        className={`grid size-4 shrink-0 place-items-center rounded-[4px] border ${
+                          on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-white"
+                        }`}
+                      >
+                        {on ? <Check className="size-3" /> : null}
+                      </span>
+                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-medium text-white">
+                        {initials(name)}
+                      </span>
+                      <span className="min-w-0 truncate">{name === user.name ? `${name} (you)` : name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <QuickHint>
+                {selected.length > 1
+                  ? `${formatTaskAssignees({ assignees: selected })} share this task.`
+                  : "Add anyone else who should have this same task."}
+              </QuickHint>
             </div>
             {lockRelated ? (
               lockedLabel ? (
@@ -357,7 +380,7 @@ export function CreateTaskDialog({
               ) : (
                 <span className="inline-flex items-center gap-1.5">
                   <Bell className="size-3.5" />
-                  One email when it’s due or overdue
+                  One email to each person when it’s due or overdue
                 </span>
               )
             }

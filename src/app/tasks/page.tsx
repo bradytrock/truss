@@ -53,7 +53,7 @@ export default function TasksPage() {
       <PageHeader
         eyebrow="Work"
         title="Tasks"
-        description="Create work, assign a person and a deadline, check it off, and get one email when it is due or overdue."
+        description="Create work, assign it to one or more people, and check it off. Each person gets one email when it is due or overdue."
         actions={
           <Button onClick={() => setCreateOpen(true)}>New task</Button>
         }
@@ -87,7 +87,7 @@ export default function TasksPage() {
           description={
             query.trim()
               ? "Try another name or word."
-              : "Add a task, assign someone, and set a deadline. It shows on Home and emails the assignee when it is due."
+              : "Add a task, assign the people who should do it, and set a deadline. It shows on Home and emails each of them when it is due."
           }
           action={<Button onClick={() => setCreateOpen(true)}>New task</Button>}
         />

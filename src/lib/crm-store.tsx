@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingTaskAssigneesColumn, missingTaskAssigneesMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -415,6 +415,13 @@ import {
   suggestedJobCode,
   codeReviewAudience,
 } from "@/lib/job-code";
+import {
+  collapseSharedReviewTasks,
+  encodeTaskAssignees,
+  normalizeTaskAssignees,
+  sharedReviewGroupId,
+  taskAssignees,
+} from "@/lib/task-desk";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { leadAssignNeedsEmail, requestLeadAssignNotification } from "@/lib/lead-assign-email";
 import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
@@ -1650,6 +1657,62 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const materialOrderSyncsRef = useRef(new Map<string, Promise<void>>());
   const fileJobCodeReviewRef = useRef<(job: Job, fromName: string, toName: string) => void>(() => undefined);
   const filingJobCodeReviews = useRef(new Set<string>());
+  const mergingSharedTasks = useRef(false);
+
+  useEffect(() => {
+    if (!hydrated || mergingSharedTasks.current) return;
+    const current = state.tasks;
+    const collapsed = collapseSharedReviewTasks(current);
+    if (!collapsed.changed) return;
+    mergingSharedTasks.current = true;
+    const before = current;
+    const after = collapsed.tasks;
+    void (async () => {
+      try {
+        const supabase = maybeClient();
+        if (supabase) {
+          const removed = before.filter((task) => !after.some((item) => item.id === task.id));
+          const updated = after.filter((task) => {
+            const previous = before.find((item) => item.id === task.id);
+            if (!previous) return false;
+            return encodeTaskAssignees(taskAssignees(previous)) !== encodeTaskAssignees(taskAssignees(task));
+          });
+          let warnedAssignees = false;
+          for (const task of updated) {
+            const people = taskAssignees(task);
+            let result = await supabase
+              .from("tasks")
+              .update({ assignee: people[0] ?? "", assignees: people })
+              .eq("id", task.id);
+            if (result.error && isMissingTaskAssigneesColumn(result.error)) {
+              if (!warnedAssignees) {
+                toast.message(missingTaskAssigneesMessage());
+                warnedAssignees = true;
+              }
+              result = await supabase
+                .from("tasks")
+                .update({ assignee: encodeTaskAssignees(people) })
+                .eq("id", task.id);
+            }
+            if (result.error) return;
+          }
+          if (removed.length) {
+            const { error } = await supabase.from("tasks").delete().in(
+              "id",
+              removed.map((task) => task.id),
+            );
+            if (error) return;
+          }
+        }
+        setState((prev) => {
+          const next = collapseSharedReviewTasks(prev.tasks);
+          return next.changed ? { ...prev, tasks: next.tasks } : prev;
+        });
+      } finally {
+        mergingSharedTasks.current = false;
+      }
+    })();
+  }, [hydrated, state.tasks]);
   const auditRef = useRef<
     | ((input: {
         entityType: CompanyAuditEntityType;
@@ -4475,51 +4538,55 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const toggleTask = useCallback(async (id: string) => {
     const current = state.tasks.find((task) => task.id === id);
     if (!current) return;
-    const after = { ...current, completed: !current.completed };
+    const completing = !current.completed;
+    const groupKey = completing ? sharedReviewGroupId(current) : null;
+    const group = groupKey
+      ? state.tasks.filter((task) => sharedReviewGroupId(task) === groupKey)
+      : [current];
+    const ids = new Set(group.map((task) => task.id));
+    const apply = (tasks: Task[]) =>
+      tasks.map((task) => (ids.has(task.id) ? { ...task, completed: completing } : task));
     const supabase = requireClient();
     if (!supabase) {
-      setState((prev) => ({
-        ...prev,
-        tasks: prev.tasks.map((task) =>
-          task.id === id ? after : task
-        ),
-      }));
-      void recordCompanyAudit({
-        entityType: "task",
-        entityId: id,
-        action: "status_changed",
-        before: current,
-        after,
-        label: current.title,
-        detail: after.completed ? "Marked task complete" : "Reopened task",
-      });
+      setState((prev) => ({ ...prev, tasks: apply(prev.tasks) }));
+      for (const task of group) {
+        const after = { ...task, completed: completing };
+        void recordCompanyAudit({
+          entityType: "task",
+          entityId: task.id,
+          action: "status_changed",
+          before: task,
+          after,
+          label: task.title,
+          detail: completing ? "Marked task complete" : "Reopened task",
+        });
+      }
       return;
     }
-    const { error } = await supabase.from("tasks").update({ completed: !current.completed }).eq("id", id);
+    const { error } = await supabase.from("tasks").update({ completed: completing }).in("id", [...ids]);
     if (error) {
       toast.error(error.message);
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((task) =>
-        task.id === id ? after : task
-      ),
-    }));
-    void recordCompanyAudit({
-      entityType: "task",
-      entityId: id,
-      action: "status_changed",
-      before: current,
-      after,
-      label: current.title,
-      detail: after.completed ? "Marked task complete" : "Reopened task",
-    });
+    setState((prev) => ({ ...prev, tasks: apply(prev.tasks) }));
+    for (const task of group) {
+      const after = { ...task, completed: completing };
+      void recordCompanyAudit({
+        entityType: "task",
+        entityId: task.id,
+        action: "status_changed",
+        before: task,
+        after,
+        label: task.title,
+        detail: completing ? "Marked task complete" : "Reopened task",
+      });
+    }
   }, [recordCompanyAudit, state.tasks]);
 
   const addTask = useCallback(
     async (input: TaskDraft) => {
       const notes = input.notes?.trim() ?? "";
+      const people = taskAssignees({ assignee: input.assignee, assignees: input.assignees });
       const localTask: Task = {
         id: crypto.randomUUID(),
         title: input.title.trim(),
@@ -4527,7 +4594,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         completed: input.completed === true,
         relatedType: input.relatedType,
         relatedId: input.relatedId,
-        assignee: input.assignee,
+        assignee: people[0] ?? "",
+        assignees: people,
         notes,
         remindedAt: null,
       };
@@ -4543,17 +4611,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
         return localTask;
       }
-      const payload = {
+      let payload: Database["public"]["Tables"]["tasks"]["Insert"] = {
         company_id: user.companyId,
         title: localTask.title,
         due_at: localTask.dueAt,
         completed: localTask.completed,
         related_type: localTask.relatedType,
         related_id: localTask.relatedId,
-        assignee: localTask.assignee,
+        assignee: people[0] ?? "",
+        assignees: people,
         notes,
       };
       let inserted = await supabase.from("tasks").insert(payload).select("*").single();
+      if (inserted.error && isMissingTaskAssigneesColumn(inserted.error)) {
+        toast.message(missingTaskAssigneesMessage());
+        const { assignees: _assignees, ...rest } = payload;
+        payload = { ...rest, assignee: encodeTaskAssignees(people) };
+        inserted = await supabase.from("tasks").insert(payload).select("*").single();
+      }
       if (inserted.error && isMissingTaskDeskColumns(inserted.error)) {
         toast.message(missingTaskDeskMessage());
         const { notes: _notes, ...rest } = payload;
@@ -4601,25 +4676,29 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       try {
         const audience = codeReviewAudience(state.staff);
+        const people = normalizeTaskAssignees(audience.map((member) => member.name));
         const sms = jobCodeReviewSms({
           jobCode: job.code,
           fromName,
           toName,
           suggestedCode: suggested,
         });
-        for (const member of audience) {
+        if (people.length) {
           try {
             await addTask({
               title,
               dueAt: localYmd(new Date()),
               relatedType: "job",
               relatedId: job.id,
-              assignee: member.name,
+              assignee: people[0] ?? "",
+              assignees: people,
               notes,
             });
           } catch {
             // Local book or missing tasks table — notice still stands.
           }
+        }
+        for (const member of audience) {
           await notifyStaffByText(member, sms);
         }
         await addActivity({
@@ -4643,19 +4722,32 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (id: string, patch: Partial<Omit<Task, "id">>) => {
       const current = state.tasks.find((task) => task.id === id);
       if (!current) return;
+      const people =
+        patch.assignees !== undefined
+          ? taskAssignees({ assignees: patch.assignees, assignee: patch.assignee ?? current.assignee })
+          : patch.assignee !== undefined
+            ? taskAssignees({ assignee: patch.assignee })
+            : taskAssignees(current);
       const after: Task = {
         ...current,
         ...patch,
         id,
+        assignee: people[0] ?? "",
+        assignees: people,
         notes: patch.notes !== undefined ? patch.notes : current.notes,
         remindedAt: patch.dueAt !== undefined && patch.dueAt !== current.dueAt ? null : (patch.remindedAt ?? current.remindedAt),
       };
+      const groupKey = patch.assignees !== undefined ? sharedReviewGroupId(after) : null;
+      const siblingIds = groupKey
+        ? state.tasks.filter((task) => task.id !== id && sharedReviewGroupId(task) === groupKey).map((task) => task.id)
+        : [];
+      const apply = (tasks: Task[]) =>
+        tasks
+          .filter((task) => !siblingIds.includes(task.id))
+          .map((task) => (task.id === id ? after : task));
       const supabase = requireClient();
       if (!supabase) {
-        setState((prev) => ({
-          ...prev,
-          tasks: prev.tasks.map((task) => (task.id === id ? after : task)),
-        }));
+        setState((prev) => ({ ...prev, tasks: apply(prev.tasks) }));
         void recordCompanyAudit({
           entityType: "task",
           entityId: id,
@@ -4666,8 +4758,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
         return;
       }
-      let nextPatch = taskPatch(patch);
+      let nextPatch = taskPatch(
+        patch.assignees !== undefined || patch.assignee !== undefined
+          ? { ...patch, assignee: after.assignee, assignees: after.assignees }
+          : patch,
+      );
       let { error } = await supabase.from("tasks").update(nextPatch).eq("id", id);
+      if (error && isMissingTaskAssigneesColumn(error)) {
+        toast.message(missingTaskAssigneesMessage());
+        const { assignees: _assignees, ...rest } = nextPatch;
+        nextPatch = { ...rest, assignee: encodeTaskAssignees(people) };
+        ({ error } = await supabase.from("tasks").update(nextPatch).eq("id", id));
+      }
       if (error && isMissingTaskDeskColumns(error)) {
         toast.message(missingTaskDeskMessage());
         const { notes: _notes, reminded_at: _reminded, ...rest } = nextPatch;
@@ -4678,10 +4780,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error.message);
         return;
       }
-      setState((prev) => ({
-        ...prev,
-        tasks: prev.tasks.map((task) => (task.id === id ? after : task)),
-      }));
+      if (siblingIds.length) {
+        const removed = await supabase.from("tasks").delete().in("id", siblingIds);
+        if (removed.error) toast.error(removed.error.message);
+      }
+      setState((prev) => ({ ...prev, tasks: apply(prev.tasks) }));
       void recordCompanyAudit({
         entityType: "task",
         entityId: id,
@@ -4757,31 +4860,38 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const current = state.tasks.find((task) => task.id === id);
       if (!current) return;
+      const groupKey = sharedReviewGroupId(current);
+      const group = groupKey ? state.tasks.filter((task) => sharedReviewGroupId(task) === groupKey) : [current];
+      const ids = new Set(group.map((task) => task.id));
       const supabase = requireClient();
       if (!supabase) {
-        setState((prev) => ({ ...prev, tasks: prev.tasks.filter((task) => task.id !== id) }));
-        void recordCompanyAudit({
-          entityType: "task",
-          entityId: id,
-          action: "deleted",
-          before: current,
-          label: current.title,
-        });
+        setState((prev) => ({ ...prev, tasks: prev.tasks.filter((task) => !ids.has(task.id)) }));
+        for (const task of group) {
+          void recordCompanyAudit({
+            entityType: "task",
+            entityId: task.id,
+            action: "deleted",
+            before: task,
+            label: task.title,
+          });
+        }
         return;
       }
-      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      const { error } = await supabase.from("tasks").delete().in("id", [...ids]);
       if (error) {
         toast.error(error.message);
         return;
       }
-      setState((prev) => ({ ...prev, tasks: prev.tasks.filter((task) => task.id !== id) }));
-      void recordCompanyAudit({
-        entityType: "task",
-        entityId: id,
-        action: "deleted",
-        before: current,
-        label: current.title,
-      });
+      setState((prev) => ({ ...prev, tasks: prev.tasks.filter((task) => !ids.has(task.id)) }));
+      for (const task of group) {
+        void recordCompanyAudit({
+          entityType: "task",
+          entityId: task.id,
+          action: "deleted",
+          before: task,
+          label: task.title,
+        });
+      }
     },
     [recordCompanyAudit, state.tasks]
   );
@@ -9879,43 +9989,44 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const fileCloseoutNotice = useCallback(
     async (input: { job: Job; title: string; notes: string; audience: StaffMember[]; sms: string; activity: string }) => {
-      const localTasks: Task[] = [];
-      for (const member of input.audience) {
-        const open = state.tasks.some(
-          (task) =>
-            !task.completed &&
-            task.relatedId === input.job.id &&
-            task.assignee === member.name &&
-            task.title === input.title,
-        );
-        if (!open) {
-          if (isSupabaseConfigured()) {
-            await addTask({
-              title: input.title,
-              dueAt: localYmd(new Date()),
-              relatedType: "job",
-              relatedId: input.job.id,
-              assignee: member.name,
-              notes: input.notes,
-            });
-          } else {
-            localTasks.push({
-              id: crypto.randomUUID(),
-              title: input.title,
-              dueAt: localYmd(new Date()),
-              completed: false,
-              relatedType: "job",
-              relatedId: input.job.id,
-              assignee: member.name,
-              notes: input.notes,
-              remindedAt: null,
-            });
-          }
+      const people = normalizeTaskAssignees(input.audience.map((member) => member.name));
+      const open = state.tasks.some(
+        (task) => !task.completed && task.relatedId === input.job.id && task.title === input.title,
+      );
+      if (!open && people.length) {
+        if (isSupabaseConfigured()) {
+          await addTask({
+            title: input.title,
+            dueAt: localYmd(new Date()),
+            relatedType: "job",
+            relatedId: input.job.id,
+            assignee: people[0] ?? "",
+            assignees: people,
+            notes: input.notes,
+          });
+        } else {
+          setState((prev) => ({
+            ...prev,
+            tasks: [
+              {
+                id: crypto.randomUUID(),
+                title: input.title,
+                dueAt: localYmd(new Date()),
+                completed: false,
+                relatedType: "job",
+                relatedId: input.job.id,
+                assignee: people[0] ?? "",
+                assignees: people,
+                notes: input.notes,
+                remindedAt: null,
+              },
+              ...prev.tasks,
+            ],
+          }));
         }
-        if (isSupabaseConfigured()) await notifyStaffByText(member, input.sms);
       }
-      if (localTasks.length) {
-        setState((prev) => ({ ...prev, tasks: [...localTasks, ...prev.tasks] }));
+      if (isSupabaseConfigured()) {
+        for (const member of input.audience) await notifyStaffByText(member, input.sms);
       }
       await addActivity({
         entityType: "job",
@@ -10438,18 +10549,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         body: `${actor.name} requested a ${money} refund on the ${paymentHeading(payment).toLowerCase()}.`,
       });
       const title = `Review refund ${saved.number}`;
-      for (const member of state.staff) {
-        if (member.locked || member.id === actor.id || !canProcessRefunds(member.role)) continue;
-        const open = state.tasks.some(
-          (task) => !task.completed && task.relatedId === job.id && task.assignee === member.name && task.title === title,
-        );
-        if (open) continue;
+      const reviewers = state.staff.filter(
+        (member) => !member.locked && member.id !== actor.id && canProcessRefunds(member.role),
+      );
+      const people = normalizeTaskAssignees(reviewers.map((member) => member.name));
+      const open = state.tasks.some(
+        (task) => !task.completed && task.relatedId === job.id && task.title === title,
+      );
+      if (!open && people.length) {
         await addTask({
           title,
           dueAt: localYmd(new Date()),
           relatedType: "job",
           relatedId: job.id,
-          assignee: member.name,
+          assignee: people[0] ?? "",
+          assignees: people,
           notes: `${actor.name} requested ${money} back on ${job.code || job.name}. ${refundDestinationLabel(payment, next.destination, customer)}.`,
         });
       }
@@ -16236,6 +16350,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CrmContextValue>(
     () => ({
       ...scoped,
+      tasks: collapseSharedReviewTasks(scoped.tasks).tasks,
       user: displayUser,
       viewer,
       effectiveStaff,

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import {
+  collapseSharedReviewTasks,
   filterTasks,
+  formatTaskAssignees,
   parseDueTaskReminder,
   searchTasks,
   sortTasks,
+  taskAssignedTo,
   taskIsOverdue,
   taskRelatedHref,
   taskReminderSubject,
@@ -44,6 +47,53 @@ assert.deepEqual(
   ["c"],
 );
 assert.equal(filterTasks(all, "open", "Brady Jones").length, 2);
+
+const shared = task({
+  id: "shared",
+  title: "Review job code MJ111026-A",
+  dueAt: "2099-01-15",
+  relatedType: "job",
+  relatedId: "job-1",
+  assignee: "Alan Gull",
+  assignees: ["Alan Gull", "Tami Vaughn", "Josh Gamlen"],
+});
+assert.equal(taskAssignedTo(shared, "Tami Vaughn"), true);
+assert.equal(taskAssignedTo(shared, "Brady Jones"), false);
+assert.equal(
+  formatTaskAssignees(shared),
+  "Alan Gull, Tami Vaughn, and Josh Gamlen",
+);
+assert.deepEqual(
+  filterTasks([shared, openMine], "mine", "Josh Gamlen").map((item) => item.id),
+  ["shared"],
+);
+assert.deepEqual(searchTasks([shared], "tami").map((item) => item.id), ["shared"]);
+
+const copies = collapseSharedReviewTasks([
+  task({
+    id: "copy-a",
+    title: "Review job code MJ111026-A",
+    relatedType: "job",
+    relatedId: "job-1",
+    assignee: "Alan Gull",
+    notes: "Reassigned from Martin Johnson to Brandon Overby.",
+  }),
+  task({
+    id: "copy-b",
+    title: "Review job code MJ111026-A",
+    relatedType: "job",
+    relatedId: "job-1",
+    assignee: "Tami Vaughn",
+    notes: "Reassigned from Martin Johnson to Brandon Overby.",
+  }),
+  task({ id: "other", title: "Call back", assignee: "Brady Jones" }),
+]);
+assert.deepEqual(
+  copies.tasks.map((item) => item.id),
+  ["copy-a", "other"],
+);
+assert.deepEqual(copies.tasks[0]?.assignees, ["Alan Gull", "Tami Vaughn"]);
+assert.equal(collapseSharedReviewTasks(copies.tasks).changed, false);
 
 assert.deepEqual(
   sortTasks(all).map((item) => item.id),

@@ -10,6 +10,7 @@ import { useCrm } from "@/lib/crm-store";
 import { onboardingStep } from "@/lib/invite-onboarding";
 import { createClient } from "@/lib/supabase/client";
 import { jobRecordHref } from "@/lib/job-record";
+import { formatTaskAssignees, taskAssignees } from "@/lib/task-desk";
 import { phoneSearchText } from "@/lib/phone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -756,15 +757,17 @@ export function SearchTrigger() {
                 .map((task) => (
                   <CommandItem
                     key={task.id}
-                    value={`${task.title} ${task.assignee} task`}
+                    value={`${task.title} ${taskAssignees(task).join(" ")} task`}
                     onSelect={() => {
                       setOpen(false);
                       router.push("/tasks");
                     }}
                   >
                     <span className="min-w-0 truncate">{task.title}</span>
-                    {task.assignee ? (
-                      <span className="ml-auto text-[10px] text-muted-foreground">{task.assignee}</span>
+                    {taskAssignees(task).length ? (
+                      <span className="ml-auto max-w-[45%] truncate text-[10px] text-muted-foreground">
+                        {formatTaskAssignees(task)}
+                      </span>
                     ) : null}
                   </CommandItem>
                 ))}

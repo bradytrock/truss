@@ -1,5 +1,97 @@
 import { daysUntil } from "@/lib/format";
+import { isJobCodeReviewTask } from "@/lib/job-code";
 import type { Job, Opportunity, Task } from "@/lib/types";
+
+/** Stored in `assignee` when the assignees column is not in Postgres yet. */
+export const TASK_ASSIGNEE_JOIN = " | ";
+
+export function normalizeTaskAssignees(names: Iterable<string | null | undefined>) {
+  const seen = new Set<string>();
+  const people: string[] = [];
+  for (const raw of names) {
+    const name = raw?.trim() ?? "";
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    people.push(name);
+  }
+  return people;
+}
+
+export function encodeTaskAssignees(names: Iterable<string | null | undefined>) {
+  return normalizeTaskAssignees(names).join(TASK_ASSIGNEE_JOIN);
+}
+
+export function splitTaskAssignee(value: string | null | undefined) {
+  const text = value?.trim() ?? "";
+  if (!text) return [];
+  if (text.includes(TASK_ASSIGNEE_JOIN)) return normalizeTaskAssignees(text.split(TASK_ASSIGNEE_JOIN));
+  return [text];
+}
+
+export function taskAssignees(task: { assignee?: string | null; assignees?: string[] | null }) {
+  const listed = normalizeTaskAssignees(task.assignees ?? []);
+  if (listed.length) return listed;
+  return splitTaskAssignee(task.assignee);
+}
+
+export function taskAssignedTo(task: { assignee?: string | null; assignees?: string[] | null }, name: string) {
+  const mine = name.trim().toLowerCase();
+  if (!mine) return false;
+  return taskAssignees(task).some((person) => person.toLowerCase() === mine);
+}
+
+export function formatTaskAssignees(task: { assignee?: string | null; assignees?: string[] | null }) {
+  const names = taskAssignees(task);
+  if (names.length === 0) return "Unassigned";
+  if (names.length === 1) return names[0] ?? "Unassigned";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+/** Open copies of one review (job code, closeout, refund) share a group id. */
+export function sharedReviewGroupId(
+  task: Pick<Task, "title" | "relatedType" | "relatedId" | "completed">,
+) {
+  if (task.completed || !task.relatedId) return null;
+  if (isJobCodeReviewTask(task)) return `job-code:${task.relatedId}:${task.title}`;
+  if (task.title.startsWith("Review closeout ")) return `closeout:${task.relatedId}:${task.title}`;
+  if (task.title.startsWith("Review refund ")) return `refund:${task.relatedId}:${task.title}`;
+  return null;
+}
+
+/** Fold duplicate review copies into one task assigned to everyone on them. */
+export function collapseSharedReviewTasks(tasks: Task[]): { tasks: Task[]; changed: boolean } {
+  const groups = new Map<string, Task[]>();
+  for (const task of tasks) {
+    const key = sharedReviewGroupId(task);
+    if (!key) continue;
+    const list = groups.get(key) ?? [];
+    list.push(task);
+    groups.set(key, list);
+  }
+  const drop = new Set<string>();
+  const replace = new Map<string, Task>();
+  for (const group of groups.values()) {
+    const people = normalizeTaskAssignees(group.flatMap((task) => taskAssignees(task)));
+    const keep = group[0];
+    if (!keep) continue;
+    const samePeople = encodeTaskAssignees(taskAssignees(keep)) === encodeTaskAssignees(people);
+    if (group.length === 1 && samePeople) continue;
+    for (const extra of group.slice(1)) drop.add(extra.id);
+    replace.set(keep.id, {
+      ...keep,
+      assignee: people[0] ?? "",
+      assignees: people,
+    });
+  }
+  if (!drop.size && !replace.size) return { tasks, changed: false };
+  return {
+    changed: true,
+    tasks: tasks.filter((task) => !drop.has(task.id)).map((task) => replace.get(task.id) ?? task),
+  };
+}
 
 export const TASK_FILTERS = ["mine", "open", "overdue", "done", "all"] as const;
 export type TaskFilter = (typeof TASK_FILTERS)[number];
@@ -26,13 +118,12 @@ export function filterTasks(
   filter: TaskFilter,
   viewerName: string,
 ) {
-  const mine = viewerName.trim().toLowerCase();
   return tasks.filter((task) => {
     if (filter === "done") return task.completed;
     if (filter === "all") return true;
     if (task.completed) return false;
     if (filter === "overdue") return taskIsOverdue(task);
-    if (filter === "mine") return mine !== "" && task.assignee.trim().toLowerCase() === mine;
+    if (filter === "mine") return taskAssignedTo(task, viewerName);
     return true;
   });
 }
@@ -80,7 +171,7 @@ export function searchTasks(tasks: Task[], query: string) {
   const needle = query.trim().toLowerCase();
   if (!needle) return tasks;
   return tasks.filter((task) =>
-    [task.title, task.assignee, taskNotes(task)].some((part) => part.toLowerCase().includes(needle)),
+    [task.title, ...taskAssignees(task), taskNotes(task)].some((part) => part.toLowerCase().includes(needle)),
   );
 }
 

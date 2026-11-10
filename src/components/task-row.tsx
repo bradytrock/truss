@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Checkbox } from "@/components/ui/checkbox";
 import { daysUntil, formatDateShort } from "@/lib/format";
-import { taskDueHeadline, taskNotes } from "@/lib/task-desk";
+import { formatTaskAssignees, taskDueHeadline, taskNotes } from "@/lib/task-desk";
 import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +50,7 @@ export function TaskRow({
           </p>
         )}
         <p className={cn("text-xs", overdue ? "text-destructive" : "text-[#706e6b]")}>
-          {task.assignee || "Unassigned"} · {formatDateShort(task.dueAt)}
+          {formatTaskAssignees(task)} · {formatDateShort(task.dueAt)}
           {headline ? ` · ${headline.toLowerCase()}` : ""}
         </p>
         {relatedHref && relatedLabel ? (

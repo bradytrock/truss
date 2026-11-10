@@ -699,6 +699,7 @@ export type Database = {
           related_type: Database["public"]["Enums"]["entity_kind"] | null;
           related_id: string | null;
           assignee: string;
+          assignees: string[];
           notes: string;
           reminded_at: string | null;
           created_at: string;
@@ -712,6 +713,7 @@ export type Database = {
           related_type?: Database["public"]["Enums"]["entity_kind"] | null;
           related_id?: string | null;
           assignee?: string;
+          assignees?: string[];
           notes?: string;
           reminded_at?: string | null;
         };

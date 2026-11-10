@@ -440,7 +440,10 @@ export interface Task {
   completed: boolean;
   relatedType: "opportunity" | "job" | "client" | null;
   relatedId: string | null;
+  /** First person. Kept so older reads still have a single name. */
   assignee: string;
+  /** Everyone on the task. One task can be shared instead of copied per person. */
+  assignees?: string[];
   notes?: string;
   remindedAt?: string | null;
 }
@@ -451,6 +454,7 @@ export type TaskDraft = {
   relatedType: Task["relatedType"];
   relatedId: string | null;
   assignee: string;
+  assignees?: string[];
   notes?: string;
   /** Write the task already finished. The desk uses this so a cleared reminder stays gone. */
   completed?: boolean;

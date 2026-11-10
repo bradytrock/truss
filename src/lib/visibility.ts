@@ -8,6 +8,7 @@ import type {
 } from "@/lib/types";
 import { SEAT_ROLE_LABELS, isNorthlineDemoName } from "@/lib/types";
 import { bdOpportunityIds, hasBusinessDevelopmentSeat, jobInBdBook, referralPartnerIds } from "@/lib/bd";
+import { taskAssignees } from "@/lib/task-desk";
 import { documentOwnerStaff } from "@/lib/document-owner";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
@@ -488,7 +489,7 @@ export function scopeBook(
     return false;
   });
   const tasks = state.tasks.filter((task) => {
-    if (names.has(task.assignee)) return true;
+    if (taskAssignees(task).some((name) => names.has(name))) return true;
     if (task.relatedType === "job" && task.relatedId && jobIds.has(task.relatedId)) return true;
     if (task.relatedType === "opportunity" && task.relatedId && opportunityIds.has(task.relatedId)) {
       return true;
