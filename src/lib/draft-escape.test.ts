@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { escapeDismissesOverlay, escapeKeepsDraft, formSignature, isTextEntryElement } from "./draft-escape.ts";
+import { dismissKeepsDraft, escapeDismissesOverlay, escapeKeepsDraft, formSignature, isTextEntryElement } from "./draft-escape.ts";
 
 assert.equal(isTextEntryElement(null), false);
 assert.equal(isTextEntryElement({ tagName: "input", type: "text" }), true);
@@ -37,6 +37,12 @@ assert.equal(escapeKeepsDraft({ reason: "outside-press", baseline: "", current: 
 assert.equal(escapeKeepsDraft({ reason: "escape-key", baseline: null, current: "Ada" }), false);
 assert.equal(escapeKeepsDraft({ reason: "close-press", baseline: "", current: "Ada" }), false);
 
+assert.equal(dismissKeepsDraft({ reason: "outside-press", baseline: "", current: "Ada" }), true);
+assert.equal(dismissKeepsDraft({ reason: "close-press", baseline: "", current: "Ada" }), true);
+assert.equal(dismissKeepsDraft({ reason: "close-press", baseline: "Ada", current: "Ada" }), false);
+assert.equal(dismissKeepsDraft({ reason: "imperative-action", baseline: "", current: "Ada" }), false);
+assert.equal(dismissKeepsDraft({ reason: "none", baseline: "", current: "Ada" }), false);
+
 const root = {
   querySelectorAll() {
     return [
@@ -57,6 +63,38 @@ const root = {
 };
 
 assert.equal(formSignature(root), "first:Ada\u0001seed:referral\u0001rush:1\u0001Call back\u0001Bold line");
+
+const choices = {
+  querySelectorAll() {
+    return [
+      {
+        tagName: "BUTTON",
+        textContent: "Residential",
+        getAttribute: (name: string) => (name === "role" ? "radio" : name === "aria-checked" ? "true" : null),
+        closest: () => null,
+      },
+      {
+        tagName: "BUTTON",
+        textContent: "Roofing",
+        getAttribute: (name: string) => (name === "aria-pressed" ? "true" : null),
+        closest: () => null,
+      },
+      {
+        tagName: "BUTTON",
+        textContent: "Referral",
+        getAttribute: (name: string) => (name === "data-slot" ? "select-trigger" : null),
+        closest: () => null,
+      },
+      {
+        tagName: "BUTTON",
+        getAttribute: (name: string) => (name === "data-slot" ? "checkbox" : null),
+        hasAttribute: (name: string) => name === "data-checked",
+        closest: () => null,
+      },
+    ];
+  },
+};
+assert.equal(formSignature(choices), "Residential:1\u0001Roofing:1\u0001Referral\u00011");
 
 const unchanged = {
   querySelectorAll() {

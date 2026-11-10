@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Calendar,
   ChevronDown,
@@ -396,6 +396,21 @@ export function JobRecord({
   onToggleExpand?: () => void;
 }) {
   const crm = useCrm();
+  const descriptionRef = useRef(job.description);
+  const crmRef = useRef(crm);
+  useEffect(() => {
+    descriptionRef.current = job.description;
+    crmRef.current = crm;
+  }, [crm, job.description]);
+  useEffect(() => {
+    const id = job.id;
+    return () => {
+      const field = document.getElementById(`job-description-${id}`);
+      if (!(field instanceof HTMLTextAreaElement) || field.dataset.edited !== "true") return;
+      if (field.value === descriptionRef.current) return;
+      void crmRef.current.updateJob(id, { description: field.value });
+    };
+  }, [job.id]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const startEstimateFlow = useStartEstimate();
@@ -1665,10 +1680,14 @@ export function JobRecord({
               Description
             </p>
             <Textarea
+              id={`job-description-${job.id}`}
               defaultValue={job.description}
               placeholder="Scope, roof type, damage notes..."
               rows={3}
               className="rounded-[12px] bg-card"
+              onInput={(event) => {
+                event.currentTarget.dataset.edited = "true";
+              }}
               onBlur={(event) => {
                 if (event.target.value !== job.description) {
                   patch({ description: event.target.value });
