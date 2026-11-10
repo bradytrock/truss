@@ -6,6 +6,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   Calendar,
   ChevronDown,
+  ChevronRight,
   Copy,
   Ellipsis,
   FileText,
@@ -298,39 +299,91 @@ function DetailRow({
   );
 }
 
-function SummaryCard({
+function SummarySegment({
   eyebrow,
   title,
   detail,
   action,
   href,
   onClick,
+  highlight = false,
+  pinDetail = false,
 }: {
   eyebrow: string;
   title: string;
-  detail: ReactNode;
+  detail: string;
   action?: string;
   href?: string;
   onClick?: () => void;
+  highlight?: boolean;
+  pinDetail?: boolean;
 }) {
-  const actionClass = "mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline";
+  const interactive = Boolean(href || onClick);
+  const className = cn(
+    "flex w-full min-w-0 items-center gap-1.5 px-3 py-3 text-left @min-[40rem]/summary:flex-1",
+    highlight
+      ? "bg-[#fcf5f4] dark:bg-[color-mix(in_srgb,var(--primary)_16%,var(--card))]"
+      : "bg-card",
+    interactive &&
+      (highlight
+        ? "cursor-pointer hover:bg-[#f8ebe9] dark:hover:bg-[color-mix(in_srgb,var(--primary)_24%,var(--card))]"
+        : "cursor-pointer hover:bg-muted/70"),
+    "focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+  );
+  const content = (
+    <>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] leading-4 font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          {eyebrow}
+        </span>
+        <span className="mt-1.5 flex min-w-0 items-baseline gap-1.5">
+          <span
+            className={cn(
+              "truncate text-[15px] leading-5 font-semibold",
+              pinDetail ? "min-w-0" : "max-w-[72%] shrink-0",
+            )}
+          >
+            {title}
+          </span>
+          {detail ? (
+            <span
+              className={cn(
+                "truncate text-[13px] leading-5",
+                pinDetail ? "shrink-0" : "min-w-0",
+                highlight && pinDetail ? "font-medium text-primary" : "text-muted-foreground",
+              )}
+            >
+              {detail}
+            </span>
+          ) : null}
+        </span>
+      </span>
+      {interactive ? (
+        <ChevronRight
+          className={cn("size-3.5 shrink-0", highlight ? "text-primary" : "text-muted-foreground")}
+          aria-hidden="true"
+        />
+      ) : null}
+      {action && action !== detail ? <span className="sr-only">{action}</span> : null}
+    </>
+  );
+  if (href) {
+    return (
+      <Link href={href} className={className} title={detail}>
+        {content}
+      </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className} title={detail}>
+        {content}
+      </button>
+    );
+  }
   return (
-    <div className="flex h-full flex-col rounded-[12px] border bg-card p-4">
-      <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{eyebrow}</p>
-      <p className="mt-3 text-lg leading-snug font-semibold">{title}</p>
-      <div className="mt-1 flex-1 text-sm text-muted-foreground">{detail}</div>
-      {action && href ? (
-        <Link href={href} className={actionClass}>
-          {action}
-          <span aria-hidden="true">→</span>
-        </Link>
-      ) : null}
-      {action && !href && onClick ? (
-        <button type="button" onClick={onClick} className={cn(actionClass, "text-left")}>
-          {action}
-          <span aria-hidden="true">→</span>
-        </button>
-      ) : null}
+    <div className={className} title={detail}>
+      {content}
     </div>
   );
 }
@@ -605,6 +658,25 @@ export function JobRecord({
       ? "No inspection date set"
       : "Due this week · no date set";
   const nextStepAction = nextTask ? "Open tasks" : pipelineColumn === "lead" ? "Set inspection" : "Set date";
+  const nextStepPrompt = !deleted && !nextTask?.dueAt;
+  const nextStepStripDetail = nextStepPrompt ? nextStepAction : nextStepDetail;
+  const insuranceTitle = claim?.carrier.trim() || "No claim";
+  const insuranceDetail =
+    claim && claimMath
+      ? showFinancials
+        ? `${formatCurrencyFull(claimMath.outstanding)} to collect`
+        : [
+            claim.claimNumber || "No claim number",
+            claim.adjusterName || null,
+            claimMath.openCount
+              ? `${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open`
+              : null,
+          ]
+            .filter((item): item is string => Boolean(item))
+            .join(" · ")
+      : showFinancials
+        ? `${formatCurrencyFull(0)} to collect`
+        : "Carrier, supplements and checks.";
   const hasWork = estimates.length + invoices.length + tasks.length + materialOrders.length > 0;
   const dateRange = formatJobRange(job.startDate, job.substantialCompletion);
   const homeownerName = primary?.name || client?.name || crm.customerName(job) || "Add a homeowner";
@@ -1394,80 +1466,71 @@ export function JobRecord({
 
             <div className="min-w-0">
         <TabsContent value="overview" className="mt-0">
-          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              eyebrow="Estimate"
-              title={
-                featuredEstimate
-                  ? formatCurrencyFull(
-                      amountForEstimate(featuredEstimate, crm.estimateLines, workMarket(job, opportunity)),
-                    )
-                  : "No estimate yet"
-              }
-              detail={
-                featuredEstimate
-                  ? `${featuredEstimate.number} · ${ESTIMATE_STATUS_LABELS[featuredEstimate.status].toLowerCase()}, ${
-                      hasEstimateSignature(featuredEstimate)
-                        ? `signed by ${featuredEstimate.signatureName}`
-                        : featuredEstimate.status === "declined"
-                          ? "declined"
-                          : "not yet signed"
-                    }`
-                  : "Build one from a measurement report or by hand."
-              }
-              action={featuredEstimate ? "Open estimate" : allowEstimates && !deleted ? "Create estimate" : undefined}
-              href={featuredEstimate ? `/estimates/${featuredEstimate.id}` : undefined}
-              onClick={featuredEstimate || deleted || !allowEstimates ? undefined : promptJobEstimate}
-            />
-            <SummaryCard
-              eyebrow="Files"
-              title={fileCount > 0 ? `${fileCount} uploaded` : "No files yet"}
-              detail={
-                latestPage?.title ||
-                jobFiles[0]?.name ||
-                (featuredEstimate
-                  ? "Measurements, reports and uploads."
-                  : "Photo reports and job files land here.")
-              }
-              action={featuredEstimate || fileCount > 0 ? "Go to files" : "Upload"}
-              onClick={() => setJobTab("files")}
-            />
-            {showInsurance ? (
-              <SummaryCard
-                eyebrow="Insurance"
-                title={claim?.carrier || "No claim yet"}
-                detail={
-                  claim && claimMath
-                    ? [
-                        claim.claimNumber || "No claim number",
-                        claim.adjusterName || null,
-                        claimMath.openCount
-                          ? `${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open`
-                          : null,
-                        showFinancials ? `${formatCurrencyFull(claimMath.outstanding)} still to collect` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : "Carrier, supplements and checks."
+          <div className="@container/summary mb-6">
+            <div className="flex flex-col divide-y divide-border overflow-hidden rounded-[12px] border bg-card @min-[40rem]/summary:flex-row @min-[40rem]/summary:divide-x @min-[40rem]/summary:divide-y-0">
+              <SummarySegment
+                eyebrow="Estimate"
+                title={
+                  featuredEstimate
+                    ? formatCurrencyFull(
+                        amountForEstimate(featuredEstimate, crm.estimateLines, workMarket(job, opportunity)),
+                      )
+                    : "No estimate yet"
                 }
-                action={claim ? "Open claim" : featuredEstimate ? "Start the claim" : "Add claim"}
-                onClick={() => setJobTab("insurance")}
+                detail={
+                  featuredEstimate
+                    ? `${featuredEstimate.number} · ${ESTIMATE_STATUS_LABELS[featuredEstimate.status].toLowerCase()}, ${
+                        hasEstimateSignature(featuredEstimate)
+                          ? `signed by ${featuredEstimate.signatureName}`
+                          : featuredEstimate.status === "declined"
+                            ? "declined"
+                            : "not yet signed"
+                      }`
+                    : "Build one from a measurement report or by hand."
+                }
+                action={featuredEstimate ? "Open estimate" : allowEstimates && !deleted ? "Create estimate" : undefined}
+                href={featuredEstimate ? `/estimates/${featuredEstimate.id}` : undefined}
+                onClick={featuredEstimate || deleted || !allowEstimates ? undefined : promptJobEstimate}
               />
-            ) : null}
-            <SummaryCard
-              eyebrow="Next step"
-              title={nextStepTitle}
-              detail={nextStepDetail}
-              action={deleted ? undefined : nextStepAction}
-              onClick={
-                deleted
-                  ? undefined
-                  : () => {
-                      if (nextTask && showPaper && !hasWork) setJobTab("paper");
-                      else setTaskOpen(true);
-                    }
-              }
-            />
+              <SummarySegment
+                eyebrow="Files"
+                title={fileCount > 0 ? `${fileCount} uploaded` : "No files yet"}
+                detail={
+                  latestPage?.title ||
+                  jobFiles[0]?.name ||
+                  (featuredEstimate
+                    ? "Measurements, reports and uploads."
+                    : "Photo reports and job files land here.")
+                }
+                action={featuredEstimate || fileCount > 0 ? "Go to files" : "Upload"}
+                onClick={() => setJobTab("files")}
+              />
+              {showInsurance ? (
+                <SummarySegment
+                  eyebrow="Insurance"
+                  title={insuranceTitle}
+                  detail={insuranceDetail}
+                  action={claim ? "Open claim" : featuredEstimate ? "Start the claim" : "Add claim"}
+                  onClick={() => setJobTab("insurance")}
+                />
+              ) : null}
+              <SummarySegment
+                eyebrow="Next step"
+                title={nextStepTitle}
+                detail={nextStepStripDetail}
+                action={deleted ? undefined : nextStepAction}
+                highlight
+                pinDetail={nextStepPrompt}
+                onClick={
+                  deleted
+                    ? undefined
+                    : () => {
+                        if (nextTask && showPaper && !hasWork) setJobTab("paper");
+                        else setTaskOpen(true);
+                      }
+                }
+              />
+            </div>
           </div>
 
           {showPaper && hasWork ? (
