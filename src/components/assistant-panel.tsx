@@ -225,7 +225,6 @@ export function AssistantPanel({ className }: { className?: string } = {}) {
   const fileRef = useRef<HTMLInputElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
   const hops = useRef(0);
   const busyRef = useRef(false);
   const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
