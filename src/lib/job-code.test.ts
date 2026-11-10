@@ -47,12 +47,13 @@ assert.equal(isJobReassigned("Blake Jones", "blake jones"), false);
 assert.equal(isJobReassigned("", "Blake Jones"), false);
 
 assert.equal(canReviewJobCodes("company_admin"), true);
-assert.equal(canReviewJobCodes("director"), true);
+assert.equal(canReviewJobCodes("director"), false);
 assert.equal(canReviewJobCodes("accountant"), true);
 assert.equal(canReviewJobCodes("project_manager"), false);
 assert.deepEqual(
   codeReviewAudience([
     { role: "company_admin", locked: false, name: "Ada" },
+    { role: "director", locked: false, name: "Dana" },
     { role: "accountant", locked: false, name: "Cal" },
     { role: "accountant", locked: true, name: "Old" },
     { role: "project_manager", locked: false, name: "Pat" },
@@ -104,6 +105,7 @@ const reviewTasks = [
 const reviewJobs = [{ id: "job_1", code: "MT092126-A", name: "Azure Lane", projectManager: "Blake Jones" }];
 assert.equal(openJobCodeReviews(reviewTasks, reviewJobs).length, 1);
 assert.equal(actionableJobCodeReviews(reviewTasks, reviewJobs, { role: "company_admin" }).length, 1);
+assert.equal(actionableJobCodeReviews(reviewTasks, reviewJobs, { role: "director" }).length, 0);
 assert.equal(actionableJobCodeReviews(reviewTasks, reviewJobs, { role: "project_manager" }).length, 0);
 
 console.log("job-code.test.ts ok");

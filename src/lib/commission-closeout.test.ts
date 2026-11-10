@@ -16,6 +16,7 @@ import {
   defaultCommissionSplits,
   isCommissionInYear,
   applyExpenseDisposition,
+  closeoutReviewAudience,
   closeoutTaskTitle,
   parseMoneyDraft,
   payoutRecipients,
@@ -511,6 +512,16 @@ const recipients = payoutRecipients(
 assert.deepEqual(
   recipients.map((member) => member.id),
   ["pm", "bd"],
+);
+assert.deepEqual(
+  closeoutReviewAudience([
+    staff({ id: "admin", name: "Avery", role: "company_admin" }),
+    staff({ id: "director", name: "Dana", role: "director" }),
+    staff({ id: "books", name: "Casey", role: "accountant" }),
+    staff({ id: "locked", name: "Old", role: "accountant", locked: true }),
+    staff({ id: "pm", name: "Pat", role: "project_manager" }),
+  ]).map((member) => member.id),
+  ["admin", "books"],
 );
 
 const bills = [
