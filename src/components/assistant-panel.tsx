@@ -19,7 +19,7 @@ import { canViewProjectFinancials } from "@/lib/visibility";
 import { isReceiptUpload } from "@/lib/receipt-extract";
 import { buildAssistantContext } from "@/lib/assistant/context";
 import { ASSISTANT_ASK_LABEL, ASSISTANT_NAME } from "@/lib/product";
-import { CASSIO_ASK_EVENT } from "@/lib/assistant/ask";
+import { CASSIO_ASK_EVENT, CASSIO_OPEN_EVENT } from "@/lib/assistant/ask";
 import {
   describeToolCall,
   executeToolCall,
@@ -66,6 +66,7 @@ export function AssistantPanel({ className }: { className?: string } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const hops = useRef(0);
   const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
@@ -248,8 +249,16 @@ export function AssistantPanel({ className }: { className?: string } = {}) {
       setOpen(true);
       void sendRef.current(prompt);
     }
+    function onOpen() {
+      setOpen(true);
+      window.setTimeout(() => composerRef.current?.focus(), 60);
+    }
     window.addEventListener(CASSIO_ASK_EVENT, onAsk);
-    return () => window.removeEventListener(CASSIO_ASK_EVENT, onAsk);
+    window.addEventListener(CASSIO_OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener(CASSIO_ASK_EVENT, onAsk);
+      window.removeEventListener(CASSIO_OPEN_EVENT, onOpen);
+    };
   }, []);
 
   function onSubmit(event: FormEvent) {
@@ -414,6 +423,7 @@ export function AssistantPanel({ className }: { className?: string } = {}) {
                   <Paperclip />
                 </Button>
                 <Textarea
+                  ref={composerRef}
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={onComposerKey}
