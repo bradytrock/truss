@@ -276,21 +276,23 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "create_invoice",
-    description: "Create a draft invoice on a job.",
+    description:
+      "Create a blank draft invoice on a job. If they are billing an existing estimate, use convert_estimate_to_invoice instead. Do not ask them to name the invoice; omit name to use the job name.",
     status: "Creating an invoice…",
     gate: "ops",
     parameters: object(
       {
         job: str("Job id or code"),
-        name: str("Invoice title"),
-        notes: str("Notes that print after the total on the invoice"),
+        name: str("Optional invoice title. Omit to use the job name. Do not ask the user for this."),
+        notes: str("Notes that print after the total on the invoice. Omit unless they already gave notes."),
       },
       ["job"],
     ),
   },
   {
     name: "convert_estimate_to_invoice",
-    description: "Turn an accepted or sent estimate’s included lines into an invoice.",
+    description:
+      "Turn an existing estimate’s included lines into a draft invoice. The invoice keeps the estimate name. Do not ask them to rename it or to fill in template, contract, or measurement fields.",
     status: "Converting the estimate…",
     gate: "ops",
     parameters: object({ estimate: str("Estimate id or number") }, ["estimate"]),

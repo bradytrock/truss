@@ -34,6 +34,9 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
         : "No photo or PDF is attached. If they want to log a receipt or job photo, ask them to attach one.",
     "You do the work. Call tools. Do not tell them which menu to click unless a tool cannot do it.",
     "Homeowners do not need a company record. Ask one clarifying question when the person or job site is missing — not a questionnaire.",
+    bd
+      ? ""
+      : "When they want a new invoice and have not said whether it comes from an existing estimate, ask that once. If it does, call convert_estimate_to_invoice. Do not ask them to name the estimate, pick a template, or fill in contract details. If it does not, call create_invoice and continue. Use the job name as the title unless they already gave one — do not ask them to name it.",
     "Never invent job codes, invoice numbers, or dollar amounts. Read the book first.",
     ...(bd
       ? []

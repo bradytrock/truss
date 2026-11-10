@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { CalendarDays, ClipboardCheck, Flag, Home, MapPin, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,11 @@ import {
   quickDialogClass,
   quickFieldClass,
 } from "@/components/quick-action-form";
-import { initials } from "@/lib/format";
+import { EstimateStatusBadge } from "@/components/status-badge";
+import { initials, formatCurrencyFull } from "@/lib/format";
+import { amountForEstimate, lineIncluded, linesForEstimate } from "@/lib/estimate-totals";
+import { estimatesForInvoiceStart } from "@/lib/invoice-start";
+import { workMarket } from "@/lib/market";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -52,6 +56,8 @@ import {
 } from "@/lib/types";
 import { canCreateInvoices } from "@/lib/visibility";
 
+type InvoiceStartStep = "ask" | "estimate" | "blank";
+
 export function CreateInvoiceDialog({
   open,
   onOpenChange,
@@ -66,8 +72,21 @@ export function CreateInvoiceDialog({
   onCreated?: (invoiceId: string) => void;
 }) {
   const router = useRouter();
-  const { jobs, addInvoice, customerName, effectiveStaff, viewer } = useCrm();
-  const [name, setName] = useState("");
+  const {
+    jobs,
+    opportunities,
+    estimates,
+    estimateLines,
+    invoices,
+    addInvoice,
+    convertEstimateToInvoice,
+    customerName,
+    effectiveStaff,
+    viewer,
+  } = useCrm();
+  const [step, setStep] = useState<InvoiceStartStep>("ask");
+  const [estimateId, setEstimateId] = useState("");
+  const [estimateQuery, setEstimateQuery] = useState("");
   const [jobId, setJobId] = useState(defaultJobId ?? jobs[0]?.id ?? "");
   const dueDefault = (() => {
     const date = new Date();
@@ -76,13 +95,17 @@ export function CreateInvoiceDialog({
   })();
   const [dueAt, setDueAt] = useState(dueDefault);
   const [notes, setNotes] = useState("");
+  const [pending, setPending] = useState(false);
   const allowed = canCreateInvoices(effectiveStaff?.role ?? viewer?.role);
 
   const fallbackJobId = jobs[0]?.id ?? "";
 
   useEffect(() => {
     if (!open) return;
-    setName("");
+    setStep("ask");
+    setEstimateId("");
+    setEstimateQuery("");
+    setPending(false);
     setJobId(defaultJobId ?? fallbackJobId);
     const date = new Date();
     date.setDate(date.getDate() + 30);
@@ -92,99 +115,311 @@ export function CreateInvoiceDialog({
 
   const job = jobs.find((item) => item.id === jobId);
   const lockedToJob = Boolean(defaultJobId);
+  const estimateHaystack = useMemo(
+    () => (estimate: (typeof estimates)[number]) => {
+      const relatedJob = jobs.find((item) => item.id === estimate.jobId);
+      return [customerName(estimate), relatedJob?.name, relatedJob?.code].filter(Boolean).join(" ");
+    },
+    [customerName, jobs],
+  );
+  const scopedEstimates = useMemo(
+    () => estimatesForInvoiceStart(estimates, { jobId: defaultJobId, haystack: estimateHaystack }),
+    [defaultJobId, estimateHaystack, estimates],
+  );
+  const visibleEstimates = useMemo(
+    () =>
+      estimatesForInvoiceStart(estimates, {
+        jobId: defaultJobId,
+        query: estimateQuery,
+        haystack: estimateHaystack,
+      }),
+    [defaultJobId, estimateHaystack, estimateQuery, estimates],
+  );
+  const invoicedEstimateIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const invoice of invoices) {
+      if (!invoice.estimateId || invoice.archivedAt || invoice.status === "void") continue;
+      ids.add(invoice.estimateId);
+    }
+    return ids;
+  }, [invoices]);
+  const selectedIncluded = estimateId
+    ? linesForEstimate(estimateLines, estimateId).filter(lineIncluded).length
+    : 0;
+
+  function finish(invoiceId: string) {
+    onOpenChange(false);
+    if (onCreated) onCreated(invoiceId);
+    else router.push(`/invoices/${invoiceId}`);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (pending) return;
     if (!allowed) {
       toast.error("This seat cannot create invoices.");
       return;
     }
-    if (!name.trim() || !jobId) {
-      toast.error("A name and job are required.");
+    const invoiceName = job?.name.trim() || (job ? customerName(job) : "") || "Invoice";
+    if (!jobId || !job) {
+      toast.error("A job is required.");
       return;
     }
+    setPending(true);
     try {
       const invoice = await addInvoice({
-        name: name.trim(),
-        clientId: job?.clientId ?? defaultClientId ?? null,
-        jobId: jobId || null,
+        name: invoiceName,
+        clientId: job.clientId ?? defaultClientId ?? null,
+        jobId,
         dueAt: dueAt || null,
         notes,
       });
       toast.success(`${invoice.number} drafted.`);
-      onOpenChange(false);
-      setName("");
-      if (onCreated) onCreated(invoice.id);
-      else router.push(`/invoices/${invoice.id}`);
+      finish(invoice.id);
     } catch {
-      // Store already toasted.
+      setPending(false);
+    }
+  }
+
+  async function handleConvert() {
+    if (pending) return;
+    if (!allowed) {
+      toast.error("This seat cannot create invoices.");
+      return;
+    }
+    if (!estimateId) {
+      toast.error("Pick an estimate.");
+      return;
+    }
+    if (selectedIncluded === 0) {
+      toast.error("Add at least one included line before converting.");
+      return;
+    }
+    setPending(true);
+    try {
+      const invoice = await convertEstimateToInvoice(estimateId);
+      const source = estimates.find((item) => item.id === estimateId);
+      toast.success(
+        source ? `${invoice.number} drafted from ${source.number}.` : `${invoice.number} drafted.`,
+      );
+      finish(invoice.id);
+    } catch {
+      setPending(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (pending) return;
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New invoice</DialogTitle>
-          <DialogDescription>
-            Bill a draw, deposit, or retainage against a job. Homeowners do not need a company on file.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-3">
-          <Field label="Name" htmlFor="inv-name">
-            <Input
-              id="inv-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Alvarez roof — progress"
-            />
-          </Field>
-          <Field label="Job">
-            <Select
-              value={jobId}
-              onValueChange={(value) => setJobId(String(value ?? ""))}
-              disabled={lockedToJob}
-              items={jobs.map((item) => ({
-                value: item.id,
-                label: `${item.name} — ${customerName(item)}`,
-              }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {jobs.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name} — {customerName(item)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Due" htmlFor="inv-due">
-            <Input
-              id="inv-due"
-              type="date"
-              value={dueAt}
-              onChange={(event) => setDueAt(event.target.value)}
-            />
-          </Field>
-          <Field label="Notes" htmlFor="inv-notes">
-            <Textarea
-              id="inv-notes"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              rows={2}
-              placeholder="Prints after the total on the invoice and PDF."
-            />
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Create draft</Button>
-          </DialogFooter>
-        </form>
+        {step === "ask" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>New invoice</DialogTitle>
+              <DialogDescription>
+                Are you creating this invoice from an existing estimate?
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                disabled={!allowed || pending}
+                onClick={() => setStep("estimate")}
+                className="rounded-md border px-3 py-3 text-left hover:bg-muted/40 disabled:opacity-50"
+              >
+                <span className="block font-medium">Yes, from an estimate</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  The invoice uses that estimate&apos;s name and included lines.
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={!allowed || pending}
+                onClick={() => setStep("blank")}
+                className="rounded-md border px-3 py-3 text-left hover:bg-muted/40 disabled:opacity-50"
+              >
+                <span className="block font-medium">No, start blank</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Continue with a new draft on a job.
+                </span>
+              </button>
+              {allowed ? null : (
+                <p className="text-sm text-muted-foreground">This seat cannot create invoices.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+            </DialogFooter>
+          </>
+        ) : null}
+
+        {step === "estimate" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Choose an estimate</DialogTitle>
+              <DialogDescription>
+                The invoice keeps this estimate&apos;s name and included lines.
+              </DialogDescription>
+            </DialogHeader>
+            {scopedEstimates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {lockedToJob ? "This job has no estimates yet." : "No estimates in the book yet."}
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                {scopedEstimates.length > 5 ? (
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={estimateQuery}
+                      onChange={(event) => setEstimateQuery(event.target.value)}
+                      placeholder="Search estimates"
+                      className="pl-8"
+                      aria-label="Search estimates"
+                    />
+                  </div>
+                ) : null}
+                {visibleEstimates.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No estimates match that search.</p>
+                ) : (
+                  <ul className="max-h-72 space-y-1 overflow-y-auto rounded-md border p-1">
+                    {visibleEstimates.map((estimate) => {
+                      const selected = estimateId === estimate.id;
+                      const relatedJob = jobs.find((item) => item.id === estimate.jobId);
+                      const opportunity = opportunities.find((item) => item.id === estimate.opportunityId);
+                      const included = linesForEstimate(estimateLines, estimate.id).filter(lineIncluded).length;
+                      const amount = amountForEstimate(
+                        estimate,
+                        estimateLines,
+                        workMarket(relatedJob, opportunity),
+                      );
+                      return (
+                        <li key={estimate.id}>
+                          <button
+                            type="button"
+                            aria-pressed={selected}
+                            onClick={() => setEstimateId(estimate.id)}
+                            className={`flex w-full items-start justify-between gap-3 rounded-md px-3 py-2 text-left ${
+                              selected ? "bg-muted/60" : "hover:bg-muted/40"
+                            }`}
+                          >
+                            <span className="min-w-0">
+                              <span className="block font-medium">
+                                {estimate.number}
+                                <span className="font-normal text-muted-foreground"> · {estimate.name}</span>
+                              </span>
+                              <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                <EstimateStatusBadge status={estimate.status} />
+                                <span>
+                                  {included} {included === 1 ? "line" : "lines"}
+                                  {relatedJob && !lockedToJob ? ` · ${relatedJob.name}` : ""}
+                                  {invoicedEstimateIds.has(estimate.id) ? " · Already invoiced" : ""}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                              {formatCurrencyFull(amount)}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                {estimateId && selectedIncluded === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    This estimate has no included lines to bill.
+                  </p>
+                ) : null}
+              </div>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={pending} onClick={() => setStep("ask")}>
+                Back
+              </Button>
+              {scopedEstimates.length === 0 ? (
+                <Button type="button" disabled={pending} onClick={() => setStep("blank")}>
+                  Start blank
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  disabled={pending || !estimateId || selectedIncluded === 0}
+                  onClick={() => void handleConvert()}
+                >
+                  {pending ? "Creating…" : "Create invoice"}
+                </Button>
+              )}
+            </DialogFooter>
+          </>
+        ) : null}
+
+        {step === "blank" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>New invoice</DialogTitle>
+              <DialogDescription>
+                Named after the job. Change the title on the invoice if you need a draw or deposit name.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="grid gap-3">
+              <Field label="Job">
+                <Select
+                  value={jobId}
+                  onValueChange={(value) => setJobId(String(value ?? ""))}
+                  disabled={lockedToJob}
+                  items={jobs.map((item) => ({
+                    value: item.id,
+                    label: `${item.name} — ${customerName(item)}`,
+                  }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {jobs.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} — {customerName(item)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Due" htmlFor="inv-due">
+                <Input
+                  id="inv-due"
+                  type="date"
+                  value={dueAt}
+                  onChange={(event) => setDueAt(event.target.value)}
+                />
+              </Field>
+              <Field label="Notes" htmlFor="inv-notes">
+                <Textarea
+                  id="inv-notes"
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  rows={2}
+                  placeholder="Prints after the total on the invoice and PDF."
+                />
+              </Field>
+              <DialogFooter>
+                <Button type="button" variant="outline" disabled={pending} onClick={() => setStep("ask")}>
+                  Back
+                </Button>
+                <Button type="submit" disabled={pending}>
+                  {pending ? "Creating…" : "Create draft"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
