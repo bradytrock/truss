@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
+import { LayoutGrid, Menu, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useCrm } from "@/lib/crm-store";
 import { onboardingStep } from "@/lib/invite-onboarding";
@@ -63,6 +63,7 @@ import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark, ProductWordmark } from "@/components/brand";
+import { CreateMenu } from "@/components/create-menu";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { isAutomationBuilderPath, SettingsMobileBar, settingsSectionLabel } from "@/components/settings-nav";
 
@@ -253,26 +254,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const fillLayout = inboxLayout || mapLayout || measureLayout || contactsLayout;
   const marketingSuite = pathname === "/marketing" || pathname.startsWith("/marketing/");
 
-  const createMenu =
-    effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
-      <>
-        <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
-      </>
-    ) : (
-      <>
-        <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("forecast")}>Forecast an expense</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("payment")}>Log payment</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("event")}>Schedule an event</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
-      </>
-    );
-
   if (marketingSuite) {
     return <div className="flex h-dvh min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#f4f3f1]">{children}</div>;
   }
@@ -363,22 +344,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                     : undefined
                 }
               />
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      size="sm"
-                      className="bg-primary text-primary-foreground hover:bg-primary/90"
-                    />
-                  }
-                >
-                  <Plus data-icon="inline-start" />
-                  <span className="hidden sm:inline">Create</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-44">
-                  {createMenu}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <CreateMenu
+                bdOnly={Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role))}
+                onCreate={setCreate}
+              />
               <UserMenu />
             </div>
           </div>

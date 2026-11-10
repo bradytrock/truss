@@ -64,7 +64,7 @@ assert.deepEqual(
   loginAsTargets(director, [director, admin, pm]).map((person) => person.id),
   ["admin", "pm"],
 );
-assert.equal(canReviewJobCodes("director"), true);
+assert.equal(canReviewJobCodes("director"), false);
 assert.equal(canReviewCloseout("director"), false);
 assert.equal(canReviewCloseout("company_admin"), true);
 assert.equal(

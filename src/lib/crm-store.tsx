@@ -283,6 +283,7 @@ import {
   LEGACY_CLOSEOUT_PAYOUT_TASK,
   closeoutHasVentRecord,
   closeoutReleaseBlock,
+  closeoutReviewAudience,
   closeoutTaskTitle,
   commissionCloseoutPayload,
   newCommissionCloseout,
@@ -397,6 +398,7 @@ import {
 } from "@/lib/training/engine";
 import {
   backfillRecordCodes,
+  canReviewJobCodes,
   codeInsertError,
   existingRecordCodes,
   isJobCodeReviewTask,
@@ -4624,9 +4626,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entityType: "job",
           entityId: job.id,
           type: "note",
-          body: `${fromName} handed this job to ${toName}. Company admins, directors, and accounting can redo ${job.code} as ${suggested} or keep it.`,
+          body: `${fromName} handed this job to ${toName}. Company admins and accounting can redo ${job.code} as ${suggested} or keep it.`,
         });
-        toast.message("Company admins, directors, and accounting can redo or change the job code.");
+        toast.message("Company admins and accounting can redo or change the job code.");
       } catch {
         filingJobCodeReviews.current.delete(job.id);
       }
@@ -4694,6 +4696,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const decideJobCodeReview = useCallback(
     async (jobId: string, decision: "redo" | "keep" | "change", code?: string) => {
+      if (!canReviewJobCodes(effectiveStaff?.role)) {
+        toast.error("Company admins and accounting change the job code after a reassignment.");
+        return false;
+      }
       const job = state.jobs.find((item) => item.id === jobId);
       if (!job) return false;
       const open = state.tasks.filter(
@@ -4744,7 +4750,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       filingJobCodeReviews.current.delete(jobId);
       return true;
     },
-    [addActivity, recordCompanyAudit, state.jobs, state.opportunities, state.tasks, updateJob, updateOpportunity, updateTask],
+    [addActivity, effectiveStaff?.role, recordCompanyAudit, state.jobs, state.opportunities, state.tasks, updateJob, updateOpportunity, updateTask],
   );
 
   const deleteTask = useCallback(
@@ -10022,7 +10028,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         job,
         title: closeoutTaskTitle("review", job.code),
         notes: `${actor.name} submitted ${code} for closeout. Compare QuickBooks with the job expenses, then release it for commission payout.`,
-        audience: codeReviewAudience(state.staff),
+        audience: closeoutReviewAudience(state.staff),
         sms: `${actor.name} submitted ${code} for closeout. Review it in Accounting.`,
         activity: `${actor.name} submitted this project for closeout. Accounting has the commission sheet.`,
       });
