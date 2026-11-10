@@ -26,6 +26,7 @@ export const LEAD_SOURCE_CATALOG = [
   { value: "past_client", label: "Past Client" },
   { value: "chatgpt", label: "ChatGPT" },
   { value: "social_media", label: "Social Media" },
+  { value: "contractor_connection", label: "Contractor Connection" },
 
   // Older books still store these. Hidden so new leads cannot pick them.
   { value: "google", label: "Google search", hidden: true },

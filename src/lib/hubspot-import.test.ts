@@ -96,6 +96,8 @@ assert.equal(guessLeadSource("Text Main Line"), "text_main_line");
 assert.equal(guessLeadSource("Called in"), "phone");
 assert.equal(guessLeadSource("Door knocking"), "sales_team");
 assert.equal(guessLeadSource("ChatGPT"), "chatgpt");
+assert.equal(guessLeadSource("Contractor Connection"), "contractor_connection");
+assert.equal(guessLeadSource("Contractor Connection referral"), "contractor_connection");
 assert.equal(guessLeadSource("Something odd"), "");
 
 assert.equal(guessOwnerStaffId("Brady Jones", staff), "s-brady");

@@ -271,6 +271,7 @@ export function guessStageTarget(stage: string): HubSpotStageTarget {
 }
 
 const SOURCE_GUESSES: Array<{ test: RegExp; source: LeadSource }> = [
+  { test: /contractor\s*connection/i, source: "contractor_connection" },
   { test: /podium/i, source: "podium" },
   { test: /\b(google\s*ads?|adwords|paid\s*search|ppc|lsa|local\s*service)/i, source: "google_ad" },
   { test: /\b(angi|angie|home\s*advisor|homeadvisor|thumbtack|yelp)/i, source: "angies_list" },
