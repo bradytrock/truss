@@ -745,8 +745,8 @@ export function AssistantPanel({ className }: { className?: string } = {}) {
           overlayClassName="bg-[#141414]/55"
           data-testid="cassio-popup"
           className={cn(
-            "flex h-[min(56rem,calc(100dvh-1rem))] max-h-[calc(100dvh-1rem)] w-[min(calc(100%-1.5rem),26.75rem)] max-w-none flex-col gap-0 overflow-hidden rounded-[1.35rem] border-0 bg-[#f7f6f3] p-0 text-[#1c1b19] shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-0 sm:max-w-none dark:bg-popover dark:text-popover-foreground",
-            expanded && "w-[min(calc(100%-1.5rem),42rem)]",
+            "top-auto right-4 bottom-4 left-auto flex h-[min(56rem,calc(100dvh-2rem))] max-h-[calc(100dvh-2rem)] w-[min(calc(100%-2rem),26.75rem)] max-w-none origin-bottom-right translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-[1.35rem] border-0 bg-[#f7f6f3] p-0 text-[#1c1b19] shadow-[0_24px_80px_rgba(0,0,0,0.28)] ring-0 sm:max-w-none data-open:slide-in-from-bottom-8 data-open:slide-in-from-right-4 data-closed:slide-out-to-bottom-8 data-closed:slide-out-to-right-4 dark:bg-popover dark:text-popover-foreground",
+            expanded && "w-[min(calc(100%-2rem),42rem)]",
           )}
         >
           <header className="flex items-start gap-3 px-4 pt-4 pb-2">
