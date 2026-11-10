@@ -199,6 +199,10 @@ export type ExecuteExtras = {
 export function describeToolCall(call: AssistantToolCall) {
   const args = call.arguments;
   switch (call.name) {
+    case "create_lead": {
+      const who = [arg(args, "firstName"), arg(args, "lastName")].filter(Boolean).join(" ");
+      return `Create a lead for ${who || "this homeowner"}?`;
+    }
     case "send_estimate":
       return `Send estimate ${arg(args, "estimate") || "this proposal"} to the client?`;
     case "send_invoice":

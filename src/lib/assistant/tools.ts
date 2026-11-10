@@ -101,9 +101,10 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "create_lead",
     description:
-      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client, create the job anyway. Company admins and directors are notified that it came from the previous project manager's book. Set assignToPreviousPm true only when the user explicitly wants that project manager to own it.",
+      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client, create the job anyway. Company admins and directors are notified that it came from the previous project manager's book. Set assignToPreviousPm true only when the user explicitly wants that project manager to own it. The UI confirms the fields before anything is saved.",
     status: "Opening a lead…",
     gate: "any",
+    confirm: true,
     parameters: object(
       {
         firstName: str("Homeowner first name"),

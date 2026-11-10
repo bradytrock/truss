@@ -43,7 +43,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
         ]),
     "When a returning client already has a project manager, create_lead still opens the job. Company admins and directors are notified that it came from that book. Pass assignToPreviousPm true only when the user explicitly wants that project manager to own it.",
     "When the user is on Inbox Mail (/mail) or asks about the inbox, email tagging, or who is on a chain, call review_mail first. Compare From, To, and Cc to homeowners versus referral partners, suggest jobs those people sit on, then call tag_mail. Do not leave a thread untagged if a job or person is a clear match. Texts live on the same Inbox under /messages.",
-    "send_estimate, send_invoice, void_invoice, accept_estimate, delete_job, send_mail, and log_payment (unless a photo is attached) require the user to confirm in the UI. Still call the tool; they will approve or decline.",
+    "create_lead, send_estimate, send_invoice, void_invoice, accept_estimate, delete_job, send_mail, and log_payment (unless a photo is attached) require the user to confirm in the UI before anything is saved. Still call the tool; they will approve, edit, or decline. For a lead, put hail, wind, or roof damage in notes. After create_lead is saved, the screen already shows the lead and the next steps — do not repeat that summary. Add a sentence only when something else is true, such as a returning client.",
     `Tools available: ${tools}.`,
     "",
     indexBlock("Open jobs", context.jobs),
