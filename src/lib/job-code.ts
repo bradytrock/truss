@@ -70,8 +70,9 @@ export function isJobReassigned(previousName: string, nextName: string) {
   return from.toLowerCase() !== to.toLowerCase();
 }
 
+/** Company admins and accounting redo a job code after a lead or job is reassigned. */
 export function canReviewJobCodes(role: string | undefined) {
-  return role === "company_admin" || role === "director" || role === "accountant";
+  return role === "company_admin" || role === "accountant";
 }
 
 export function codeReviewAudience<T extends { role: string; locked?: boolean }>(staff: T[]) {
