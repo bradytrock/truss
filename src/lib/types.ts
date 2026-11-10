@@ -858,6 +858,15 @@ export interface ForecastedExpense {
   createdBy: string;
 }
 
+export const MATERIAL_ORDER_STATUSES = ["draft", "sent", "confirmed", "delivered"] as const;
+export type MaterialOrderStatus = (typeof MATERIAL_ORDER_STATUSES)[number];
+
+export const MATERIAL_ORDER_FULFILLMENTS = ["delivery", "pickup"] as const;
+export type MaterialOrderFulfillment = (typeof MATERIAL_ORDER_FULFILLMENTS)[number];
+
+export const MATERIAL_ORDER_WINDOWS = ["morning", "afternoon", "anytime"] as const;
+export type MaterialOrderWindow = (typeof MATERIAL_ORDER_WINDOWS)[number];
+
 export interface MaterialOrder {
   id: string;
   number: string;
@@ -869,6 +878,17 @@ export interface MaterialOrder {
   createdAt: string;
   /** Set when this order is archived off the job Paper list. */
   archivedAt?: string | null;
+  status: MaterialOrderStatus;
+  /** Delivery to the job, or the supplier holds it for will-call. */
+  fulfillment: MaterialOrderFulfillment;
+  window: MaterialOrderWindow;
+  /** When false, a delivery date does not create a production calendar event. */
+  onCalendar: boolean;
+  /** Short supplier instructions. These print above the line items on the PDF. */
+  quickNotes: string[];
+  sentAt: string | null;
+  branch: string;
+  accountNumber: string;
 }
 
 export interface MaterialOrderLine {

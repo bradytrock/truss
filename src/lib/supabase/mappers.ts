@@ -10,7 +10,15 @@ import {
   type EagleviewOrder,
   type EagleviewOrderStatus,
 } from "@/lib/eagleview";
-import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders";
+import {
+  fillMaterialOrder,
+  fillMaterialOrderLine,
+  parseMaterialOrderFulfillment,
+  parseMaterialOrderStatus,
+  parseMaterialOrderWindow,
+  parseQuickNotes,
+  serializeQuickNotes,
+} from "@/lib/material-orders";
 import { fillVendorFeedback, fillVendorPrice, fillVendorProfile } from "@/lib/vendor-profile";
 import { fillMaterialOrderTemplate, fillMaterialOrderTemplateLine } from "@/lib/material-order-templates";
 import { parseContractTypes } from "@/lib/contract-types";
@@ -1644,6 +1652,16 @@ export function mapReturningClientLead(row: ReturningClientLeadRow): ReturningCl
 }
 
 export function mapMaterialOrder(row: MaterialOrderRow): MaterialOrder {
+  const extra = row as MaterialOrderRow & {
+    status?: string;
+    fulfillment?: string;
+    delivery_window?: string;
+    on_calendar?: boolean;
+    quick_notes?: string;
+    sent_at?: string | null;
+    branch?: string;
+    account_number?: string;
+  };
   return fillMaterialOrder({
     id: row.id,
     number: row.number,
@@ -1654,7 +1672,49 @@ export function mapMaterialOrder(row: MaterialOrderRow): MaterialOrder {
     createdBy: row.created_by,
     createdAt: row.created_at,
     archivedAt: "archived_at" in row ? ((row.archived_at as string | null | undefined) ?? null) : null,
+    status: parseMaterialOrderStatus(extra.status),
+    fulfillment: parseMaterialOrderFulfillment(extra.fulfillment),
+    window: parseMaterialOrderWindow(extra.delivery_window),
+    onCalendar: extra.on_calendar !== false,
+    quickNotes: parseQuickNotes(extra.quick_notes),
+    sentAt: extra.sent_at ?? null,
+    branch: extra.branch ?? "",
+    accountNumber: extra.account_number ?? "",
   });
+}
+
+export function materialOrderInsert(order: MaterialOrder, companyId: string) {
+  return {
+    id: order.id,
+    company_id: companyId,
+    number: order.number,
+    job_id: order.jobId,
+    vendor: order.vendor,
+    notes: order.notes,
+    needed_by: order.neededBy,
+    created_by: order.createdBy,
+    status: order.status,
+    fulfillment: order.fulfillment,
+    delivery_window: order.window,
+    on_calendar: order.onCalendar,
+    quick_notes: serializeQuickNotes(order.quickNotes),
+    sent_at: order.sentAt,
+    branch: order.branch,
+    account_number: order.accountNumber,
+  };
+}
+
+export function materialOrderLegacyInsert(order: MaterialOrder, companyId: string) {
+  return {
+    id: order.id,
+    company_id: companyId,
+    number: order.number,
+    job_id: order.jobId,
+    vendor: order.vendor,
+    notes: order.notes,
+    needed_by: order.neededBy,
+    created_by: order.createdBy,
+  };
 }
 
 export function materialOrderPatch(patch: Partial<MaterialOrder>) {
@@ -1663,6 +1723,31 @@ export function materialOrderPatch(patch: Partial<MaterialOrder>) {
   if (patch.notes !== undefined) row.notes = patch.notes;
   if (patch.neededBy !== undefined) row.needed_by = patch.neededBy;
   if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt;
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.fulfillment !== undefined) row.fulfillment = patch.fulfillment;
+  if (patch.window !== undefined) row.delivery_window = patch.window;
+  if (patch.onCalendar !== undefined) row.on_calendar = patch.onCalendar;
+  if (patch.quickNotes !== undefined) row.quick_notes = serializeQuickNotes(patch.quickNotes);
+  if (patch.sentAt !== undefined) row.sent_at = patch.sentAt;
+  if (patch.branch !== undefined) row.branch = patch.branch;
+  if (patch.accountNumber !== undefined) row.account_number = patch.accountNumber;
+  return row;
+}
+
+const MATERIAL_ORDER_WORKFLOW_COLUMNS = [
+  "status",
+  "fulfillment",
+  "delivery_window",
+  "on_calendar",
+  "quick_notes",
+  "sent_at",
+  "branch",
+  "account_number",
+] as const;
+
+export function materialOrderLegacyPatch(patch: Partial<MaterialOrder>) {
+  const row = materialOrderPatch(patch);
+  for (const column of MATERIAL_ORDER_WORKFLOW_COLUMNS) delete row[column];
   return row;
 }
 

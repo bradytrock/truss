@@ -1,5 +1,39 @@
-import type { CatalogItem, MaterialOrder, MaterialOrderLine } from "@/lib/types";
+import type {
+  CatalogItem,
+  MaterialOrder,
+  MaterialOrderFulfillment,
+  MaterialOrderLine,
+  MaterialOrderStatus,
+  MaterialOrderWindow,
+} from "@/lib/types";
 import { lineAmount, sumLines } from "@/lib/money";
+
+export function parseMaterialOrderStatus(value: unknown): MaterialOrderStatus {
+  return value === "sent" || value === "confirmed" || value === "delivered" ? value : "draft";
+}
+
+export function parseMaterialOrderFulfillment(value: unknown): MaterialOrderFulfillment {
+  return value === "pickup" ? "pickup" : "delivery";
+}
+
+export function parseMaterialOrderWindow(value: unknown): MaterialOrderWindow {
+  return value === "afternoon" || value === "anytime" ? value : "morning";
+}
+
+export function parseQuickNotes(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value !== "string" || !value.trim()) return [];
+  return value
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function serializeQuickNotes(notes: string[]) {
+  return notes.map((item) => item.trim()).filter(Boolean).join("\n");
+}
 
 export type MaterialOrderDraft = Partial<MaterialOrder> &
   Pick<MaterialOrder, "id" | "number" | "jobId">;
@@ -18,6 +52,14 @@ export function fillMaterialOrder(order: MaterialOrderDraft): MaterialOrder {
     createdBy: order.createdBy ?? "",
     createdAt: order.createdAt ?? new Date().toISOString(),
     archivedAt: order.archivedAt ?? null,
+    status: parseMaterialOrderStatus(order.status),
+    fulfillment: parseMaterialOrderFulfillment(order.fulfillment),
+    window: parseMaterialOrderWindow(order.window),
+    onCalendar: order.onCalendar !== false,
+    quickNotes: parseQuickNotes(order.quickNotes),
+    sentAt: order.sentAt ?? null,
+    branch: order.branch ?? "",
+    accountNumber: order.accountNumber ?? "",
   };
 }
 

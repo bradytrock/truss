@@ -14,12 +14,14 @@ export function findMaterialOrderEvent<T extends { notes: string }>(events: T[],
   return events.find((event) => isMaterialOrderEvent(event.notes, orderId));
 }
 
-export function materialOrderDeliveryWindow(neededBy: string) {
+export function materialOrderDeliveryWindow(neededBy: string, windowName?: string) {
   const day = neededBy.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
-  const starts = new Date(`${day}T08:00:00`);
+  const startHour = windowName === "afternoon" ? 12 : 8;
+  const durationHours = windowName === "anytime" ? 8 : 2;
+  const starts = new Date(`${day}T${String(startHour).padStart(2, "0")}:00:00`);
   if (Number.isNaN(starts.getTime())) return null;
-  const ends = new Date(starts.getTime() + 2 * 60 * 60 * 1000);
+  const ends = new Date(starts.getTime() + durationHours * 60 * 60 * 1000);
   return { startsAt: starts.toISOString(), endsAt: ends.toISOString() };
 }
 
@@ -44,16 +46,25 @@ export function materialOrderDeliveryDraft(input: {
     notes: string;
     neededBy: string | null;
     jobId: string;
+    window?: string;
+    fulfillment?: string;
   };
   location: string;
   assignee: string;
   opportunityId: string | null;
   clientId: string | null;
 }) {
-  const window = materialOrderDeliveryWindow(input.order.neededBy ?? "");
+  const window = materialOrderDeliveryWindow(input.order.neededBy ?? "", input.order.window);
   if (!window) return null;
+  const vendor = input.order.vendor.trim();
+  const title =
+    input.order.fulfillment === "pickup"
+      ? vendor
+        ? `Will-call · ${vendor}`
+        : `Will-call · ${input.order.number}`
+      : materialOrderDeliveryTitle(input.order);
   return {
-    title: materialOrderDeliveryTitle(input.order),
+    title,
     kind: MATERIAL_ORDER_EVENT_KIND,
     startsAt: window.startsAt,
     endsAt: window.endsAt,
@@ -78,6 +89,8 @@ export async function applyMaterialOrderDeliverySync(input: {
     notes: string;
     neededBy: string | null;
     jobId: string;
+    window?: string;
+    fulfillment?: string;
   };
   events: { id: string; notes: string }[];
   existingId?: string;

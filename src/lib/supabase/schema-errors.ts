@@ -884,6 +884,23 @@ export function missingMaterialOrdersMessage() {
   return `Saved in this browser. Run ${MATERIAL_ORDERS_SQL} in the SQL editor (or a fresh bootstrap) so material orders persist for the office and the field.`;
 }
 
+export const MATERIAL_ORDER_WORKFLOW_SQL = "supabase/migrations/20261109180000_material_order_workflow.sql";
+
+export function isMissingMaterialOrderWorkflow(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const specific = ["delivery_window", "on_calendar", "quick_notes", "sent_at", "account_number", "fulfillment"];
+  const mentionsColumn =
+    specific.some((column) => message.includes(column)) ||
+    (message.includes("material_orders") && (message.includes("'status'") || message.includes("'branch'")));
+  if (!mentionsColumn) return false;
+  return message.includes("schema cache") || message.includes("column") || message.includes("material_orders");
+}
+
+export function missingMaterialOrderWorkflowMessage() {
+  return `Saved in this browser. Run ${MATERIAL_ORDER_WORKFLOW_SQL} in the SQL editor so material order status, delivery windows, and supplier notes persist for the office.`;
+}
+
 export const VENDOR_PROFILES_SQL = "supabase/migrations/20260923120000_vendor_profiles.sql";
 
 export function isMissingVendorProfiles(error: { message?: string; code?: string } | null | undefined) {

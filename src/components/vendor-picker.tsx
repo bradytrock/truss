@@ -28,6 +28,8 @@ export function VendorPicker({
   emptyHint,
   placeholder = "Select a QuickBooks vendor",
   appearance = "select",
+  disabled = false,
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -36,6 +38,8 @@ export function VendorPicker({
   emptyHint?: string;
   placeholder?: string;
   appearance?: "select" | "search";
+  disabled?: boolean;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -73,11 +77,14 @@ export function VendorPicker({
       }}
     >
       <PopoverTrigger
+        disabled={disabled}
         className={cn(
           appearance === "search"
             ? "flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-white px-3 text-left text-sm font-normal focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
             : cn(buttonVariants({ variant: "outline" }), "h-8 w-full justify-between font-normal"),
           !value && "text-muted-foreground",
+          disabled && "pointer-events-none opacity-60",
+          className,
         )}
       >
         {appearance === "search" ? (

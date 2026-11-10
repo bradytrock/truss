@@ -78,6 +78,7 @@ export async function sendResendEmail(input: {
   from?: string;
   /** Always the project manager’s real inbox. */
   replyTo?: string;
+  attachments?: { filename: string; content: string }[];
 }) {
   const to = input.to.trim();
   const subject = input.subject.replace(/[\r\n]+/g, " ").trim();
@@ -101,6 +102,7 @@ export async function sendResendEmail(input: {
   }
 
   const resend = new Resend(resendApiKey());
+  const attachments = input.attachments?.filter((file) => file.filename.trim() && file.content.trim());
   const { data, error } = await resend.emails.send({
     from,
     to: [to],
@@ -108,6 +110,9 @@ export async function sendResendEmail(input: {
     html: html || text,
     text: text || html,
     replyTo,
+    ...(attachments && attachments.length
+      ? { attachments: attachments.map((file) => ({ filename: file.filename, content: file.content })) }
+      : {}),
   });
 
   if (error) {

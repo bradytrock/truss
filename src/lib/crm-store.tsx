@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -222,6 +222,9 @@ import {
   mapMaterialOrder,
   mapMaterialOrderLine,
   materialOrderPatch,
+  materialOrderLegacyPatch,
+  materialOrderInsert,
+  materialOrderLegacyInsert,
   materialOrderLinePatch,
   mapMaterialOrderTemplate,
   mapMaterialOrderTemplateLine,
@@ -1459,6 +1462,7 @@ type CrmContextValue = CrmState & {
     templateId?: string | null;
   }) => Promise<MaterialOrder>;
   updateMaterialOrder: (id: string, patch: Partial<MaterialOrder>) => Promise<boolean>;
+  applyMaterialOrderTemplate: (orderId: string, templateId: string) => Promise<MaterialOrderLine[]>;
   addMaterialOrderLineFromCatalog: (orderId: string, catalogItemId: string) => Promise<MaterialOrderLine | undefined>;
   addCustomMaterialOrderLine: (orderId: string) => Promise<MaterialOrderLine | undefined>;
   updateMaterialOrderLine: (id: string, patch: Partial<MaterialOrderLine>) => Promise<void>;
@@ -10728,17 +10732,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         syncMaterialOrderDeliveryRef.current(order);
         return order;
       }
-      const payload = {
-        id: order.id,
-        company_id: user.companyId,
-        number: order.number,
-        job_id: order.jobId,
-        vendor: order.vendor,
-        notes: order.notes,
-        needed_by: order.neededBy,
-        created_by: order.createdBy,
-      };
-      const { data, error } = await supabase.from("material_orders").insert(payload).select("*").single();
+      let savedRow = await supabase
+        .from("material_orders")
+        .insert(materialOrderInsert(order, user.companyId))
+        .select("*")
+        .single();
+      if (savedRow.error && isMissingMaterialOrderWorkflow(savedRow.error)) {
+        toast.message(missingMaterialOrderWorkflowMessage());
+        savedRow = await supabase
+          .from("material_orders")
+          .insert(materialOrderLegacyInsert(order, user.companyId))
+          .select("*")
+          .single();
+      }
+      const { data, error } = savedRow;
       if (error || !data) {
         if (error && isMissingMaterialOrders(error)) {
           toast.message(missingMaterialOrdersMessage());
@@ -10806,7 +10813,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (next) syncMaterialOrderDeliveryRef.current(next);
       return true;
     }
-    const { error } = await supabase.from("material_orders").update(materialOrderPatch(patch)).eq("id", id);
+    let { error } = await supabase.from("material_orders").update(materialOrderPatch(patch)).eq("id", id);
+    if (error && isMissingMaterialOrderWorkflow(error)) {
+      const legacy = materialOrderLegacyPatch(patch);
+      if (Object.keys(legacy).length === 0) {
+        toast.message(missingMaterialOrderWorkflowMessage());
+        apply();
+        if (next) syncMaterialOrderDeliveryRef.current(next);
+        return true;
+      }
+      const retry = await supabase.from("material_orders").update(legacy).eq("id", id);
+      if (!retry.error) {
+        toast.message(missingMaterialOrderWorkflowMessage());
+        apply();
+        if (next) syncMaterialOrderDeliveryRef.current(next);
+        return true;
+      }
+      error = retry.error;
+    }
     if (error) {
       if (isMissingMaterialOrders(error)) {
         toast.message(missingMaterialOrdersMessage());
@@ -10826,6 +10850,60 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (next) syncMaterialOrderDeliveryRef.current(next);
     return true;
   }, []);
+
+  const applyMaterialOrderTemplate = useCallback(
+    async (orderId: string, templateId: string) => {
+      const book = bookRef.current;
+      const order = (book.materialOrders ?? []).find((item) => item.id === orderId);
+      const template = (book.materialOrderTemplates ?? []).find((item) => item.id === templateId);
+      if (!order || !template || order.status !== "draft") return [];
+      const existing = (book.materialOrderLines ?? []).filter((line) => line.materialOrderId === orderId);
+      const start = existing.reduce((max, line) => Math.max(max, line.sortOrder), 0);
+      const lines = materialOrderLinesFromTemplate(
+        template.id,
+        orderId,
+        book.materialOrderTemplateLines ?? [],
+      ).map((line, index) => fillMaterialOrderLine({ ...line, sortOrder: start + index + 1 }));
+      if (lines.length) {
+        const supabase = maybeClient();
+        if (!supabase) {
+          setState((prev) => ({
+            ...prev,
+            materialOrderLines: [...(prev.materialOrderLines ?? []), ...lines],
+          }));
+        } else {
+          const inserted = await supabase.from("material_order_lines").insert(
+            lines.map((line) => ({
+              id: line.id,
+              company_id: user.companyId,
+              material_order_id: orderId,
+              catalog_item_id: line.catalogItemId,
+              name: line.name || "Custom item",
+              quantity: line.quantity,
+              unit: line.unit,
+              unit_cost: line.unitCost,
+              sort_order: line.sortOrder,
+            })),
+          );
+          if (inserted.error && !isMissingMaterialOrders(inserted.error)) {
+            toast.error(inserted.error.message);
+            return [];
+          }
+          if (inserted.error) toast.message(missingMaterialOrdersMessage());
+          setState((prev) => ({
+            ...prev,
+            materialOrderLines: [...(prev.materialOrderLines ?? []), ...lines],
+          }));
+        }
+      }
+      const patch: Partial<MaterialOrder> = {};
+      if (!order.vendor.trim() && template.vendor.trim()) patch.vendor = template.vendor;
+      if (!order.notes.trim() && template.notes.trim()) patch.notes = template.notes;
+      if (Object.keys(patch).length) await updateMaterialOrder(orderId, patch);
+      return lines;
+    },
+    [updateMaterialOrder, user.companyId],
+  );
 
   const addMaterialOrderLineFromCatalog = useCallback(
     async (orderId: string, catalogItemId: string) => {
@@ -12435,8 +12513,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .then(async () => {
         const book = bookRef.current;
         const job = book.jobs.find((item) => item.id === order.jobId);
+        const calendarOrder = order.onCalendar === false ? { ...order, neededBy: null } : order;
         const eventId = await applyMaterialOrderDeliverySync({
-          order,
+          order: calendarOrder,
           events: book.events,
           existingId: materialOrderEventIdsRef.current.get(order.id),
           location: job ? jobAddress(job) : "",
@@ -16297,6 +16376,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       askRefundQuestion,
       addMaterialOrder,
       updateMaterialOrder,
+      applyMaterialOrderTemplate,
       addMaterialOrderLineFromCatalog,
       addCustomMaterialOrderLine,
       updateMaterialOrderLine,
@@ -16518,6 +16598,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       askRefundQuestion,
       addMaterialOrder,
       updateMaterialOrder,
+      applyMaterialOrderTemplate,
       addMaterialOrderLineFromCatalog,
       addCustomMaterialOrderLine,
       updateMaterialOrderLine,

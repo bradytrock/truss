@@ -779,6 +779,14 @@ export type Database = {
           created_by: string;
           created_at: string;
           archived_at: string | null;
+          status: string;
+          fulfillment: string;
+          delivery_window: string;
+          on_calendar: boolean;
+          quick_notes: string;
+          sent_at: string | null;
+          branch: string;
+          account_number: string;
         };
         Insert: {
           id?: string;
@@ -791,6 +799,14 @@ export type Database = {
           created_by?: string;
           created_at?: string;
           archived_at?: string | null;
+          status?: string;
+          fulfillment?: string;
+          delivery_window?: string;
+          on_calendar?: boolean;
+          quick_notes?: string;
+          sent_at?: string | null;
+          branch?: string;
+          account_number?: string;
         };
         Update: Partial<Database["public"]["Tables"]["material_orders"]["Insert"]>;
         Relationships: [];
