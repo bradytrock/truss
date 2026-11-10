@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
@@ -30,6 +30,7 @@ import { CreateClientDialog } from "@/components/create-records";
 import { ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { StartEstimateDialogHost } from "@/components/start-estimate-button";
 import { Button } from "@/components/ui/button";
+import { UnsavedChangesDialog } from "@/components/ui/unsaved-changes-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -231,73 +232,125 @@ export function ContactsDesk() {
     [router, searchParams],
   );
 
-  const editsBlockLeave = useCallback(() => {
-    if (!editOpen || !editDirtyRef.current) return false;
-    toast.message("Save or cancel your contact edits first.");
-    return true;
-  }, [editOpen]);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const leaveActionRef = useRef<(() => void) | null>(null);
 
   const finishEditing = useCallback(() => {
     editDirtyRef.current = false;
     setEditOpen(false);
   }, []);
 
+  const requestLeave = useCallback(
+    (action: () => void) => {
+      if (!editOpen || !editDirtyRef.current) {
+        action();
+        return;
+      }
+      leaveActionRef.current = action;
+      setLeaveOpen(true);
+    },
+    [editOpen],
+  );
+
+  const blockNavigate = useCallback(
+    (href: string) => {
+      if (!editOpen || !editDirtyRef.current) return false;
+      leaveActionRef.current = () => router.push(href);
+      setLeaveOpen(true);
+      return true;
+    },
+    [editOpen, router],
+  );
+
+  const keepContactEdits = useCallback(() => {
+    leaveActionRef.current = null;
+    setLeaveOpen(false);
+  }, []);
+
+  const discardContactEdits = useCallback(() => {
+    const action = leaveActionRef.current;
+    leaveActionRef.current = null;
+    editDirtyRef.current = false;
+    setEditOpen(false);
+    setLeaveOpen(false);
+    action?.();
+  }, []);
+
+  const saveContactEdits = useCallback(() => {
+    setLeaveOpen(false);
+    const form = document.getElementById("contact-inline-form");
+    if (!(form instanceof HTMLFormElement)) return;
+    try {
+      form.requestSubmit();
+    } catch {
+      setLeaveOpen(true);
+    }
+  }, []);
+
+  const finishSavedEdits = useCallback(() => {
+    const action = leaveActionRef.current;
+    leaveActionRef.current = null;
+    finishEditing();
+    action?.();
+  }, [finishEditing]);
+
   const setFilter = useCallback(
     (next: ContactFilter) => {
-      if (editsBlockLeave()) return;
-      finishEditing();
-      goToPage(1);
-      replaceParams((params) => {
-        if (next === "all") params.delete("filter");
-        else params.set("filter", next);
-        if (next === "vendors") params.delete("contact");
-        else params.delete("vendor");
+      requestLeave(() => {
+        finishEditing();
+        goToPage(1);
+        replaceParams((params) => {
+          if (next === "all") params.delete("filter");
+          else params.set("filter", next);
+          if (next === "vendors") params.delete("contact");
+          else params.delete("vendor");
+        });
       });
     },
-    [editsBlockLeave, finishEditing, goToPage, replaceParams],
+    [finishEditing, goToPage, replaceParams, requestLeave],
   );
 
   const selectContact = useCallback(
     (id: string) => {
-      if (id === contactId) {
-        if (editOpen) return;
-      } else if (editsBlockLeave()) {
-        return;
-      }
-      replaceParams((params) => {
-        params.set("contact", id);
+      if (id === contactId && editOpen) return;
+      requestLeave(() => {
+        replaceParams((params) => {
+          params.set("contact", id);
+        });
+        setNote("");
+        setAddingTask(false);
+        setTaskTitle("");
+        setFullOpen(false);
+        finishEditing();
       });
-      setNote("");
-      setAddingTask(false);
-      setTaskTitle("");
-      setFullOpen(false);
-      finishEditing();
     },
-    [contactId, editOpen, editsBlockLeave, finishEditing, replaceParams],
+    [contactId, editOpen, finishEditing, replaceParams, requestLeave],
   );
 
   const closeContact = useCallback(() => {
-    if (editsBlockLeave()) return;
-    replaceParams((params) => {
-      params.delete("contact");
-      params.delete("vendor");
+    requestLeave(() => {
+      replaceParams((params) => {
+        params.delete("contact");
+        params.delete("vendor");
+      });
+      setFullOpen(false);
+      finishEditing();
+      setAddingTask(false);
     });
-    setFullOpen(false);
-    finishEditing();
-    setAddingTask(false);
-  }, [editsBlockLeave, finishEditing, replaceParams]);
+  }, [finishEditing, replaceParams, requestLeave]);
 
   const selectVendor = useCallback(
     (id: string) => {
-      if (editsBlockLeave()) return;
-      finishEditing();
-      replaceParams((params) => {
-        params.set("filter", "vendors");
-        params.set("vendor", id);
-        params.delete("contact");
+      requestLeave(() => {
+        finishEditing();
+        replaceParams((params) => {
+          params.set("filter", "vendors");
+          params.set("vendor", id);
+          params.delete("contact");
+        });
       });
     },
-    [editsBlockLeave, finishEditing, replaceParams],
+    [finishEditing, replaceParams, requestLeave],
   );
 
   const revealRow = useCallback(
@@ -363,9 +416,10 @@ export function ContactsDesk() {
         event.preventDefault();
         searchRef.current?.focus();
       }
+      if (leaveOpen) return;
       if (event.key === "Escape" && editOpen && !fullOpen) {
         event.preventDefault();
-        finishEditing();
+        requestLeave(() => finishEditing());
         return;
       }
       if (event.key === "Escape" && (contactId || vendorId) && !fullOpen) {
@@ -379,7 +433,7 @@ export function ContactsDesk() {
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [closeContact, contactId, editOpen, finishEditing, fullOpen, step, vendorId]);
+  }, [closeContact, contactId, editOpen, finishEditing, fullOpen, leaveOpen, requestLeave, step, vendorId]);
 
   async function importCsv(file: File) {
     setImporting(true);
@@ -671,16 +725,17 @@ export function ContactsDesk() {
               onClose={closeContact}
               onPrev={() => step(-1)}
               onNext={() => step(1)}
-              onAttemptLeave={editsBlockLeave}
+              onBlockNavigate={blockNavigate}
               editing={editOpen}
               onExpand={() => {
-                if (editsBlockLeave()) return;
-                finishEditing();
-                setFullOpen(true);
+                requestLeave(() => {
+                  finishEditing();
+                  setFullOpen(true);
+                });
               }}
               onEdit={() => setEditOpen(true)}
-              onCancelEdit={finishEditing}
-              onSavedEdit={finishEditing}
+              onCancelEdit={() => requestLeave(() => finishEditing())}
+              onSavedEdit={finishSavedEdits}
               onEditDirty={setEditDirty}
               onNewJob={() => setJobOpen(true)}
               onEstimate={() =>
@@ -745,6 +800,15 @@ export function ContactsDesk() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <UnsavedChangesDialog
+        open={leaveOpen}
+        title="Close without saving?"
+        description="This contact has edits that are not saved yet. Closing throws them away."
+        submitLabel="Save contact"
+        onKeep={keepContactEdits}
+        onDiscard={discardContactEdits}
+        onSave={saveContactEdits}
+      />
       <CreateClientDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ContactNewSeedDialog contact={openContact ?? null} open={jobOpen} onOpenChange={setJobOpen} />
       {fullOpen && openContact ? (
@@ -1124,6 +1188,13 @@ function ContactRow({
   );
 }
 
+function leaveThrough(event: MouseEvent<HTMLAnchorElement>, block: (href: string) => boolean) {
+  if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+  const href = event.currentTarget.getAttribute("href");
+  if (!href) return;
+  if (block(href)) event.preventDefault();
+}
+
 function ContactPanel({
   row,
   note,
@@ -1137,7 +1208,7 @@ function ContactPanel({
   onClose,
   onPrev,
   onNext,
-  onAttemptLeave,
+  onBlockNavigate,
   onExpand,
   editing,
   onEdit,
@@ -1160,7 +1231,7 @@ function ContactPanel({
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
-  onAttemptLeave: () => boolean;
+  onBlockNavigate: (href: string) => boolean;
   onExpand: () => void;
   editing: boolean;
   onEdit: () => void;
@@ -1236,9 +1307,7 @@ function ContactPanel({
             <Link
               href={`/messages?contact=${row.id}`}
               className={quickClass}
-              onClick={(event) => {
-                if (onAttemptLeave()) event.preventDefault();
-              }}
+              onClick={(event) => leaveThrough(event, onBlockNavigate)}
             >
               <MessageSquare className="size-5 text-primary" />
               Text
@@ -1253,9 +1322,7 @@ function ContactPanel({
             <Link
               href={mailHref({ compose: true, email: row.email, contact: row.id })}
               className={quickClass}
-              onClick={(event) => {
-                if (onAttemptLeave()) event.preventDefault();
-              }}
+              onClick={(event) => leaveThrough(event, onBlockNavigate)}
             >
               <Mail className="size-5 text-primary" />
               Email
@@ -1326,9 +1393,7 @@ function ContactPanel({
                 key={job.id}
                 href={`/jobs?job=${job.id}`}
                 className="mb-2 flex items-center gap-3 rounded-xl px-3.5 py-3 shadow-[0_0_0_1px_rgba(28,25,22,0.08)] last:mb-0 hover:bg-[#fafaf8]"
-                onClick={(event) => {
-                  if (onAttemptLeave()) event.preventDefault();
-                }}
+                onClick={(event) => leaveThrough(event, onBlockNavigate)}
               >
                 <span className="grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-[#f0efec] text-primary">
                   <Home className="size-4" />

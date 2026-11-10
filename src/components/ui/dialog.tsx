@@ -8,11 +8,17 @@ import { Button } from "@/components/ui/button"
 import { DraftEscapeProvider, useDraftEscape, useDraftRootRef } from "@/components/ui/draft-escape"
 import { XIcon } from "lucide-react"
 
-function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
-  const draft = useDraftEscape(onOpenChange)
+function Dialog({
+  onOpenChange,
+  unsavedGuard = true,
+  open,
+  ...props
+}: DialogPrimitive.Root.Props & { unsavedGuard?: boolean }) {
+  const draft = useDraftEscape(onOpenChange, { enabled: unsavedGuard, open })
   return (
     <DraftEscapeProvider value={draft.context}>
-      <DialogPrimitive.Root data-slot="dialog" {...props} onOpenChange={draft.onOpenChange} />
+      <DialogPrimitive.Root data-slot="dialog" {...props} open={open} onOpenChange={draft.onOpenChange} />
+      {draft.confirm}
     </DraftEscapeProvider>
   )
 }
@@ -49,15 +55,17 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   ref,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
+  overlayClassName?: string
 }) {
   const draftRef = useDraftRootRef(ref)
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(

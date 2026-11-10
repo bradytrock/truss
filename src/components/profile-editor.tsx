@@ -373,6 +373,7 @@ export function ProfileEditor({
   return (
     <>
       <Sheet
+        unsavedGuard={false}
         open={open}
         onOpenChange={(next, details) => {
           if (next) return;

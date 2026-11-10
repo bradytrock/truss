@@ -8,11 +8,17 @@ import { Button } from "@/components/ui/button"
 import { DraftEscapeProvider, useDraftEscape, useDraftRootRef } from "@/components/ui/draft-escape"
 import { XIcon } from "lucide-react"
 
-function Sheet({ onOpenChange, ...props }: SheetPrimitive.Root.Props) {
-  const draft = useDraftEscape(onOpenChange)
+function Sheet({
+  onOpenChange,
+  unsavedGuard = true,
+  open,
+  ...props
+}: SheetPrimitive.Root.Props & { unsavedGuard?: boolean }) {
+  const draft = useDraftEscape(onOpenChange, { enabled: unsavedGuard, open })
   return (
     <DraftEscapeProvider value={draft.context}>
-      <SheetPrimitive.Root data-slot="sheet" {...props} onOpenChange={draft.onOpenChange} />
+      <SheetPrimitive.Root data-slot="sheet" {...props} open={open} onOpenChange={draft.onOpenChange} />
+      {draft.confirm}
     </DraftEscapeProvider>
   )
 }

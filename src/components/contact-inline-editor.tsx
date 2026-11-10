@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { contactSiteAddress } from "@/lib/contact-book";
+import { useUnsavedBeforeUnload } from "@/components/ui/draft-escape";
 import { useCrm } from "@/lib/crm-store";
 import { parseLocation } from "@/lib/job-record";
 import { digitsOnly, formatPhoneInput } from "@/lib/phone";
@@ -72,6 +73,8 @@ export function ContactInlineEditor({
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
 
+  useUnsavedBeforeUnload(dirty);
+
   useEffect(() => {
     const field = document.getElementById("contact-edit-name");
     if (field instanceof HTMLInputElement) field.focus();
@@ -133,6 +136,7 @@ export function ContactInlineEditor({
 
   return (
     <form
+      id="contact-inline-form"
       aria-label="Edit contact"
       className="min-w-0 max-w-full"
       onSubmit={handleSubmit}
