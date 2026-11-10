@@ -136,6 +136,7 @@ import { useStartMaterialOrder } from "@/lib/start-material-order";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
 import { archivedPaper, livePaper } from "@/lib/paper-archive";
 import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
+import { JobNewMenu } from "@/components/job-new-menu";
 import { JobRelatedContacts } from "@/components/job-related-contacts";
 import { JobTagField } from "@/components/job-tag-field";
 import { jobTagSuggestions } from "@/lib/job-tags";
@@ -770,43 +771,19 @@ export function JobRecord({
   }
 
   const newMenu = !deleted ? (
-    <DropdownMenu>
-        <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            size="sm"
-            className="rounded-lg"
-            disabled={estimatePending || materialPending}
-            aria-label="Create on this job"
-          />
-        }
-      >
-        <Plus data-icon="inline-start" />
-        {estimatePending || materialPending ? "Opening…" : "New"}
-        <ChevronDown data-icon="inline-end" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-44">
-        {allowEstimates ? (
-          <DropdownMenuItem onClick={() => openNew("estimate")}>New estimate</DropdownMenuItem>
-        ) : null}
-        {showFinancials ? (
-          <DropdownMenuItem onClick={() => openNew("invoice")}>New invoice</DropdownMenuItem>
-        ) : null}
-        {showPaper ? (
-          <>
-            <DropdownMenuItem onClick={() => openNew("materials")}>New material order</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setMaterialTemplateOpen(true)}>
-              New material order from template
-            </DropdownMenuItem>
-          </>
-        ) : null}
-        <DropdownMenuItem onClick={() => openNew("interaction")}>New interaction</DropdownMenuItem>
-        {showFinancials ? (
-          <DropdownMenuItem onClick={() => openNew("expense")}>New expense</DropdownMenuItem>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <JobNewMenu
+      pending={estimatePending || materialPending}
+      showEstimate={allowEstimates}
+      showInvoice={showFinancials}
+      showMaterialOrder={showPaper}
+      showExpense={showFinancials}
+      onEstimate={() => openNew("estimate")}
+      onInvoice={() => openNew("invoice")}
+      onMaterialOrder={() => openNew("materials")}
+      onMaterialTemplate={() => setMaterialTemplateOpen(true)}
+      onInteraction={() => openNew("interaction")}
+      onExpense={() => openNew("expense")}
+    />
   ) : null;
 
   return (
