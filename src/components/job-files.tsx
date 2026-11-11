@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
   FileArchive,
+  ShieldCheck,
   FileSpreadsheet,
   FileText,
   Film,
@@ -15,6 +16,7 @@ import {
   Upload,
 } from "lucide-react";
 import { CompletionCertificateDialog } from "@/components/completion-certificate-dialog";
+import { LaborWarrantyDialog } from "@/components/labor-warranty-dialog";
 import { toast } from "sonner";
 import { CompanyFilePickerList } from "@/components/company-files";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -46,6 +48,7 @@ export function JobFilesPanel({
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [certificateOpen, setCertificateOpen] = useState(false);
+  const [warrantyOpen, setWarrantyOpen] = useState(false);
   const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
   const files = (crm.jobFiles ?? []).filter((file) => file.jobId === jobId);
   const job = crm.getJob(jobId);
@@ -168,6 +171,17 @@ export function JobFilesPanel({
             type="button"
             size="sm"
             variant="outline"
+            disabled={disabled || !job || uploading || attachingFromDirectory}
+            title="Lifetime labor and material warranty"
+            onClick={() => setWarrantyOpen(true)}
+          >
+            <ShieldCheck data-icon="inline-start" />
+            Warranty
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
             disabled={disabled || uploading || attachingFromDirectory}
             onClick={() => setDirectoryOpen(true)}
           >
@@ -177,7 +191,10 @@ export function JobFilesPanel({
         </div>
       </div>
       {job ? (
-        <CompletionCertificateDialog job={job} open={certificateOpen} onOpenChange={setCertificateOpen} />
+        <>
+          <CompletionCertificateDialog job={job} open={certificateOpen} onOpenChange={setCertificateOpen} />
+          <LaborWarrantyDialog job={job} open={warrantyOpen} onOpenChange={setWarrantyOpen} />
+        </>
       ) : null}
       <Dialog open={directoryOpen} onOpenChange={setDirectoryOpen}>
         <DialogContent className="sm:max-w-lg">
