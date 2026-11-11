@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import {
+  autoLinkCompanyCamJob,
   createCompanyCamProject,
   fetchCompanyCamProject,
   loadCompanyCamConnection,
   loadCompanyCamJob,
   loadCompanyCamLink,
+  pauseCompanyCamLink,
   publicCompanyCamLink,
   saveCompanyCamLink,
   searchCompanyCamProjects,
   syncCompanyCamJob,
 } from "@/lib/companycam-server";
-import { isUuid } from "@/lib/companycam";
+import { isPausedCompanyCamProjectId, isUuid } from "@/lib/companycam";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingCompanyCam, missingCompanyCamMessage } from "@/lib/supabase/schema-errors";
@@ -59,10 +61,27 @@ export async function GET(request: Request) {
     else projects = found.projects;
   }
 
+  let link = publicCompanyCamLink(linkResult.row);
+  const paused = Boolean(
+    linkResult.row && isPausedCompanyCamProjectId(linkResult.row.companycam_project_id),
+  );
+  if (!searching && connected && row && (!linkResult.row || paused) && !job.deleted_at) {
+    try {
+      const linked = await autoLinkCompanyCamJob(supabase, {
+        token: row.access_token.trim(),
+        companyId: profile.company_id,
+        job,
+      });
+      if (linked.row) link = publicCompanyCamLink(linked.row);
+    } catch {
+      // The next visit tries again.
+    }
+  }
+
   return NextResponse.json({
     connected,
     companyName: row?.companycam_company_name ?? "",
-    link: publicCompanyCamLink(linkResult.row),
+    link,
     projects,
     searchError,
     sql: null,
@@ -109,15 +128,20 @@ export async function POST(request: Request) {
   }
 
   if (action === "unlink") {
-    const { error: unlinkError } = await supabase
-      .from("companycam_job_links")
-      .delete()
-      .eq("company_id", profile.company_id)
-      .eq("job_id", job.id);
-    if (unlinkError) {
-      const failed = schemaFailure(unlinkError);
+    const paused = await pauseCompanyCamLink(supabase, {
+      companyId: profile.company_id,
+      jobId: job.id,
+      address: {
+        street: job.street,
+        city: job.city,
+        state: job.state,
+        postalCode: job.postal_code,
+      },
+    });
+    if (paused.error) {
+      const failed = schemaFailure(paused.error);
       if (failed) return failed;
-      return NextResponse.json({ error: unlinkError.message }, { status: 400 });
+      return NextResponse.json({ error: paused.error.message }, { status: 400 });
     }
     return NextResponse.json({ ok: true, link: null });
   }
@@ -171,7 +195,7 @@ export async function POST(request: Request) {
     const linkResult = await loadCompanyCamLink(supabase, profile.company_id, job.id);
     const linkMissing = schemaFailure(linkResult.error);
     if (linkMissing) return linkMissing;
-    if (!linkResult.row) {
+    if (!linkResult.row || isPausedCompanyCamProjectId(linkResult.row.companycam_project_id)) {
       return NextResponse.json({ error: "Link a CompanyCam project before syncing photos." }, { status: 400 });
     }
     const synced = await syncCompanyCamJob(supabase, {

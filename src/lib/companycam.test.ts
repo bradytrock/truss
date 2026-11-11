@@ -17,8 +17,15 @@ import {
   companyCamWebhookUrl,
   formatCompanyCamAddress,
   isCompanyCamImageUrl,
+  isPausedCompanyCamProjectId,
   jobHasCompanyCamAddress,
+  pausedCompanyCamProjectId,
   looksLikeCompanyCamToken,
+  companyCamAddressesMatch,
+  companyCamCandidateProjectId,
+  companyCamJobForProject,
+  companyCamPostalCode,
+  companyCamProjectForJob,
   parseCompanyCamCompany,
   parseCompanyCamPhoto,
   parseCompanyCamProject,
@@ -67,7 +74,96 @@ const project = parseCompanyCamProject({
 });
 assert.equal(project?.id, "42");
 assert.equal(project?.address, "100 Main, Plano, TX 75074");
+assert.equal(project?.street, "100 Main");
+assert.equal(project?.postalCode, "75074");
 assert.equal(project?.url, "https://app.companycam.com/projects/42");
+
+const jobAddress = { street: "100 Main Street", city: "Plano", state: "Texas", postalCode: "75074-1234" };
+assert.equal(companyCamPostalCode("75074-1234"), "75074");
+assert.equal(companyCamPostalCode("7507"), "");
+assert.equal(pausedCompanyCamProjectId("job-1"), "paused:job-1");
+assert.equal(isPausedCompanyCamProjectId("paused:job-1"), true);
+assert.equal(isPausedCompanyCamProjectId("42"), false);
+const pausedLine = JSON.stringify(jobAddress);
+assert.equal(
+  companyCamCandidateProjectId({ ...jobAddress, projectId: "paused:job-1" }, pausedLine),
+  "paused:job-1",
+);
+assert.equal(
+  companyCamCandidateProjectId(
+    { street: "200 Oak Ave", city: "Plano", state: "TX", postalCode: "75074", projectId: "paused:job-1" },
+    pausedLine,
+  ),
+  "",
+);
+assert.equal(companyCamCandidateProjectId({ ...jobAddress, projectId: "42" }, pausedLine), "42");
+assert.equal(project ? companyCamAddressesMatch(jobAddress, project) : false, true);
+assert.equal(
+  companyCamAddressesMatch(
+    { street: "100 North Main St", city: "Ft. Worth", state: "TX", postalCode: "76102" },
+    { street: "100 N. Main Street", city: "Fort Worth", state: "Texas", postalCode: "76102" },
+  ),
+  true,
+);
+assert.equal(
+  companyCamAddressesMatch(
+    { street: "808 P St Suite 2", city: "Lincoln", state: "NE", postalCode: "68508" },
+    { street: "808 P Street #2", city: "Lincoln", state: "NE", postalCode: "68508" },
+  ),
+  true,
+);
+assert.equal(
+  companyCamAddressesMatch(jobAddress, { street: "100 Main", city: "Plano", state: "TX", postalCode: "75074" }),
+  true,
+);
+assert.equal(
+  companyCamAddressesMatch(jobAddress, { street: "100 Main Ave", city: "Plano", state: "TX", postalCode: "75074" }),
+  false,
+);
+assert.equal(
+  companyCamAddressesMatch(jobAddress, { street: "100 Main St Apt 4", city: "Plano", state: "TX", postalCode: "75074" }),
+  false,
+);
+assert.equal(
+  companyCamAddressesMatch(jobAddress, { street: "100 Main St", city: "Allen", state: "TX", postalCode: "75074" }),
+  false,
+);
+assert.equal(
+  companyCamAddressesMatch(jobAddress, { street: "100 Main St", city: "Plano", state: "OK", postalCode: "75074" }),
+  false,
+);
+
+const twin = parseCompanyCamProject({
+  id: "43",
+  name: "Smith again",
+  address: { street_address_1: "100 Main St", city: "Plano", state: "TX", postal_code: "75074" },
+});
+assert.equal(companyCamProjectForJob([project, twin].filter((item) => item !== null), jobAddress, true), null);
+assert.equal(companyCamProjectForJob(project ? [project] : [], jobAddress, false), null);
+assert.equal(companyCamProjectForJob(project ? [project] : [], jobAddress, true)?.id, "42");
+
+const addressJob = { id: "job-1", ...jobAddress, projectId: "" };
+assert.equal(
+  companyCamJobForProject([addressJob], { id: "42", street: "100 Main St", city: "Plano", state: "TX", postalCode: "75074" }, true)?.id,
+  "job-1",
+);
+assert.equal(
+  companyCamJobForProject(
+    [addressJob, { id: "job-2", street: "100 Main St", city: "Plano", state: "TX", postalCode: "75074", projectId: "" }],
+    { id: "42", ...jobAddress },
+    true,
+  ),
+  null,
+);
+assert.equal(
+  companyCamJobForProject(
+    [{ ...addressJob, projectId: "99" }],
+    { id: "42", street: "100 Main St", city: "Plano", state: "TX", postalCode: "75074" },
+    true,
+  ),
+  null,
+);
+assert.equal(companyCamJobForProject([addressJob], { id: "42", ...jobAddress }, false), null);
 
 const photo = parseCompanyCamPhoto({
   id: "8675309",

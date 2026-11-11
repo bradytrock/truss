@@ -79,6 +79,8 @@ export function JobCompanyCamPanel({
     return data;
   }
 
+  const addressKey = [job?.street, job?.city, job?.state, job?.postalCode].map((part) => part?.trim() ?? "").join("|");
+
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -96,7 +98,7 @@ export function JobCompanyCamPanel({
     return () => {
       cancelled = true;
     };
-  }, [jobId]);
+  }, [addressKey, jobId]);
 
   useEffect(() => {
     const projectId = info?.link?.projectId ?? "";
@@ -133,7 +135,14 @@ export function JobCompanyCamPanel({
 
   async function act(action: "link" | "create" | "unlink", projectId?: string) {
     if (mappingDisabled) return;
-    if (action === "unlink" && !window.confirm("Unlink this CompanyCam project from the job?")) return;
+    if (
+      action === "unlink" &&
+      !window.confirm(
+        "Unlink this CompanyCam project from the job? It stays off this address until someone links a project.",
+      )
+    ) {
+      return;
+    }
     setPending(true);
     try {
       const response = await fetch("/api/companycam/job", {
@@ -179,7 +188,7 @@ export function JobCompanyCamPanel({
             <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">CompanyCam</p>
             <p className="mt-0.5 text-sm text-muted-foreground">
               {info?.connected
-                ? `This company is connected to ${info.companyName || "CompanyCam"}. Link the job's project and its photos stay in the gallery.`
+                ? `This company is connected to ${info.companyName || "CompanyCam"}. Photos from the project at this address show up in the gallery.`
                 : "Connect this company's CompanyCam account to show a project's photos on the job."}
             </p>
           </div>
@@ -256,7 +265,7 @@ export function JobCompanyCamPanel({
 
         {loaded && info?.connected && mappingLocked && !link ? (
           <p className="text-sm text-muted-foreground">
-            This job is not linked to a CompanyCam project yet. An ops seat can map it.
+            No CompanyCam project at this address is connected yet. An ops seat can choose one.
           </p>
         ) : null}
 

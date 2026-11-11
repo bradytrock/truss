@@ -30,7 +30,7 @@ export default function CompanyCamSettingsPage() {
     >
       <IntegrationSettingsChrome
         title="CompanyCam"
-        description="Connect this company's own CompanyCam account. Jobs can link a project and pull those photos into the gallery."
+        description="Connect this company's own CompanyCam account. A job picks up the CompanyCam project at the same address, and those photos stay in the gallery."
       >
         <CompanyCamSettingsForm />
       </IntegrationSettingsChrome>
@@ -154,7 +154,7 @@ function CompanyCamSettingsForm() {
           <CardTitle>Photo webhook</CardTitle>
           <CardDescription>
             Saving a token registers this URL with that CompanyCam account. Photos added or edited
-            on a linked project show up on the job. Opening the job also drops photos that were
+            on the project at the job&apos;s address show up on the job. Opening the job also drops photos that were
             removed in CompanyCam. Keys expire in CompanyCam, so paste a fresh one before the
             current key stops working.
           </CardDescription>

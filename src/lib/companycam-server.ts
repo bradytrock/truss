@@ -1,28 +1,41 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   COMPANYCAM_API,
   asCompanyCamList,
   companyCamErrorMessage,
+  companyCamAddressesMatch,
+  companyCamCandidateProjectId,
+  companyCamJobForProject,
   companyCamListedPhotoId,
   companyCamNextPhotoCursor,
   companyCamPhotoCreateBody,
   companyCamPhotoIdsToDrop,
   companyCamPhotoPageState,
   companyCamPhotoQuery,
+  companyCamPostalCode,
   companyCamProjectBody,
+  companyCamProjectForJob,
   companyCamTokenHint,
+  uniqueCompanyCamAddressMatch,
   companyCamUploadUrl,
   companyCamWebhookUrl,
   isCompanyCamImageUrl,
+  isPausedCompanyCamProjectId,
   isUuid,
+  pausedCompanyCamAddress,
+  pausedCompanyCamProjectId,
   jobHasCompanyCamAddress,
   parseCompanyCamCompany,
   parseCompanyCamPhoto,
   parseCompanyCamProject,
+  type CompanyCamAddress,
+  type CompanyCamAddressJob,
   type CompanyCamPhoto,
   type CompanyCamProject,
 } from "@/lib/companycam";
+import { railwayClientOptions, railwayDatabaseEnabled } from "@/lib/railway-rest";
 import type { Database } from "@/lib/supabase/database.types";
+import { getSupabaseUrl } from "@/lib/supabase/env";
 
 type Client = SupabaseClient<Database>;
 type ConnectionRow = Database["public"]["Tables"]["companycam_connections"]["Row"];
@@ -61,7 +74,7 @@ export function publicCompanyCamStatus(row: ConnectionRow | null, origin: string
 }
 
 export function publicCompanyCamLink(row: JobLinkRow | null) {
-  if (!row) return null;
+  if (!row || isPausedCompanyCamProjectId(row.companycam_project_id)) return null;
   return {
     id: row.id,
     jobId: row.job_id,
@@ -168,6 +181,156 @@ export async function searchCompanyCamProjects(token: string, query: string) {
     .map(parseCompanyCamProject)
     .filter((item): item is CompanyCamProject => Boolean(item));
   return { ok: true as const, error: "", projects };
+}
+
+const PROJECT_PAGE_SIZE = 100;
+const PROJECT_MAX_PAGES = 3;
+const ADDRESS_CANDIDATE_LIMIT = 201;
+
+async function listCompanyCamProjectsByQuery(token: string, query: string) {
+  const projects: CompanyCamProject[] = [];
+  const seen = new Set<string>();
+  const q = query.trim().slice(0, 120);
+  if (!q) return { ok: true as const, error: "", projects, complete: true };
+  for (let page = 1; page <= PROJECT_MAX_PAGES; page += 1) {
+    const params = new URLSearchParams({
+      per_page: String(PROJECT_PAGE_SIZE),
+      page: String(page),
+      query: q,
+    });
+    const result = await companyCamRequest(token, `/projects?${params.toString()}`);
+    if (!result.ok) {
+      return { ok: false as const, error: result.error, projects, complete: false };
+    }
+    const raw = asCompanyCamList(result.json);
+    for (const item of raw) {
+      const project = parseCompanyCamProject(item);
+      if (!project || seen.has(project.id)) continue;
+      seen.add(project.id);
+      projects.push(project);
+    }
+    if (raw.length < PROJECT_PAGE_SIZE) return { ok: true as const, error: "", projects, complete: true };
+  }
+  return { ok: true as const, error: "", projects, complete: false };
+}
+
+/** The one CompanyCam project at this address. An incomplete search never links. */
+export async function findCompanyCamProjectForAddress(token: string, address: CompanyCamAddress) {
+  const queries = [
+    [address.street, address.city, address.postalCode].map((part) => part.trim()).filter(Boolean).join(" "),
+    [address.street, address.postalCode].map((part) => part.trim()).filter(Boolean).join(" "),
+  ];
+  const tried = new Set<string>();
+  for (const query of queries) {
+    const key = query.toLowerCase();
+    if (!query || tried.has(key)) continue;
+    tried.add(key);
+    const listed = await listCompanyCamProjectsByQuery(token, query);
+    if (!listed.ok) return { ok: false as const, error: listed.error, project: null };
+    if (!listed.complete) return { ok: true as const, error: "", project: null };
+    const project = companyCamProjectForJob(listed.projects, address, true);
+    if (project) return { ok: true as const, error: "", project };
+  }
+  return { ok: true as const, error: "", project: null };
+}
+
+export async function listCompanyCamAddressJobs(supabase: Client, companyId: string, postalCode: string) {
+  const postal = companyCamPostalCode(postalCode);
+  if (!postal) return { complete: true, jobs: [] as CompanyCamAddressJob[], error: "" };
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("id, street, city, state, postal_code")
+    .eq("company_id", companyId)
+    .is("deleted_at", null)
+    .ilike("postal_code", `${postal}%`)
+    .limit(ADDRESS_CANDIDATE_LIMIT);
+  if (error) return { complete: false, jobs: [] as CompanyCamAddressJob[], error: error.message };
+  const rows = data ?? [];
+  const complete = rows.length < ADDRESS_CANDIDATE_LIMIT;
+  const ids = rows.map((row) => row.id);
+  const links = new Map<string, { projectId: string; addressLine: string }>();
+  if (ids.length > 0) {
+    const linked = await supabase
+      .from("companycam_job_links")
+      .select("job_id, companycam_project_id, address_line")
+      .eq("company_id", companyId)
+      .in("job_id", ids);
+    if (linked.error) return { complete: false, jobs: [] as CompanyCamAddressJob[], error: linked.error.message };
+    for (const row of linked.data ?? []) {
+      if (row.companycam_project_id) {
+        links.set(row.job_id, { projectId: row.companycam_project_id, addressLine: row.address_line });
+      }
+    }
+  }
+  return {
+    complete,
+    error: "",
+    jobs: rows.map((row) => {
+      const address = {
+        street: row.street,
+        city: row.city,
+        state: row.state,
+        postalCode: row.postal_code,
+      };
+      const link = links.get(row.id);
+      return {
+        id: row.id,
+        ...address,
+        projectId: companyCamCandidateProjectId(
+          { ...address, projectId: link?.projectId ?? "" },
+          link?.addressLine ?? "",
+        ),
+      };
+    }),
+  };
+}
+
+/** Link the job when exactly one CompanyCam project and one open job share its address. */
+export async function autoLinkCompanyCamJob(
+  supabase: Client,
+  input: { token: string; companyId: string; job: CompanyCamJobRecord },
+) {
+  if (input.job.deleted_at) return { row: null as JobLinkRow | null };
+  const existing = await loadCompanyCamLink(supabase, input.companyId, input.job.id);
+  if (existing.error) return { row: null };
+  const address: CompanyCamAddress = {
+    street: input.job.street,
+    city: input.job.city,
+    state: input.job.state,
+    postalCode: input.job.postal_code,
+  };
+  const paused = Boolean(existing.row && isPausedCompanyCamProjectId(existing.row.companycam_project_id));
+  const pausedAddress = paused && existing.row ? pausedCompanyCamAddress(existing.row.address_line) : null;
+  const addressChanged =
+    paused && pausedAddress !== null && !companyCamAddressesMatch(pausedAddress, address);
+  if (existing.row && !addressChanged) {
+    return { row: paused ? null : existing.row };
+  }
+  if (!jobHasCompanyCamAddress(address)) return { row: null };
+
+  const peers = await listCompanyCamAddressJobs(supabase, input.companyId, address.postalCode);
+  if (peers.error || !peers.complete) return { row: null };
+  const jobs = peers.jobs.some((job) => job.id === input.job.id)
+    ? peers.jobs
+    : [...peers.jobs, { id: input.job.id, ...address, projectId: "" }];
+  const match = uniqueCompanyCamAddressMatch(jobs, (job) => job, address);
+  if (!match || match.id !== input.job.id || match.projectId) return { row: null };
+
+  const found = await findCompanyCamProjectForAddress(input.token, address);
+  if (!found.ok || !found.project) return { row: null };
+  if (jobs.some((job) => job.projectId === found.project.id)) return { row: null };
+
+  const saved = await saveCompanyCamLink(supabase, {
+    companyId: input.companyId,
+    jobId: input.job.id,
+    project: found.project,
+  });
+  if (saved.row?.companycam_project_id === found.project.id) return { row: saved.row };
+  if (saved.error && "code" in saved.error && saved.error.code === "23505") {
+    const again = await loadCompanyCamLink(supabase, input.companyId, input.job.id);
+    if (again.row?.companycam_project_id === found.project.id) return { row: again.row };
+  }
+  return { row: null };
 }
 
 export async function fetchCompanyCamProject(token: string, projectId: string) {
@@ -343,6 +506,40 @@ export async function saveCompanyCamLink(
     .select("*")
     .single();
   return { error, row: data };
+}
+
+/** Remember that someone unlinked this job so the same address does not attach again. */
+export async function pauseCompanyCamLink(
+  supabase: Client,
+  input: { companyId: string; jobId: string; address: CompanyCamAddress },
+) {
+  const now = new Date().toISOString();
+  const payload = {
+    company_id: input.companyId,
+    job_id: input.jobId,
+    companycam_project_id: pausedCompanyCamProjectId(input.jobId),
+    project_name: "",
+    project_url: "",
+    address_line: JSON.stringify({
+      street: input.address.street.trim(),
+      city: input.address.city.trim(),
+      state: input.address.state.trim(),
+      postalCode: input.address.postalCode.trim(),
+    }),
+    updated_at: now,
+  };
+  const { data: current } = await supabase
+    .from("companycam_job_links")
+    .select("id")
+    .eq("company_id", input.companyId)
+    .eq("job_id", input.jobId)
+    .maybeSingle();
+  if (current?.id) {
+    const { error } = await supabase.from("companycam_job_links").update(payload).eq("id", current.id);
+    return { error };
+  }
+  const { error } = await supabase.from("companycam_job_links").insert(payload);
+  return { error };
 }
 
 const COMPANYCAM_ID_CHUNK = 100;
@@ -710,4 +907,132 @@ export async function deleteCompanyCamWebhook(token: string, webhookId: string) 
 
 export function connectionTokenHint(token: string) {
   return companyCamTokenHint(token);
+}
+
+function companyCamServiceClient() {
+  if (railwayDatabaseEnabled()) return null;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
+  if (!serviceKey) return null;
+  return createClient<Database>(getSupabaseUrl(), serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    ...railwayClientOptions(),
+  });
+}
+
+function jsonRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function textField(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function parseAddressJobs(value: unknown) {
+  if (!Array.isArray(value)) return [] as CompanyCamAddressJob[];
+  const jobs: CompanyCamAddressJob[] = [];
+  for (const item of value) {
+    const row = jsonRecord(item);
+    const id = textField(row?.id);
+    if (!row || !isUuid(id)) continue;
+    const address = {
+      street: textField(row.street),
+      city: textField(row.city),
+      state: textField(row.state),
+      postalCode: textField(row.postalCode),
+    };
+    jobs.push({
+      id,
+      ...address,
+      projectId: companyCamCandidateProjectId(
+        { ...address, projectId: textField(row.projectId) },
+        textField(row.addressLine),
+      ),
+    });
+  }
+  return jobs;
+}
+
+/**
+ * When a photo arrives for a CompanyCam project that is not linked yet,
+ * attach it to the one open job at that project's address.
+ * The webhook token is the credential. The CompanyCam access token stays on the server.
+ */
+export async function attachCompanyCamWebhookProject(
+  supabase: Client,
+  input: { webhookToken: string; projectId: string },
+) {
+  const projectId = input.projectId.trim();
+  const webhookToken = input.webhookToken.trim();
+  if (!projectId || !webhookToken) return { linked: false };
+
+  const admin = companyCamServiceClient();
+  if (admin) {
+    const linked = await attachCompanyCamProjectWithClient(admin, { webhookToken, projectId });
+    if (linked !== "unavailable") return { linked: linked === "linked" };
+  }
+
+  const access = await supabase.rpc("companycam_webhook_access", { p_token: webhookToken });
+  if (access.error) return { linked: false };
+  const accessRow = jsonRecord(access.data);
+  const token = textField(accessRow?.accessToken).trim();
+  if (accessRow?.ok !== true || !token) return { linked: false };
+
+  const projectResult = await fetchCompanyCamProject(token, projectId);
+  if (!projectResult.ok || !projectResult.project) return { linked: false };
+  const project = projectResult.project;
+
+  const candidates = await supabase.rpc("companycam_address_candidates", {
+    p_token: webhookToken,
+    p_postal: project.postalCode,
+  });
+  if (candidates.error) return { linked: false };
+  const candidateRow = jsonRecord(candidates.data);
+  if (candidateRow?.ok !== true) return { linked: false };
+  const jobs = parseAddressJobs(candidateRow.jobs);
+  const match = companyCamJobForProject(jobs, project, candidateRow.complete !== false);
+  if (!match) return { linked: false };
+
+  const saved = await supabase.rpc("companycam_save_auto_link", {
+    p_token: webhookToken,
+    p_job_id: match.id,
+    p_project_id: project.id,
+    p_project_name: project.name,
+    p_project_url: project.url,
+    p_address_line: project.address,
+  });
+  if (saved.error) return { linked: false };
+  const savedRow = jsonRecord(saved.data);
+  return { linked: savedRow?.ok === true && savedRow.linked === true };
+}
+
+async function attachCompanyCamProjectWithClient(
+  supabase: Client,
+  input: { webhookToken: string; projectId: string },
+): Promise<"linked" | "unmatched" | "unavailable"> {
+  const { data, error } = await supabase
+    .from("companycam_connections")
+    .select("*")
+    .eq("webhook_token", input.webhookToken)
+    .eq("linked", true)
+    .maybeSingle();
+  if (error || !data?.access_token.trim()) return "unavailable";
+  const projectResult = await fetchCompanyCamProject(data.access_token.trim(), input.projectId);
+  if (!projectResult.ok || !projectResult.project) return "unmatched";
+  const project = projectResult.project;
+  const peers = await listCompanyCamAddressJobs(supabase, data.company_id, project.postalCode);
+  if (peers.error) return "unavailable";
+  const match = companyCamJobForProject(peers.jobs, project, peers.complete);
+  if (!match) return "unmatched";
+  const saved = await saveCompanyCamLink(supabase, {
+    companyId: data.company_id,
+    jobId: match.id,
+    project,
+  });
+  if (saved.row?.companycam_project_id === project.id) return "linked";
+  if (saved.error && "code" in saved.error && saved.error.code === "23505") {
+    const again = await loadCompanyCamLink(supabase, data.company_id, match.id);
+    if (again.row?.companycam_project_id === project.id) return "linked";
+  }
+  return "unmatched";
 }

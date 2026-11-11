@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { normalizeState } from "./address-suggest.ts";
 
 export const COMPANYCAM_API = "https://api.companycam.com/v2";
 
@@ -9,10 +10,26 @@ export type CompanyCamCompany = {
   name: string;
 };
 
+export type CompanyCamAddress = {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+};
+
+export type CompanyCamAddressJob = CompanyCamAddress & {
+  id: string;
+  projectId?: string;
+};
+
 export type CompanyCamProject = {
   id: string;
   name: string;
   address: string;
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
   url: string;
 };
 
@@ -100,12 +117,122 @@ export function parseCompanyCamProject(json: unknown): CompanyCamProject | null 
   const id = idOf(json.id);
   if (!id) return null;
   const name = textOf(json.name) || "Untitled project";
+  const parts = companyCamAddressFromJson(json.address);
   const address = formatCompanyCamAddress(json.address);
   const explicit = textOf(json.project_url);
   const url = explicit.startsWith("https://")
     ? explicit
     : `https://app.companycam.com/projects/${encodeURIComponent(id)}`;
-  return { id, name, address, url };
+  return { id, name, address, url, ...parts };
+}
+
+export function companyCamAddressFromJson(address: unknown): CompanyCamAddress {
+  if (!isRecord(address)) return { street: "", city: "", state: "", postalCode: "" };
+  return {
+    street: [textOf(address.street_address_1), textOf(address.street_address_2)].filter(Boolean).join(" "),
+    city: textOf(address.city),
+    state: textOf(address.state),
+    postalCode: textOf(address.postal_code),
+  };
+}
+
+/** First five ZIP digits. ZIP+4 and punctuation collapse to the same code. */
+export function companyCamPostalCode(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 5 ? digits.slice(0, 5) : "";
+}
+
+const PAUSED_COMPANYCAM_PROJECT_PREFIX = "paused:";
+
+/** Keeps an unlinked job from matching the same address again until that address changes. */
+export function pausedCompanyCamProjectId(jobId: string) {
+  return `${PAUSED_COMPANYCAM_PROJECT_PREFIX}${jobId.trim()}`;
+}
+
+export function isPausedCompanyCamProjectId(projectId: string) {
+  return projectId.trim().startsWith(PAUSED_COMPANYCAM_PROJECT_PREFIX);
+}
+
+export function pausedCompanyCamAddress(value: string): CompanyCamAddress | null {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const row = parsed as Record<string, unknown>;
+    return {
+      street: typeof row.street === "string" ? row.street : "",
+      city: typeof row.city === "string" ? row.city : "",
+      state: typeof row.state === "string" ? row.state : "",
+      postalCode: typeof row.postalCode === "string" ? row.postalCode : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A paused link blocks another match at the same address. A new address can match again. */
+export function companyCamCandidateProjectId(
+  job: CompanyCamAddress & { projectId?: string },
+  pauseAddressLine: string,
+) {
+  const projectId = job.projectId?.trim() ?? "";
+  if (!isPausedCompanyCamProjectId(projectId)) return projectId;
+  const paused = pausedCompanyCamAddress(pauseAddressLine);
+  if (!paused || companyCamAddressesMatch(paused, job)) return projectId;
+  return "";
+}
+
+/**
+ * Street, city, state, and ZIP compare equal after spelling differences
+ * (St/Street, N/North, Suite/#, TX/Texas, ZIP+4). A missing city or state
+ * does not reject a match. A different city, state, or unit does.
+ */
+export function companyCamAddressesMatch(left: CompanyCamAddress, right: CompanyCamAddress) {
+  const a = normalizeCompanyCamAddress(left);
+  const b = normalizeCompanyCamAddress(right);
+  if (!a || !b) return false;
+  if (!companyCamStreetsMatch(a.street, b.street) || a.postal !== b.postal) return false;
+  if (a.city && b.city && a.city !== b.city) return false;
+  if (a.state && b.state && a.state !== b.state) return false;
+  return true;
+}
+
+/** The one item at this address. Zero or several matches stay unresolved. */
+export function uniqueCompanyCamAddressMatch<T>(
+  items: readonly T[],
+  addressOf: (item: T) => CompanyCamAddress,
+  target: CompanyCamAddress,
+) {
+  const matches = items.filter((item) => companyCamAddressesMatch(addressOf(item), target));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/** The CompanyCam project at the job address, when the search list is complete and unique. */
+export function companyCamProjectForJob(
+  projects: readonly CompanyCamProject[],
+  job: CompanyCamAddress,
+  listComplete: boolean,
+) {
+  if (!listComplete) return null;
+  return uniqueCompanyCamAddressMatch(projects, (project) => project, job) ?? null;
+}
+
+/**
+ * The one open job at the project address.
+ * A job already tied to a different project, or a project already tied to a different job, stays unresolved.
+ * An incomplete candidate list never counts as unique.
+ */
+export function companyCamJobForProject(
+  jobs: readonly CompanyCamAddressJob[],
+  project: CompanyCamAddress & { id: string },
+  listComplete: boolean,
+) {
+  if (!listComplete) return null;
+  const match = uniqueCompanyCamAddressMatch(jobs, (job) => job, project);
+  if (!match) return null;
+  const linkedProject = match.projectId?.trim() ?? "";
+  if (linkedProject && linkedProject !== project.id) return null;
+  if (jobs.some((job) => (job.projectId?.trim() ?? "") === project.id && job.id !== match.id)) return null;
+  return match;
 }
 
 export function parseCompanyCamPhoto(json: unknown): CompanyCamPhoto | null {
@@ -340,6 +467,127 @@ export function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value.trim(),
   );
+}
+
+const STREET_TOKEN: Record<string, string> = {
+  street: "st",
+  st: "st",
+  avenue: "ave",
+  ave: "ave",
+  av: "ave",
+  boulevard: "blvd",
+  blvd: "blvd",
+  drive: "dr",
+  dr: "dr",
+  road: "rd",
+  rd: "rd",
+  lane: "ln",
+  ln: "ln",
+  court: "ct",
+  ct: "ct",
+  place: "pl",
+  pl: "pl",
+  terrace: "ter",
+  ter: "ter",
+  circle: "cir",
+  cir: "cir",
+  trail: "trl",
+  trl: "trl",
+  parkway: "pkwy",
+  pkwy: "pkwy",
+  highway: "hwy",
+  hwy: "hwy",
+  square: "sq",
+  sq: "sq",
+  north: "n",
+  n: "n",
+  south: "s",
+  s: "s",
+  east: "e",
+  e: "e",
+  west: "w",
+  w: "w",
+  northeast: "ne",
+  ne: "ne",
+  northwest: "nw",
+  nw: "nw",
+  southeast: "se",
+  se: "se",
+  southwest: "sw",
+  sw: "sw",
+  apartment: "unit",
+  apt: "unit",
+  suite: "unit",
+  ste: "unit",
+  unit: "unit",
+};
+
+const TRAILING_STREET_SUFFIX = new Set([
+  "st",
+  "ave",
+  "blvd",
+  "dr",
+  "rd",
+  "ln",
+  "ct",
+  "pl",
+  "ter",
+  "cir",
+  "trl",
+  "pkwy",
+  "hwy",
+  "sq",
+  "way",
+]);
+
+function normalizeCompanyCamAddress(address: CompanyCamAddress) {
+  const street = normalizeStreet(address.street);
+  const postal = companyCamPostalCode(address.postalCode);
+  if (!street || !postal) return null;
+  return {
+    street,
+    city: normalizeCity(address.city),
+    state: normalizeState(address.state),
+    postal,
+  };
+}
+
+function normalizeStreet(value: string) {
+  const tokens = value
+    .toLowerCase()
+    .replace(/#/g, " unit ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => STREET_TOKEN[token] ?? token)
+    .filter((token, index, list) => token !== "unit" || list[index - 1] !== "unit");
+  return tokens.join(" ");
+}
+
+function normalizeCity(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => (token === "ft" ? "fort" : token))
+    .join(" ");
+}
+
+function companyCamStreetsMatch(left: string, right: string) {
+  if (left === right) return true;
+  const a = stripTrailingStreetSuffix(left);
+  const b = stripTrailingStreetSuffix(right);
+  return a === b && (a !== left) !== (b !== right);
+}
+
+function stripTrailingStreetSuffix(value: string) {
+  const tokens = value.split(" ").filter(Boolean);
+  const last = tokens[tokens.length - 1] ?? "";
+  if (tokens.length < 2 || !TRAILING_STREET_SUFFIX.has(last)) return value;
+  return tokens.slice(0, -1).join(" ");
 }
 
 function isoDate(date: Date) {

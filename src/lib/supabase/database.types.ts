@@ -4331,6 +4331,25 @@ export type Database = {
         };
         Returns: Json;
       };
+      companycam_webhook_access: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      companycam_address_candidates: {
+        Args: { p_token: string; p_postal: string };
+        Returns: Json;
+      };
+      companycam_save_auto_link: {
+        Args: {
+          p_token: string;
+          p_job_id: string;
+          p_project_id: string;
+          p_project_name: string;
+          p_project_url: string;
+          p_address_line: string;
+        };
+        Returns: Json;
+      };
       qbwc_upsert_connector: {
         Args: { p_password: string; p_item_name?: string };
         Returns: Json;

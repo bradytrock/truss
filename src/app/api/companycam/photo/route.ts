@@ -5,7 +5,7 @@ import {
   pushJobPhotoToCompanyCam,
   removeJobPhotoFromCompanyCam,
 } from "@/lib/companycam-server";
-import { isUuid } from "@/lib/companycam";
+import { isPausedCompanyCamProjectId, isUuid } from "@/lib/companycam";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingCompanyCam, missingCompanyCamMessage } from "@/lib/supabase/schema-errors";
@@ -49,7 +49,11 @@ export async function POST(request: Request) {
   if (!token) return NextResponse.json({ ok: true, skipped: true, reason: "not_connected" });
 
   const linkResult = await loadCompanyCamLink(supabase, profile.company_id, photo.job_id);
-  if (linkResult.error || !linkResult.row) {
+  if (
+    linkResult.error ||
+    !linkResult.row ||
+    isPausedCompanyCamProjectId(linkResult.row.companycam_project_id)
+  ) {
     return NextResponse.json({ ok: true, skipped: true, reason: "not_linked" });
   }
 
