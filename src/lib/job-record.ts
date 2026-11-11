@@ -5,7 +5,10 @@ import {
   STAGE_LABELS,
   isShelvedStage,
   isNorthlineDemoName,
+  encodeStoredTrades,
+  otherTradeNameFrom,
   parseTrades,
+  cleanOtherTradeName,
   type Job,
   type JobCustomField,
   type LeadSource,
@@ -190,6 +193,18 @@ function inferredTags(opportunity?: Opportunity | null): string[] {
   return tags;
 }
 
+function namedOtherTrade(job: { trades?: readonly string[]; otherTradeName?: string }) {
+  const trades = parseTrades(job.trades);
+  if (!trades.includes("other")) return "";
+  if (typeof job.otherTradeName === "string") return cleanOtherTradeName(job.otherTradeName);
+  return otherTradeNameFrom(job.trades);
+}
+
+function storedTradePayload(job: Pick<Job, "trades"> & { otherTradeName?: string }) {
+  const trades = encodeStoredTrades(job.trades, job.otherTradeName);
+  return trades.length ? { trades } : {};
+}
+
 /** Move `nextPrimaryId` to primary; keep the previous primary as a related contact. */
 export function primaryHomeownerPatch(
   job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds">,
@@ -244,6 +259,7 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     projectType: (job.projectType || opportunity?.projectType || "") as ProjectType | "",
     market: workMarket(job, opportunity),
     trades: parseTrades(job.trades),
+    otherTradeName: namedOtherTrade(job),
     leadSource: (job.leadSource || opportunity?.leadSource || "") as LeadSource | "",
     primaryPhotoId: job.primaryPhotoId ?? null,
     projectedMarginPercent: job.projectedMarginPercent ?? null,
@@ -340,7 +356,7 @@ export function jobInsertPayload(job: Job, companyId: string, extras?: { id?: st
     project_type: job.projectType || null,
     lead_source: job.leadSource ?? "",
     market: job.market,
-    ...(job.trades.length ? { trades: job.trades } : {}),
+    ...storedTradePayload(job),
   };
 }
 

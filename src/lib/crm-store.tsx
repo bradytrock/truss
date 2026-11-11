@@ -312,6 +312,7 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { companyFamily, companyNameKey } from "@/lib/company-groups";
 import {
   NORTHLINE_COMPANY,
+  normalizeTradePatch,
   STAGE_LABELS,
   STAGE_PROBABILITY,
   isShelvedStage,
@@ -3548,8 +3549,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [recordCompanyAudit, state.jobs, state.opportunities]
   );
 
-  const updateJob = useCallback(async (id: string, patch: Partial<Job>, options?: { skipAudit?: boolean }) => {
+  const updateJob = useCallback(async (id: string, input: Partial<Job>, options?: { skipAudit?: boolean }) => {
     const before = state.jobs.find((job) => job.id === id);
+    const patch = normalizeTradePatch(before, input);
     const apply = () =>
       setState((prev) => ({
         ...prev,
@@ -7484,6 +7486,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 geocodedAt: existingJob.geocodedAt,
                 geocodeQuery: existingJob.geocodeQuery,
                 trades: existingJob.trades,
+                otherTradeName: existingJob.otherTradeName,
                 subcontractorIds: existingJob.subcontractorIds,
                 relatedContactIds: existingJob.relatedContactIds,
                 assigned: existingJob.assigned,
