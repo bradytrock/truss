@@ -93,6 +93,7 @@ function base(overrides: Partial<Parameters<typeof buildHomeDesk>[0]> = {}) {
     accounting: [],
     returning: [],
     jobCodes: [],
+    viewer: { id: "brady", name: "Brady Jones" },
     ...overrides,
   });
 }
@@ -111,6 +112,19 @@ const desk = base({
       name: "Albert Johnston",
       primaryContactId: "c-albert",
       projectManager: "Sam Rogers",
+      ownerStaffId: "sam",
+    }),
+    job({
+      id: "dana",
+      opportunityId: "opp-dana",
+      status: "precon",
+      code: "BJ100626-A",
+      name: "Dana Cole",
+      primaryContactId: "c-dana",
+      projectManager: "Brady Jones",
+      ownerStaffId: "brady",
+      location: "12 Oak St",
+      street: "12 Oak St",
     }),
     job({
       id: "albert-b",
@@ -143,7 +157,8 @@ const desk = base({
     }),
   ],
   opportunities: [
-    opportunity({ id: "opp-albert", stage: "bid_submitted", value: 4000, leadSource: "phone" }),
+    opportunity({ id: "opp-albert", stage: "bid_submitted", value: 4000, leadSource: "phone", ownerStaffId: "sam", estimator: "Sam Rogers" }),
+    opportunity({ id: "opp-dana", stage: "bid_submitted", value: 8000, leadSource: "referral", ownerStaffId: "brady", estimator: "Brady Jones" }),
     opportunity({ id: "opp-keown", stage: "awarded", value: 0, leadSource: "website" }),
     opportunity({ id: "opp-prod", stage: "awarded", value: 580220, leadSource: "phone" }),
     opportunity({ id: "opp-lead", stage: "pursuing", value: 1000, leadSource: "referral" }),
@@ -159,12 +174,30 @@ const desk = base({
       acceptedAt: null,
       taxRate: 0,
     } as Estimate,
+    {
+      id: "est-dana",
+      jobId: "dana",
+      opportunityId: "opp-dana",
+      status: "sent",
+      archivedAt: null,
+      sentAt: "2026-10-06T15:00:00",
+      acceptedAt: null,
+      taxRate: 0,
+    } as Estimate,
   ],
   tasks: [
     task({
       id: "raynor",
       title: "Call Raynor Durham back",
       dueAt: "2026-10-10",
+      relatedType: "job",
+      relatedId: "prod",
+    }),
+    task({
+      id: "clifton",
+      title: "Call Clifton Springman back",
+      dueAt: "2026-10-13",
+      assignee: "Morgan James",
       relatedType: "job",
       relatedId: "prod",
     }),
@@ -204,7 +237,10 @@ const desk = base({
       author: "Brady Jones",
     } as Activity,
   ],
-  contacts: [{ id: "c-albert", name: "Albert Johnston", phone: "2145550100" }],
+  contacts: [
+    { id: "c-albert", name: "Albert Johnston", phone: "2145550100" },
+    { id: "c-dana", name: "Dana Cole", phone: "2145550101" },
+  ],
   customerName: (item) => (item.id === "keown" ? "Adam Kubitz" : item.name),
   qb: { invoiceCount: 4, expenseCount: 14, paymentCount: 10 },
 });
@@ -213,12 +249,14 @@ assert.match(desk.greeting, /Good afternoon, Brady/);
 assert.match(desk.briefLabel, /October 13/);
 assert.match(desk.briefLabel, /Cassio's brief/);
 assert.equal(desk.rows[0]?.badge, "CALLBACK");
-assert.match(desk.rows[0]?.title ?? "", /Albert Johnston/);
+assert.match(desk.rows[0]?.title ?? "", /Dana Cole/);
+assert.equal(desk.rows.some((row) => row.title.includes("Albert Johnston")), false);
+assert.equal(desk.rows.some((row) => row.title.includes("Clifton Springman")), false);
 assert.match(desk.rows[0]?.status ?? "", /Waiting 7 days/);
 assert.equal(desk.rows[0]?.actions.some((action) => action.type === "call"), true);
-const albertDone = desk.rows[0]?.actions.find((action) => action.type === "clear");
-assert.equal(albertDone?.type === "clear" ? albertDone.title : "", PROPOSAL_FOLLOW_UP_TASK);
-assert.equal(albertDone?.type === "clear" ? albertDone.relatedId : "", "albert");
+const danaDone = desk.rows[0]?.actions.find((action) => action.type === "clear");
+assert.equal(danaDone?.type === "clear" ? danaDone.title : "", PROPOSAL_FOLLOW_UP_TASK);
+assert.equal(danaDone?.type === "clear" ? danaDone.relatedId : "", "dana");
 
 const overdue = desk.rows.find((row) => row.id === "task-raynor");
 assert.equal(overdue?.badge, "OVERDUE");
@@ -226,7 +264,8 @@ assert.equal(overdue?.status, "Due Oct 10");
 assert.ok((overdue?.age ?? 0) < (desk.rows[0]?.age ?? 0));
 
 assert.ok(desk.rows.some((row) => row.badge === "APPROVE" && row.detail.includes("4 invoices")));
-assert.ok(desk.rows.some((row) => row.badge === "PROPOSALS"));
+const proposals = desk.rows.find((row) => row.badge === "PROPOSALS");
+assert.match(proposals?.title ?? "", /^1 proposal /);
 assert.equal(desk.counts.all, desk.rows.length);
 assert.ok(desk.counts.calls >= 1);
 assert.ok(desk.counts.money >= 2);
@@ -285,9 +324,11 @@ const waitingJob = job({
   id: "sam",
   opportunityId: "opp-sam",
   status: "precon",
-  code: "SR100126-A",
+  code: "BJ100126-A",
   name: "Sam Rogers",
   primaryContactId: "c-sam",
+  ownerStaffId: "brady",
+  projectManager: "Brady Jones",
 });
 const waitingOpp = opportunity({ id: "opp-sam", stage: "bid_submitted" });
 const waitingContact = [{ id: "c-sam", name: "Sam Rogers", phone: "2145550199" }];
@@ -363,6 +404,8 @@ const closeoutJob = job({
   name: "Closeout house",
   location: "4020 Azure Lane",
   street: "4020 Azure Lane",
+  ownerStaffId: "brady",
+  projectManager: "Brady Jones",
 });
 
 const openCloseout = base({
@@ -454,5 +497,49 @@ assert.equal(bdReady?.titleHref, "/jobs?job=job-co");
 assert.equal(bdReady?.detail.includes("Commissions"), false);
 const bdReadyLink = bdReady?.actions.find((action) => action.type === "link");
 assert.equal(bdReadyLink?.type === "link" ? bdReadyLink.href : "", "/jobs?job=job-co");
+
+const shared = base({
+  tasks: [
+    task({
+      id: "shared",
+      title: "Call the adjuster",
+      dueAt: "2026-10-13",
+      assignee: "Morgan James",
+      assignees: ["Morgan James", "Brady Jones"],
+    }),
+  ],
+});
+assert.equal(shared.rows.some((row) => row.id === "task-shared"), true);
+
+const otherCloseout = base({
+  jobs: [
+    job({
+      id: "morgan-job",
+      opportunityId: "opp-morgan",
+      status: "in_progress",
+      code: "MJ111026-A",
+      name: "Clifton Springman",
+      ownerStaffId: "morgan",
+      projectManager: "Morgan James",
+      location: "8302 Brentwood St, Rowlett, TX 75088",
+      street: "8302 Brentwood St",
+      city: "Rowlett",
+    }),
+  ],
+  opportunities: [opportunity({ id: "opp-morgan", stage: "awarded", ownerStaffId: "morgan", estimator: "Morgan James" })],
+  closeouts: [{ jobId: "morgan-job", status: "submitted" }],
+  tasks: [
+    task({
+      id: "morgan-call",
+      title: "Call Clifton Springman back",
+      dueAt: "2026-10-13",
+      assignee: "Morgan James",
+      relatedType: "job",
+      relatedId: "morgan-job",
+    }),
+  ],
+});
+assert.equal(otherCloseout.rows.some((row) => row.title.includes("Clifton")), false);
+assert.equal(otherCloseout.rows.some((row) => row.id === "closeout-morgan-job"), false);
 
 console.log("home-desk tests passed");

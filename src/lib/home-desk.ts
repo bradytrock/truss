@@ -10,7 +10,8 @@ import {
   localYmd,
 } from "@/lib/format";
 import { isJobCodeReviewTask, type JobCodeReviewNotice } from "@/lib/job-code";
-import { formatTaskAssignees } from "@/lib/task-desk";
+import { namesMatch } from "@/lib/seats";
+import { formatTaskAssignees, taskAssignedTo } from "@/lib/task-desk";
 import { dedupeJobsByOpportunity, duplicateLeadJobs, isDeletedJob, jobAddress, jobRecordHref } from "@/lib/job-record";
 import { messagesHref } from "@/lib/job-messages";
 import { pipelinePathTotals, unweightedContractValue } from "@/lib/pipeline-path";
@@ -148,6 +149,11 @@ export type HomeDeskInput = {
   jobCodes: JobCodeReviewNotice[];
   /** Business development seats do not use the Commissions desk. */
   showCommissions?: boolean;
+  /**
+   * Whose list this is. Tasks, callbacks, closeouts, and the proposals
+   * follow-up stay on this person. Omit to keep the whole book.
+   */
+  viewer?: { id: string; name: string } | null;
 };
 
 const STAGE_TONE: Record<string, HomeDeskStage["tone"]> = {
@@ -284,6 +290,64 @@ function compareRows(left: HomeDeskRow, right: HomeDeskRow) {
   return BADGE_RANK[right.badge] - BADGE_RANK[left.badge];
 }
 
+function taskForViewer(task: Task, input: HomeDeskInput) {
+  if (!input.viewer) return true;
+  return taskAssignedTo(task, input.viewer.name);
+}
+
+function viewerEstimates(input: HomeDeskInput) {
+  if (!input.viewer) return input.estimates;
+  return input.estimates.filter((estimate) => {
+    const job = estimate.jobId ? input.jobs.find((item) => item.id === estimate.jobId) : undefined;
+    const opportunityId = estimate.opportunityId || job?.opportunityId;
+    const opportunity = opportunityId
+      ? input.opportunities.find((item) => item.id === opportunityId)
+      : undefined;
+    return assignedWork(input, job, opportunity);
+  });
+}
+
+/** A job or lead is yours when you own it, run it, or are named on it. */
+function assignedWork(
+  input: HomeDeskInput,
+  job: Job | undefined,
+  opportunity: Opportunity | undefined,
+) {
+  const viewer = input.viewer;
+  if (!viewer) return true;
+  if (job && viewerOwnsJob(job, opportunity, viewer)) return true;
+  if (opportunity && viewerOwnsOpportunity(opportunity, viewer)) return true;
+  return false;
+}
+
+function viewerOwnsJob(
+  job: Job,
+  opportunity: Opportunity | undefined,
+  viewer: { id: string; name: string },
+) {
+  const id = viewer.id.trim();
+  if (id && job.ownerStaffId && job.ownerStaffId === id) return true;
+  if (id && opportunity?.ownerStaffId && opportunity.ownerStaffId === id) return true;
+  if (samePerson(job.projectManager, viewer.name)) return true;
+  if (samePerson(job.salesRep, viewer.name)) return true;
+  if ((job.assigned ?? []).some((person) => samePerson(person, viewer.name))) return true;
+  if (opportunity && samePerson(opportunity.estimator, viewer.name)) return true;
+  return false;
+}
+
+function viewerOwnsOpportunity(opportunity: Opportunity, viewer: { id: string; name: string }) {
+  const id = viewer.id.trim();
+  if (id && opportunity.ownerStaffId && opportunity.ownerStaffId === id) return true;
+  return samePerson(opportunity.estimator, viewer.name);
+}
+
+function samePerson(left: string | null | undefined, right: string | null | undefined) {
+  const value = left?.trim() ?? "";
+  const other = right?.trim() ?? "";
+  if (!value || !other) return false;
+  return namesMatch(value, other);
+}
+
 function taskRows(
   input: HomeDeskInput,
   jobs: Job[],
@@ -292,7 +356,7 @@ function taskRows(
   now: Date,
 ): HomeDeskRow[] {
   return input.tasks
-    .filter((task) => !task.completed && !isJobCodeReviewTask(task))
+    .filter((task) => !task.completed && !isJobCodeReviewTask(task) && taskForViewer(task, input))
     .map((task) => taskRow(task, input, jobs, opportunities, contacts, now))
     .filter((row): row is HomeDeskRow => Boolean(row));
 }
@@ -424,6 +488,7 @@ function proposalCallbacks(
   for (const job of jobs) {
     const opportunity = job.opportunityId ? opportunities.get(job.opportunityId) : undefined;
     if (workColumnFor(job, opportunity) !== "proposal_sent") continue;
+    if (!assignedWork(input, job, opportunity)) continue;
     if (covered.has(job.id) || (job.opportunityId && covered.has(job.opportunityId))) continue;
     const sentAt = proposalSentAt(job, input.estimates);
     if (!sentAt) continue;
@@ -475,6 +540,13 @@ function closeoutRows(input: HomeDeskInput, jobs: Job[]): HomeDeskRow[] {
   );
   return input.closeouts
     .filter((closeout) => closeout.status === "submitted" && !covered.has(closeout.jobId))
+    .filter((closeout) => {
+      const job = jobs.find((item) => item.id === closeout.jobId);
+      const opportunity = job?.opportunityId
+        ? input.opportunities.find((item) => item.id === job.opportunityId)
+        : undefined;
+      return assignedWork(input, job, opportunity);
+    })
     .map((closeout) => {
       const job = jobs.find((item) => item.id === closeout.jobId);
       const name = job ? input.customerName(job) || job.name : "Job";
@@ -524,7 +596,7 @@ function summaryRows(input: HomeDeskInput): HomeDeskRow[] {
       age: 0,
     });
   }
-  const unsigned = input.estimates.filter(
+  const unsigned = viewerEstimates(input).filter(
     (estimate) => !estimate.archivedAt && (estimate.status === "sent" || estimate.status === "viewed"),
   );
   if (unsigned.length > 0) {
@@ -730,7 +802,7 @@ function agenda(
       href: "/calendar",
     }));
   const tomorrowTasks = input.tasks
-    .filter((task) => !task.completed && task.dueAt.slice(0, 10) === tomorrowKey)
+    .filter((task) => !task.completed && taskForViewer(task, input) && task.dueAt.slice(0, 10) === tomorrowKey)
     .slice(0, 3)
     .map((task) => {
       const similar = input.tasks.filter(

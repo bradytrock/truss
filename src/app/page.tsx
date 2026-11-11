@@ -118,6 +118,9 @@ export default function HomePage() {
       }),
       jobCodes: jobCodeReviews,
       showCommissions: !viewer || !isBusinessDevelopment(viewer.role),
+      viewer: viewer
+        ? { id: viewer.id, name: viewer.name }
+        : { id: crm.user.staffId, name: crm.user.name },
     });
   }, [crm, jobCodeReviews, returningNotices, reviewNotices]);
 

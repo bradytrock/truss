@@ -75,7 +75,7 @@ export function HomeDesk({
           <div className="px-5 pt-5 pb-3">
             <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Needs you today</h2>
             <p className="mt-0.5 text-[13px] text-muted-foreground">
-              Callbacks, overdue tasks, reviews and approvals — most urgent first.
+              Your callbacks, overdue tasks, reviews and approvals — most urgent first.
             </p>
             <div className="mt-3 inline-flex flex-wrap rounded-full bg-muted p-0.5 text-[12.5px]">
               <FilterChip active={filter === "all"} onClick={() => choose("all")}>
