@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Copy, Download, ExternalLink, Mail, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -128,6 +128,8 @@ export function ShareLinkDialog({
   }) => void | Promise<void>;
 }) {
   const [pending, setPending] = useState<"copy" | "pdf" | "text" | "email" | null>(null);
+  /** Sync lock — `pending` state alone cannot stop a second click before React re-renders. */
+  const pendingLock = useRef(false);
   const [textStatus, setTextStatus] = useState<PhotonTextStatus | null>(null);
   const [emailStatus, setEmailStatus] = useState<ResendStatus | null>(null);
   const [phones, setPhones] = useState<Record<string, string>>({});
@@ -291,6 +293,7 @@ export function ShareLinkDialog({
   }
 
   async function handleText() {
+    if (pendingLock.current) return;
     const ready = textTargets.filter((target) => looksLikePhone(target.phone));
     if (ready.length === 0) {
       toast.error("Add a mobile number to text, or copy the link.");
@@ -304,6 +307,7 @@ export function ShareLinkDialog({
       toast.error("Keep the share link in the message.");
       return;
     }
+    pendingLock.current = true;
     setPending("text");
     try {
       let mocked = false;
@@ -362,11 +366,13 @@ export function ShareLinkDialog({
     } catch {
       toast.error("Could not reach the texting service.");
     } finally {
+      pendingLock.current = false;
       setPending(null);
     }
   }
 
   async function handleEmail() {
+    if (pendingLock.current) return;
     const ready = emailTargets.filter((target) => looksLikeEmail(target.email));
     if (ready.length === 0) {
       toast.error("Add an email address, or copy the link.");
@@ -392,6 +398,7 @@ export function ShareLinkDialog({
       );
       return;
     }
+    pendingLock.current = true;
     setPending("email");
     try {
       let mocked = false;
@@ -491,6 +498,7 @@ export function ShareLinkDialog({
     } catch {
       toast.error("Could not reach Resend.");
     } finally {
+      pendingLock.current = false;
       setPending(null);
     }
   }
