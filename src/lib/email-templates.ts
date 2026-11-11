@@ -73,7 +73,7 @@ export const SYSTEM_EMAIL_CATALOG: Array<{
     kind: "estimate_opened",
     label: "Estimate opened",
     description: "Emailed to the project manager when a client opens a proposal.",
-    tokens: ["name", "company", "who", "label", "address", "number", "subject", "message"],
+    tokens: ["name", "company", "who", "label", "address", "number", "subject", "message", "openedAt", "job", "amount"],
   },
   {
     kind: "task_reminder",
@@ -131,9 +131,9 @@ export const SYSTEM_EMAIL_DEFAULTS: Record<SystemEmailKind, SystemEmailDraft> = 
   },
   estimate_opened: {
     subject: "{{subject}}",
-    headline: "{{who}} opened {{label}}",
-    message: "{{message}}",
-    button: "",
+    headline: "Proposal {{number}} was opened",
+    message: "{{who}} opened the proposal for {{address}} on {{openedAt}}.",
+    button: "View proposal",
   },
   task_reminder: {
     subject: "{{subject}}",

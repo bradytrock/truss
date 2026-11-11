@@ -1,4 +1,6 @@
+import { appOrigin } from "@/lib/app-origin";
 import {
+  estimateOpenedAddress,
   estimateOpenedEmailSubject,
   estimateOpenedEmailText,
   estimateOpenedSms,
@@ -6,14 +8,15 @@ import {
   parseEstimateOpenedNotify,
 } from "@/lib/estimate-opened";
 import {
-  emailTemplateHasOverride,
-  resolveSystemEmail,
-  systemEmailHtml,
-  systemEmailText,
-} from "@/lib/email-templates";
+  estimateOpenedAmountLabel,
+  estimateOpenedEmailLinks,
+  formatEstimateOpenedAt,
+  renderEstimateOpenedEmailHtml,
+} from "@/lib/estimate-opened-email";
+import { resolveSystemEmail, systemEmailText } from "@/lib/email-templates";
 import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
-import { firstName } from "@/lib/phone";
-import { looksLikePhone } from "@/lib/phone";
+import { resolveStoredFileUrl } from "@/lib/storage/urls";
+import { firstName, looksLikePhone } from "@/lib/phone";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { sendOfficeText } from "@/lib/photon-server";
 import { looksLikeEmail } from "@/lib/share-text";
@@ -30,6 +33,28 @@ export async function isSignedInOfficeSession() {
   } catch {
     return false;
   }
+}
+
+function openedLogoUrl(notify: {
+  cardLogoUrl?: string;
+  cardLogoStoragePath?: string;
+  companyLogoUrl?: string;
+  companyLogoStoragePath?: string;
+}) {
+  const candidates = [
+    { storagePath: notify.cardLogoStoragePath, url: notify.cardLogoUrl },
+    { storagePath: notify.companyLogoStoragePath, url: notify.companyLogoUrl },
+  ];
+  for (const candidate of candidates) {
+    if (!candidate.storagePath?.trim() && !candidate.url?.trim()) continue;
+    const resolved = resolveStoredFileUrl({
+      storagePath: candidate.storagePath,
+      url: candidate.url,
+      kind: "company-assets",
+    });
+    if (resolved.trim()) return resolved;
+  }
+  return "";
 }
 
 /** Log the open on the job and text/email the project manager. */
@@ -59,37 +84,65 @@ export async function notifyProjectManagerEstimateOpened(token: string) {
         senderName: "Office",
         companyName: notify.companyName || "Truss",
       });
-      const text = estimateOpenedEmailText(notify);
+      const now = new Date();
+      const origin = await appOrigin();
+      const links = estimateOpenedEmailLinks(notify, origin);
+      const amount = estimateOpenedAmountLabel(notify);
+      const openedAt = formatEstimateOpenedAt(
+        notify.openedAt,
+        notify.staffTimeZone || notify.viewerTimeZone,
+        now,
+      );
+      const text = estimateOpenedEmailText(notify, {
+        amount,
+        openCount: Math.max(1, notify.openCount || 0),
+        proposalUrl: links.proposalUrl,
+        jobUrl: links.jobUrl,
+      });
       const subject = estimateOpenedEmailSubject(notify);
       const templates = await loadCompanyEmailTemplates(supabase, notify.companyId);
-      const custom = emailTemplateHasOverride(templates, "estimate_opened")
-        ? resolveSystemEmail("estimate_opened", templates, {
-            name: firstName(notify.name),
-            company: notify.companyName,
-            who: estimateOpenedWho(notify.contactName),
-            label: notify.estimateNumber || notify.estimateName || "the proposal",
-            address: notify.address,
-            number: notify.estimateNumber,
-            subject,
-            message: text,
-          })
-        : null;
+      const stored = templates?.estimate_opened ?? {};
+      const custom = resolveSystemEmail("estimate_opened", templates, {
+        name: firstName(notify.name),
+        company: notify.companyName,
+        who: estimateOpenedWho(notify.contactName),
+        label: notify.estimateNumber || notify.estimateName || "the proposal",
+        address: estimateOpenedAddress(notify).full || notify.address,
+        number: notify.estimateNumber,
+        subject,
+        message: text,
+        openedAt,
+        job: notify.jobCode,
+        amount,
+      });
       const replyTo = looksLikeEmail(notify.companyEmail) ? notify.companyEmail : notify.email;
+      const plain = stored.message?.trim()
+        ? [
+            systemEmailText({
+              headline: stored.headline?.trim() ? custom.headline : "",
+              message: custom.message,
+            }),
+            links.proposalUrl,
+            links.jobUrl,
+          ]
+            .filter(Boolean)
+            .join("\n\n")
+        : text;
       const result = await sendResendEmail({
         to: notify.email,
         from,
         replyTo,
-        subject: custom?.subject || subject,
-        text: custom
-          ? systemEmailText({ headline: custom.headline, message: custom.message })
-          : text,
-        html: custom
-          ? systemEmailHtml({ headline: custom.headline, message: custom.message, button: custom.button })
-          : `<p>${text
-              .replaceAll("&", "&amp;")
-              .replaceAll("<", "&lt;")
-              .replaceAll(">", "&gt;")
-              .replaceAll("\n", "<br/>")}</p>`,
+        subject: stored.subject?.trim() ? custom.subject : subject,
+        text: plain,
+        html: renderEstimateOpenedEmailHtml({
+          notify,
+          origin,
+          logoUrl: openedLogoUrl(notify),
+          headline: stored.headline?.trim() ? custom.headline : undefined,
+          message: stored.message?.trim() ? custom.message : undefined,
+          button: stored.button?.trim() ? custom.button : undefined,
+          now,
+        }),
       });
       if (!result.ok) {
         console.error("[share] estimate opened email", result.error);

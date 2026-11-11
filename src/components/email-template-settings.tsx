@@ -63,7 +63,10 @@ const SAMPLE_VARS: Record<SystemEmailKind, Record<string, string>> = {
     address: "100 Main St, Plano, TX",
     number: "E-1042",
     subject: "Proposal E-1042 opened — 100 Main St, Plano, TX",
-    message: "Dana Alvarez opened proposal E-1042 (100 Main St, Plano, TX).",
+    message: "Dana Alvarez opened the proposal for 100 Main St, Plano, TX on Nov 10, 2026 · 10:31 PM.",
+    openedAt: "Nov 10, 2026 · 10:31 PM",
+    job: "AR-1042",
+    amount: "$18,450.00",
   },
   task_reminder: {
     name: "Alex",
