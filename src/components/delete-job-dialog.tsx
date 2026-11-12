@@ -50,6 +50,7 @@ export function DeleteJobDialog({
 
   return (
     <Dialog
+      unsavedGuard={false}
       open={open}
       onOpenChange={(next) => {
         if (!next) setReason("");

@@ -58,12 +58,14 @@ export function CreateInvoiceDialog({
   defaultClientId,
   defaultJobId,
   onCreated,
+  unsavedGuard = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultClientId?: string | null;
   defaultJobId?: string;
   onCreated?: (invoiceId: string) => void;
+  unsavedGuard?: boolean;
 }) {
   const router = useRouter();
   const { jobs, addInvoice, customerName, effectiveStaff, viewer } = useCrm();
@@ -122,7 +124,7 @@ export function CreateInvoiceDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={unsavedGuard} open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New invoice</DialogTitle>
@@ -655,7 +657,7 @@ export function AddPhotoDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={false} open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add job photo</DialogTitle>

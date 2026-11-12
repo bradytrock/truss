@@ -92,7 +92,7 @@ export function LaborWarrantyDialog({
   const logoUrl = crm.company.logoUrl?.trim();
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={false} open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[min(92dvh,56rem)] sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Lifetime labor & material warranty</DialogTitle>

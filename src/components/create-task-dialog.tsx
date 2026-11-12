@@ -44,6 +44,7 @@ export function CreateTaskDialog({
   defaultRelatedId,
   defaultTitle,
   lockRelated,
+  unsavedGuard = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -52,6 +53,7 @@ export function CreateTaskDialog({
   defaultRelatedId?: string | null;
   defaultTitle?: string;
   lockRelated?: boolean;
+  unsavedGuard?: boolean;
 }) {
   const { jobs, opportunities, contacts, clients, teamMembers, user, addTask, updateTask, deleteTask } = useCrm();
   const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
@@ -225,7 +227,7 @@ export function CreateTaskDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={unsavedGuard} open={open} onOpenChange={onOpenChange}>
       <DialogContent className={quickDialogClass("lg")}>
         <QuickHeader
           tone="slate"

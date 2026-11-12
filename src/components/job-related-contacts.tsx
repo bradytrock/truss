@@ -273,6 +273,7 @@ export function JobRelatedContacts({
         </ul>
       )}
       <Dialog
+        unsavedGuard={false}
         open={createOpen}
         onOpenChange={(open) => {
           setCreateOpen(open);

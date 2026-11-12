@@ -83,6 +83,7 @@ export function ShareLinkDialog({
   onDownloadPdf,
   onTexted,
   onEmailed,
+  unsavedGuard = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -126,6 +127,7 @@ export function ShareLinkDialog({
     url: string;
     contactId?: string;
   }) => void | Promise<void>;
+  unsavedGuard?: boolean;
 }) {
   const [pending, setPending] = useState<"copy" | "pdf" | "text" | "email" | null>(null);
   const [textStatus, setTextStatus] = useState<PhotonTextStatus | null>(null);
@@ -496,7 +498,7 @@ export function ShareLinkDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={unsavedGuard} open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

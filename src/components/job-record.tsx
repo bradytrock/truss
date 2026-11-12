@@ -2175,7 +2175,7 @@ export function JobRecord({
         </div>
       </Tabs>
 
-      <Dialog open={addressOpen} onOpenChange={setAddressOpen}>
+      <Dialog unsavedGuard={false} open={addressOpen} onOpenChange={setAddressOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Job site</DialogTitle>
@@ -2260,14 +2260,16 @@ export function JobRecord({
         onCreate={(template, photoLayout) => void startPage(template, photoLayout)}
       />
       <CreateInvoiceDialog
+        unsavedGuard={false}
         open={invoiceOpen}
         onOpenChange={setInvoiceOpen}
         defaultClientId={job.clientId}
         defaultJobId={job.id}
         onCreated={() => setJobTab("paper")}
       />
-      <LogExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
+      <LogExpenseDialog unsavedGuard={false} open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
       <CreateTaskDialog
+        unsavedGuard={false}
         open={taskOpen}
         onOpenChange={setTaskOpen}
         defaultRelatedType="job"
@@ -2288,7 +2290,7 @@ export function JobRecord({
           onClose={() => setReportId(null)}
         />
       ) : null}
-      <Dialog open={codeOpen} onOpenChange={setCodeOpen}>
+      <Dialog unsavedGuard={false} open={codeOpen} onOpenChange={setCodeOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Change job code</DialogTitle>

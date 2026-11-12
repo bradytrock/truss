@@ -220,10 +220,12 @@ export function LogExpenseDialog({
   open,
   onOpenChange,
   defaultJobId,
+  unsavedGuard = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultJobId?: string | null;
+  unsavedGuard?: boolean;
 }) {
   const crm = useCrm();
   const [file, setFile] = useState<File | undefined>();
@@ -363,7 +365,7 @@ export function LogExpenseDialog({
   const logger = crm.effectiveStaff?.name.trim() || crm.user.name.trim() || "you";
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={unsavedGuard} open={open} onOpenChange={onOpenChange}>
       <DialogContent className={quickDialogClass("wide")}>
         <QuickHeader
           tone="rose"
@@ -543,12 +545,14 @@ export function LogPaymentDialog({
   defaultJobId,
   defaultInvoiceId,
   defaultMethod,
+  unsavedGuard = true,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultJobId?: string | null;
   defaultInvoiceId?: string | null;
   defaultMethod?: string | null;
+  unsavedGuard?: boolean;
 }) {
   const crm = useCrm();
   const [file, setFile] = useState<File | undefined>();
@@ -676,7 +680,7 @@ export function LogPaymentDialog({
   const leftAfter = balance == null ? null : balance - paymentValue;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={unsavedGuard} open={open} onOpenChange={onOpenChange}>
       <DialogContent className={quickDialogClass("wide")}>
         <QuickHeader
           tone="green"

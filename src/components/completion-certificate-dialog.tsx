@@ -81,7 +81,7 @@ export function CompletionCertificateDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={false} open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[min(92dvh,56rem)] sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Certificate of completion</DialogTitle>

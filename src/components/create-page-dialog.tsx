@@ -42,7 +42,7 @@ export function CreatePageDialog({
   const showLayout = templateIncludesPhotos(template);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog unsavedGuard={false} open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New page</DialogTitle>

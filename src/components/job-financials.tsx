@@ -317,8 +317,8 @@ export function JobFinancials({ job }: { job: Job }) {
         onOpenChange={setForecastOpen}
         defaultJobId={job.id}
       />
-      <LogExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
-      <LogPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} defaultJobId={job.id} />
+      <LogExpenseDialog unsavedGuard={false} open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
+      <LogPaymentDialog unsavedGuard={false} open={paymentOpen} onOpenChange={setPaymentOpen} defaultJobId={job.id} />
     </div>
   );
 }
