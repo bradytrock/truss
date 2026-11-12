@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import {
   canAddSecondHomeowner,
   customerContactDetails,
+  isCompanyCustomerName,
+  isJobHomeowner,
   relatedContactIdsWithHomeowner,
+  resolveCustomerName,
   secondHomeownerDraft,
 } from "./parties.ts";
 import type { Contact, Job } from "./types.ts";
@@ -32,6 +35,7 @@ function job(partial: Partial<Job> & Pick<Job, "id" | "primaryContactId">): Job 
 const dana = contact({ id: "c1", name: "Dana Alvarez", phone: "2145550101" });
 const jordan = contact({ id: "c2", name: "Jordan Alvarez" });
 const adjuster = contact({ id: "c3", name: "Pat Adjuster", title: "Public adjuster" });
+const manager = contact({ id: "c4", name: "Riley Chen", title: "Property manager" });
 
 assert.equal(canAddSecondHomeowner(undefined, [dana]), false);
 assert.equal(canAddSecondHomeowner(job({ id: "j1", primaryContactId: "" }), [dana]), false);
@@ -52,6 +56,41 @@ assert.equal(
     [dana, adjuster],
   ),
   true,
+);
+assert.equal(isJobHomeowner(manager), false);
+assert.equal(isJobHomeowner(contact({ id: "c5", name: "Sam Cole", title: "Tenant" })), false);
+assert.equal(
+  canAddSecondHomeowner(
+    job({ id: "j1", primaryContactId: dana.id, relatedContactIds: [manager.id] }),
+    [dana, manager],
+  ),
+  true,
+);
+
+const company = {
+  id: "llc",
+  name: "Maple Street Holdings LLC",
+  type: "owner" as const,
+  city: "Plano",
+  state: "TX",
+  notes: "",
+};
+const personCompany = { ...company, id: "person", name: "Dana Alvarez" };
+assert.equal(isCompanyCustomerName("Maple Street Holdings LLC"), true);
+assert.equal(isCompanyCustomerName("Dana Alvarez"), false);
+assert.equal(
+  resolveCustomerName(
+    { clientId: company.id, contactId: dana.id, secondContactId: jordan.id },
+    { clients: [company], contacts: [dana, jordan], jobs: [], opportunities: [] },
+  ),
+  "Maple Street Holdings LLC",
+);
+assert.equal(
+  resolveCustomerName(
+    { clientId: personCompany.id, contactId: dana.id, secondContactId: jordan.id },
+    { clients: [personCompany], contacts: [dana, jordan], jobs: [], opportunities: [] },
+  ),
+  "Dana Alvarez and Jordan Alvarez",
 );
 
 assert.deepEqual(relatedContactIdsWithHomeowner(["c1"], "c2"), ["c1", "c2"]);

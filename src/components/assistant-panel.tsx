@@ -94,6 +94,11 @@ const LEAD_INPUTS = [
   ["state", "State"],
   ["postalCode", "ZIP"],
   ["notes", "Damage notes"],
+  ["llcName", "LLC name"],
+  ["relatedContactName", "Related contact"],
+  ["relatedContactPhone", "Related phone"],
+  ["relatedContactEmail", "Related email"],
+  ["relatedContactTitle", "Related role"],
 ] as const;
 
 type Attachment = { dataUrl: string; name: string };

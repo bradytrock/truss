@@ -154,6 +154,9 @@ export function leadPreview(
   const postalCode = asString(args.postalCode);
   const source = asString(args.source);
   const notes = asString(args.notes);
+  const llcName = asString(args.llcName);
+  const relatedName = asString(args.relatedContactName);
+  const relatedTitle = asString(args.relatedContactTitle);
   const labeledSource = sourceLabel(source);
   const damage = damageLabel(notes);
   const addressLine = addressChoiceLabel({ street, city, state, postalCode });
@@ -162,6 +165,10 @@ export function leadPreview(
   const assignedTo = args.assignToPreviousPm === true ? "Previous project manager" : "You";
   const fields: PreviewField[] = [
     fullName ? { label: "Contact", value: `${fullName} · ${note}` } : null,
+    llcName ? { label: "LLC", value: llcName } : null,
+    relatedName
+      ? { label: "Related contact", value: [relatedName, relatedTitle].filter(Boolean).join(" · ") }
+      : null,
     phone ? { label: "Phone", value: phone } : null,
     email ? { label: "Email", value: email } : null,
     damage ? { label: "Damage", value: damage } : null,

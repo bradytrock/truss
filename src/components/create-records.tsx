@@ -46,14 +46,20 @@ import { useCrm } from "@/lib/crm-store";
 import { formatPhone, initials, localYmd } from "@/lib/format";
 import {
   DEFAULT_LEAD_STATE,
+  RELATED_CONTACT_ROLES,
   defaultDeliveryForSource,
   formatJobSite,
-  leadName,
+  leadContactTitle,
   leadNeedsReferrer,
+  leadRecordName,
   leadReferrerAllowsFreeText,
   matchReferralPartners,
+  matchingCompany,
+  relatedContactTitle,
   resolveLeadReferrer,
+  type RelatedContactRole,
 } from "@/lib/leads";
+import { uniqueIds } from "@/lib/job-record";
 import { projectTypeForMarket } from "@/lib/market";
 import {
   JOB_MARKET_LABELS,
@@ -108,6 +114,14 @@ export function CreateOpportunityDialog({
   const [referralId, setReferralId] = useState("");
   const [referralQuery, setReferralQuery] = useState("");
   const [notes, setNotes] = useState("");
+  const [useLlc, setUseLlc] = useState(false);
+  const [llcName, setLlcName] = useState("");
+  const [useRelated, setUseRelated] = useState(false);
+  const [relatedName, setRelatedName] = useState("");
+  const [relatedPhone, setRelatedPhone] = useState("");
+  const [relatedEmail, setRelatedEmail] = useState("");
+  const [relatedRole, setRelatedRole] = useState<RelatedContactRole>("property_manager");
+  const [relatedCustomTitle, setRelatedCustomTitle] = useState("");
   const [saving, setSaving] = useState(false);
 
   const assignee = people.find((member) => member.id === assigneeId);
@@ -159,6 +173,14 @@ export function CreateOpportunityDialog({
     setReferralId("");
     setReferralQuery("");
     setNotes("");
+    setUseLlc(false);
+    setLlcName("");
+    setUseRelated(false);
+    setRelatedName("");
+    setRelatedPhone("");
+    setRelatedEmail("");
+    setRelatedRole("property_manager");
+    setRelatedCustomTitle("");
   }
 
   function handleOpenChange(next: boolean) {
@@ -172,6 +194,24 @@ export function CreateOpportunityDialog({
     const last = lastName.trim();
     if (!source) {
       toast.error("Pick a seed.");
+      return;
+    }
+    const company = useLlc ? llcName.trim() : "";
+    if (useLlc && !company) {
+      toast.error("Enter the LLC name.");
+      return;
+    }
+    const extraName = useRelated ? relatedName.trim() : "";
+    if (useRelated && !extraName) {
+      toast.error("Enter the related contact’s name.");
+      return;
+    }
+    if (useRelated && relatedPhone.trim() && phone.trim() && phonesMatch(relatedPhone, phone)) {
+      toast.error("The related contact needs a different phone than the person on this lead.");
+      return;
+    }
+    if (useRelated && relatedEmail.trim() && email.trim() && emailsMatch(relatedEmail, email)) {
+      toast.error("The related contact needs a different email than the person on this lead.");
       return;
     }
     const site = formatJobSite({ street, city, state: region, postalCode });
@@ -190,6 +230,19 @@ export function CreateOpportunityDialog({
     }
     setSaving(true);
     try {
+      const existingCompany = company ? matchingCompany(crm.book.clients, company) : undefined;
+      const client = existingCompany
+        ? existingCompany
+        : company
+          ? await crm.addClient({
+              name: company,
+              type: "owner",
+              city: city.trim(),
+              state: region.trim(),
+              notes: "",
+            })
+          : null;
+      const clientId = client?.id ?? null;
       const existingContact =
         match?.contact ??
         (phone.trim()
@@ -201,9 +254,9 @@ export function CreateOpportunityDialog({
       let contact = existingContact;
       if (!contact) {
         contact = await crm.addContact({
-          clientId: null,
+          clientId,
           name: fullName,
-          title: "Homeowner",
+          title: leadContactTitle(company),
           email: email.trim(),
           phone: phone.trim(),
           ownerStaffId: owner?.id || crm.user.staffId,
@@ -216,12 +269,37 @@ export function CreateOpportunityDialog({
           email: email.trim() || contact.email,
           phone: phone.trim() || contact.phone,
           ownerStaffId: owner?.id || contact.ownerStaffId,
+          ...(clientId && !contact.clientId ? { clientId } : {}),
         });
       }
+      const extraTitle = relatedContactTitle(relatedRole, relatedCustomTitle);
+      const existingRelated = extraName
+        ? (relatedPhone.trim()
+            ? crm.book.contacts.find((item) => phonesMatch(item.phone, relatedPhone.trim()))
+            : undefined) ??
+          (relatedEmail.trim()
+            ? crm.book.contacts.find((item) => emailsMatch(item.email, relatedEmail.trim()))
+            : undefined)
+        : undefined;
+      const related =
+        extraName && existingRelated?.id !== contact.id
+          ? existingRelated ??
+            (await crm.addContact({
+                clientId,
+                name: extraName,
+                title: extraTitle,
+                email: relatedEmail.trim(),
+                phone: relatedPhone.trim(),
+                ownerStaffId: owner?.id || crm.user.staffId,
+                isReferralPartner: false,
+                listingWatchUrl: "",
+                listingWatchEnabled: false,
+              }))
+          : null;
       const pipelineValue = Math.max(0, moneyAmount(estimatedValue) ?? 0);
       const opportunity = await crm.addOpportunity({
-        name: leadName(first, last, site || city.trim()),
-        clientId: null,
+        name: leadRecordName({ first, last, site: site || city.trim(), companyName: company }),
+        clientId,
         primaryContactId: contact.id,
         stage: "pursuing",
         value: pipelineValue,
@@ -244,8 +322,16 @@ export function CreateOpportunityDialog({
         postalCode: postalCode.trim(),
         notes: notes.trim(),
       });
-      if (trades.length && opportunity.costingJob?.id) {
-        void crm.updateJob(opportunity.costingJob.id, { trades }).catch(() => undefined);
+      const jobPatch: { trades?: Trade[]; relatedContactIds?: string[] } = {};
+      if (trades.length) jobPatch.trades = trades;
+      if (related && opportunity.costingJob?.id) {
+        jobPatch.relatedContactIds = uniqueIds([
+          ...(opportunity.costingJob.relatedContactIds ?? []),
+          related.id,
+        ]);
+      }
+      if (opportunity.costingJob?.id && (jobPatch.trades || jobPatch.relatedContactIds)) {
+        await crm.updateJob(opportunity.costingJob.id, jobPatch);
       }
       const returningNote = match
         ? match.job
@@ -258,6 +344,8 @@ export function CreateOpportunityDialog({
         type: "note",
         body: [
           `Lead opened for ${fullName}. Seed: ${LEAD_SOURCE_LABELS[source]}.`,
+          company ? `Customer: ${company}.` : "",
+          related ? `Related contact: ${related.name}${related.title || extraTitle ? ` (${related.title || extraTitle})` : ""}.` : "",
           referral.name ? `Referred by ${referral.name}.` : "",
           notes.trim() ? notes.trim() : "",
           returningNote.trim(),
@@ -361,7 +449,7 @@ export function CreateOpportunityDialog({
               />
             </div>
 
-            <QuickSection>Homeowner</QuickSection>
+            <QuickSection>{useLlc ? "Primary contact" : "Homeowner"}</QuickSection>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <QuickLabel htmlFor="lead-first" required>First name</QuickLabel>
@@ -406,6 +494,113 @@ export function CreateOpportunityDialog({
                 autoComplete="email"
               />
             </div>
+
+            <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
+              <span>
+                <span className="block text-sm font-semibold">Owned by an LLC</span>
+                <span className="block text-xs text-muted-foreground">
+                  The LLC is the customer on this job. Common for rentals and commercial properties.
+                </span>
+              </span>
+              <Checkbox checked={useLlc} onCheckedChange={(value) => setUseLlc(Boolean(value))} />
+            </label>
+            {useLlc ? (
+              <div>
+                <QuickLabel htmlFor="lead-llc" required>LLC name</QuickLabel>
+                <Input
+                  id="lead-llc"
+                  className={quickFieldClass}
+                  value={llcName}
+                  onChange={(event) => setLlcName(event.target.value)}
+                  placeholder="Maple Street Holdings LLC"
+                  autoComplete="organization"
+                />
+                <QuickHint>Proposals, invoices, and the job use this name. The person above is who you call.</QuickHint>
+              </div>
+            ) : null}
+
+            <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
+              <span>
+                <span className="block text-sm font-semibold">Related contact</span>
+                <span className="block text-xs text-muted-foreground">
+                  Add a property manager, tenant, or someone else on this project.
+                </span>
+              </span>
+              <Checkbox checked={useRelated} onCheckedChange={(value) => setUseRelated(Boolean(value))} />
+            </label>
+            {useRelated ? (
+              <div className="grid gap-3">
+                <div>
+                  <QuickLabel htmlFor="lead-related-name" required>Name</QuickLabel>
+                  <Input
+                    id="lead-related-name"
+                    className={quickFieldClass}
+                    value={relatedName}
+                    onChange={(event) => setRelatedName(event.target.value)}
+                    placeholder="Riley Chen"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <QuickLabel htmlFor="lead-related-phone" optional>Phone</QuickLabel>
+                    <PhoneInput
+                      id="lead-related-phone"
+                      className={quickFieldClass}
+                      value={relatedPhone}
+                      onValueChange={setRelatedPhone}
+                      placeholder="(214) 555-0199"
+                    />
+                  </div>
+                  <div>
+                    <QuickLabel htmlFor="lead-related-email" optional>Email</QuickLabel>
+                    <Input
+                      id="lead-related-email"
+                      className={quickFieldClass}
+                      type="email"
+                      value={relatedEmail}
+                      onChange={(event) => setRelatedEmail(event.target.value)}
+                      placeholder="riley@example.com"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <QuickLabel>Role</QuickLabel>
+                  <Select
+                    value={relatedRole}
+                    onValueChange={(value) => {
+                      const next = String(value ?? "");
+                      if (RELATED_CONTACT_ROLES.some((role) => role.value === next)) {
+                        setRelatedRole(next as RelatedContactRole);
+                      }
+                    }}
+                    items={RELATED_CONTACT_ROLES.map((role) => ({ value: role.value, label: role.label }))}
+                  >
+                    <SelectTrigger className={`${quickFieldClass} w-full`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RELATED_CONTACT_ROLES.map((role) => (
+                        <SelectItem key={role.value} value={role.value}>
+                          {role.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {relatedRole === "other" ? (
+                  <div>
+                    <QuickLabel htmlFor="lead-related-title">Title</QuickLabel>
+                    <Input
+                      id="lead-related-title"
+                      className={quickFieldClass}
+                      value={relatedCustomTitle}
+                      onChange={(event) => setRelatedCustomTitle(event.target.value)}
+                      placeholder="Facilities"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {returning ? (
               <div className="grid gap-2 rounded-lg border bg-muted/40 px-3 py-2.5">

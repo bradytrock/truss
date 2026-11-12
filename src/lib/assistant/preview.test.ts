@@ -44,6 +44,28 @@ assert.equal(preview.contactNote, "new contact");
 assert.equal(preview.assignedTo, "You");
 assert.equal(preview.jobCode, "BJ111026-A");
 assert.equal(preview.fields.find((field) => field.label === "Contact")?.value, "Jane Ortiz · new contact");
+assert.equal(preview.fields.find((field) => field.label === "LLC"), undefined);
+
+const llcCall: AssistantToolCall = {
+  ...call,
+  arguments: {
+    ...call.arguments,
+    llcName: "Maple Street Holdings LLC",
+    relatedContactName: "Riley Chen",
+    relatedContactTitle: "Property manager",
+  },
+};
+const llcPreview = leadPreview(llcCall, {
+  ownerName: "Blake Jones",
+  codes: [],
+  contacts: [],
+  now: new Date(2026, 10, 10),
+});
+assert.equal(llcPreview.fields.find((field) => field.label === "LLC")?.value, "Maple Street Holdings LLC");
+assert.equal(
+  llcPreview.fields.find((field) => field.label === "Related contact")?.value,
+  "Riley Chen · Property manager",
+);
 assert.equal(cassioSubtitle(), "Runs your book: leads, estimates, invoices, mail");
 assert.equal(cassioSubtitle("Jane Ortiz"), "New lead · Jane Ortiz");
 assert.equal(leadIntro(1, "412 Maple"), "Here's the lead I'll create.");
