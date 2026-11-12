@@ -366,7 +366,7 @@ The contract price for the work in this proposal is {{contract_price}}. A deposi
 This proposal covers the included items listed above for {{job_site}}. Optional items are not in the contract price unless you select them before you sign.
 
 3. Schedule
-This proposal is good through {{valid_until}}. Sending it signs for the contractor. Work starts after you sign and pay any deposit.
+This proposal is good through {{valid_until}}. The person who prepared this estimate has signed it. Work starts after you sign and pay any deposit.
 
 4. Changes
 Changes on site will be written as a change order with a price before we proceed.
@@ -383,6 +383,9 @@ export type EstimateDraft = Omit<
   | "secondAcceptedAt"
   | "ownerSignedAt"
   | "ownerSignedName"
+  | "ownerSignedImage"
+  | "ownerSignedStaffId"
+  | "ownerSignedTitle"
   | "taxRate"
   | "discountKind"
   | "discountValue"
@@ -416,6 +419,9 @@ export type EstimateDraft = Omit<
       | "secondAcceptedAt"
       | "ownerSignedAt"
       | "ownerSignedName"
+      | "ownerSignedImage"
+      | "ownerSignedStaffId"
+      | "ownerSignedTitle"
       | "taxRate"
       | "discountKind"
       | "discountValue"
@@ -465,10 +471,11 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     contactId,
     secondContactId,
     secondAcceptedAt: secondContactId ? (estimate.secondAcceptedAt ?? null) : null,
-    ownerSignedAt:
-      estimate.ownerSignedAt ??
-      (estimate.status !== "draft" && estimate.sentAt ? estimate.sentAt : null),
+    ownerSignedAt: estimate.ownerSignedAt ?? null,
     ownerSignedName: estimate.ownerSignedName ?? "",
+    ownerSignedImage: estimate.ownerSignedImage ?? "",
+    ownerSignedStaffId: estimate.ownerSignedStaffId ?? null,
+    ownerSignedTitle: estimate.ownerSignedTitle ?? "",
     taxRate: estimate.taxRate ?? 0,
     discountKind: estimate.discountKind ?? "percent",
     discountValue: estimate.discountValue ?? 0,

@@ -640,6 +640,11 @@ export interface Estimate {
   secondAcceptedAt: string | null;
   ownerSignedAt: string | null;
   ownerSignedName: string;
+  /** Drawn signature from someone assigned to the job, collected before send. */
+  ownerSignedImage: string;
+  ownerSignedStaffId: string | null;
+  /** Seat title printed under that signature. */
+  ownerSignedTitle: string;
   createdAt: string;
   taxRate: number;
   discountKind: "percent" | "amount";

@@ -443,7 +443,8 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "send_estimate",
-    description: "Mark an estimate sent and mint a client link. Always confirm first.",
+    description:
+      "Mark an estimate sent and mint a client link. Someone assigned to the job must already have signed it on the estimate. Always confirm first.",
     status: "Sending the estimate…",
     gate: "ops",
     confirm: true,

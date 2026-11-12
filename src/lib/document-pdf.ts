@@ -850,6 +850,7 @@ function drawHomeownerLine(
   x: number,
   y: number,
   width: number,
+  caption: string,
 ) {
   const dateW = 90;
   const sigW = width - dateW - 16;
@@ -867,7 +868,7 @@ function drawHomeownerLine(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   ink(doc, PAPER_MUTED);
-  doc.text(line.signedAt ? `Homeowner signature · ${formatDate(line.signedAt)}` : "Homeowner signature", x, y);
+  doc.text(line.signedAt ? `${caption} · ${formatDate(line.signedAt)}` : caption, x, y);
   doc.text("Date", x + sigW + 16, y);
   y += 18;
   draw(doc, { r: 200, g: 200, b: 200 });
@@ -926,7 +927,20 @@ async function writePaperAuthorization(
   for (const line of homeowners) {
     const image = isSignaturePng(line.image) ? await loadLogoForPdf(line.image) : null;
     y = ensure(y, 90);
-    y = drawHomeownerLine(doc, line, image, PAPER_INSET, y, right - PAPER_INSET);
+    y = drawHomeownerLine(doc, line, image, PAPER_INSET, y, right - PAPER_INSET, "Homeowner signature");
+  }
+  if (contractor && isSignaturePng(contractor.image)) {
+    const image = await loadLogoForPdf(contractor.image);
+    y = ensure(y, 90);
+    y = drawHomeownerLine(
+      doc,
+      contractor,
+      image,
+      PAPER_INSET,
+      y,
+      right - PAPER_INSET,
+      contractor.caption,
+    );
   }
   const pmLines = manager?.name.trim() ? paperManagerLines(manager) : [];
   y = ensure(y, 36 + pmLines.length * 11);

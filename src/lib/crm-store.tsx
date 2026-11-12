@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingTaskAssigneesColumn, missingTaskAssigneesMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingAssigneeSignature, missingAssigneeSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingTaskAssigneesColumn, missingTaskAssigneesMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -121,14 +121,18 @@ import {
   templateLineFromCatalogItem,
 } from "@/lib/material-order-templates";
 import {
+  ASSIGNEE_SIGN_CONSENT_TEXT,
+  ASSIGNEE_SIGN_CONSENT_VERSION,
+  estimateAssigneeNames,
   estimateNeedsSecondSignature,
   mintEstimateSignerTokens,
   nextEstimateSignature,
-  resolveProjectOwner,
   signatureFieldsForRole,
   signingRoleForName,
+  staffCanSignEstimate,
   type HomeownerSigner,
 } from "@/lib/estimate-signers";
+import { isSignaturePng, parseEstimateSignature } from "@/lib/estimate-signature";
 import {
   browserTimeZone,
   ESIGN_CONSENT_TEXT,
@@ -661,6 +665,14 @@ function scheduleEventWriteWithoutGuests(event: Omit<ScheduleEvent, "id">) {
     client_id: row.client_id,
     notes: row.notes,
   };
+}
+
+function withoutAssigneeSignatureColumns(row: Database["public"]["Tables"]["estimates"]["Update"]) {
+  const rest = { ...row };
+  delete rest.owner_signed_image;
+  delete rest.owner_signed_staff_id;
+  delete rest.owner_signed_title;
+  return rest;
 }
 
 function maybeClient() {
@@ -1254,7 +1266,8 @@ type CrmContextValue = CrmState & {
     contractTypeId?: string | null;
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
-  sendEstimate: (id: string) => Promise<void>;
+  sendEstimate: (id: string) => Promise<boolean | void>;
+  signEstimateAsAssignee: (id: string, input: { image: string }) => Promise<boolean>;
   acceptEstimate: (
     id: string,
     signature?: { name: string; image: string },
@@ -2598,7 +2611,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       deliveryChannel?: string;
       deliveryTo?: string;
       capturedInOffice?: boolean;
+      consentText?: string;
+      consentVersion?: string;
     }) => {
+      const consentText =
+        input.kind === "signed" ? input.consentText?.trim() || ESIGN_CONSENT_TEXT : "";
+      const consentVersion =
+        input.kind === "signed" ? input.consentVersion?.trim() || ESIGN_CONSENT_VERSION : "";
       const event = fillSignatureEvent({
         id: crypto.randomUUID(),
         estimateId: input.estimateId,
@@ -2612,8 +2631,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         timeZone: browserTimeZone(),
         deliveryChannel: input.deliveryChannel ?? "",
         deliveryTo: input.deliveryTo ?? "",
-        consentText: input.kind === "signed" ? ESIGN_CONSENT_TEXT : "",
-        consentVersion: input.kind === "signed" ? ESIGN_CONSENT_VERSION : "",
+        consentText,
+        consentVersion,
         capturedInOffice: Boolean(input.capturedInOffice),
         staffId: input.capturedInOffice ? user.staffId || null : null,
         createdAt: new Date().toISOString(),
@@ -2634,8 +2653,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             signerName: input.signerName ?? "",
             token: input.token ?? "",
             consented: input.consented ?? input.kind === "signed",
-            consentText: input.kind === "signed" ? ESIGN_CONSENT_TEXT : "",
-            consentVersion: input.kind === "signed" ? ESIGN_CONSENT_VERSION : "",
+            consentText,
+            consentVersion,
             timeZone: browserTimeZone(),
             deliveryChannel: input.deliveryChannel ?? "",
             deliveryTo: input.deliveryTo ?? "",
@@ -5872,6 +5891,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await finish();
         return;
       }
+      if (
+        isMissingAssigneeSignature(error) &&
+        (patch.ownerSignedImage !== undefined ||
+          patch.ownerSignedStaffId !== undefined ||
+          patch.ownerSignedTitle !== undefined)
+      ) {
+        const retry = await supabase
+          .from("estimates")
+          .update(withoutAssigneeSignatureColumns(estimatePatch(patch)))
+          .eq("id", id);
+        if (!retry.error) {
+          apply();
+          toast.message(missingAssigneeSignatureMessage());
+          await finish();
+          pushPipelineValue();
+          return;
+        }
+      }
       toast.error(error.message);
       return;
     }
@@ -5880,24 +5917,108 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     pushPipelineValue();
   }, [companySettings, recordCompanyAudit, state.estimates, syncPipelineValueFromEstimate]);
 
+  const signEstimateAsAssignee = useCallback(
+    async (id: string, input: { image: string }) => {
+      const book = bookRef.current;
+      const current = book.estimates.find((estimate) => estimate.id === id);
+      if (!current) return false;
+      const name = (effectiveStaff?.name || user.name).trim();
+      const title =
+        (effectiveStaff?.title || user.title || "Prepared by").replace(/ · via .*$/, "").trim() || "Prepared by";
+      const names = estimateAssigneeNames({
+        job: current.jobId ? book.jobs.find((job) => job.id === current.jobId) : undefined,
+        opportunity: current.opportunityId
+          ? book.opportunities.find((item) => item.id === current.opportunityId)
+          : undefined,
+        staff: book.staff,
+      });
+      if (!staffCanSignEstimate({ name }, names)) {
+        toast.error(
+          names.length
+            ? "Someone assigned to this job has to sign the estimate before it can be sent."
+            : "Assign someone to this job before sending the estimate.",
+        );
+        return false;
+      }
+      const parsed = parseEstimateSignature({ name, image: input.image });
+      if (!parsed.ok) {
+        toast.error(parsed.error);
+        return false;
+      }
+      const patch = {
+        ownerSignedAt: new Date().toISOString(),
+        ownerSignedName: name,
+        ownerSignedImage: parsed.signature.image,
+        ownerSignedStaffId: looksLikeUuid(effectiveStaff?.id || user.staffId)
+          ? effectiveStaff?.id || user.staffId
+          : null,
+        ownerSignedTitle: title,
+      };
+      const stamp = (estimates: typeof book.estimates) =>
+        estimates.map((estimate) => (estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate));
+      const apply = () => {
+        bookRef.current = { ...bookRef.current, estimates: stamp(bookRef.current.estimates) };
+        setState((prev) => {
+          const next = { ...prev, estimates: stamp(prev.estimates) };
+          bookRef.current = next;
+          return next;
+        });
+      };
+      const supabase = maybeClient();
+      if (supabase) {
+        let { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
+        if (error && isMissingAssigneeSignature(error)) {
+          const retry = await supabase
+            .from("estimates")
+            .update(withoutAssigneeSignatureColumns(estimatePatch(patch)))
+            .eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingAssigneeSignatureMessage());
+        }
+        if (error) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      apply();
+      void recordCompanyAudit({
+        entityType: "estimate",
+        entityId: id,
+        action: "updated",
+        before: current,
+        after: fillEstimate({ ...current, ...patch }),
+        label: current.number || current.name,
+        detail: `${name} signed the estimate`,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
+      void recordEstimateSignatureEvent({
+        estimateId: id,
+        kind: "signed",
+        signerRole: "contractor",
+        signerName: name,
+        consented: true,
+        consentText: ASSIGNEE_SIGN_CONSENT_TEXT,
+        consentVersion: ASSIGNEE_SIGN_CONSENT_VERSION,
+        capturedInOffice: true,
+      });
+      return true;
+    },
+    [effectiveStaff?.id, effectiveStaff?.name, effectiveStaff?.title, recordCompanyAudit, recordEstimateSignatureEvent, user.name, user.staffId, user.title],
+  );
+
   const sendEstimate = useCallback(
     async (id: string) => {
       const book = bookRef.current;
       const current = book.estimates.find((estimate) => estimate.id === id);
-      if (!current) return;
+      if (!current) return false;
+      if (!isSignaturePng(current.ownerSignedImage)) {
+        toast.error("Someone assigned to this job has to sign the estimate before it can be sent.");
+        return false;
+      }
       const sentAt = new Date().toISOString();
       const signing = applyCoOwnerToEstimate(current, book.jobs, book.contacts);
       const tokens = mintEstimateSignerTokens(signing);
-      const owner = resolveProjectOwner({
-        estimate: current,
-        jobs: book.jobs,
-        opportunities: book.opportunities,
-        staff: book.staff,
-        user,
-        companyName: companySettings.name,
-      });
-      const ownerSignedAt = current.ownerSignedAt || sentAt;
-      const ownerSignedName = current.ownerSignedName.trim() || owner.name;
       const terms = liveEstimateTerms({
         estimate: current,
         companyDefault: companyEstimateTermsFor(companySettings, current.contractTypeId),
@@ -5909,14 +6030,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             estimates: prev.estimates.map((estimate) =>
               estimate.id === id
                 ? {
-                    ...estimate,
+                    ...current,
                     status: "sent" as const,
                     sentAt,
                     secondContactId: signing.secondContactId,
                     shareToken: tokens.shareToken,
                     secondShareToken: tokens.secondShareToken,
-                    ownerSignedAt,
-                    ownerSignedName,
                     terms,
                   }
                 : estimate
@@ -5933,8 +6052,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           share_token?: string;
           second_share_token?: string;
           second_contact_id?: string | null;
-          owner_signed_at?: string;
-          owner_signed_name?: string;
           terms?: string;
         } = {
           status: "sent",
@@ -5942,8 +6059,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           share_token: tokens.shareToken,
           second_share_token: tokens.secondShareToken,
           second_contact_id: signing.secondContactId,
-          owner_signed_at: ownerSignedAt,
-          owner_signed_name: ownerSignedName,
           terms,
         };
         let { error } = await supabase.from("estimates").update(payload).eq("id", id);
@@ -5952,8 +6067,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             status: "sent",
             sent_at: sentAt,
             share_token: tokens.shareToken,
-            owner_signed_at: ownerSignedAt,
-            owner_signed_name: ownerSignedName,
           }).eq("id", id);
           error = retry.error;
           if (!error) toast.message(missingSignerLinksMessage());
@@ -5990,8 +6103,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 secondContactId: signing.secondContactId,
                 shareToken: tokens.shareToken,
                 secondShareToken: tokens.secondShareToken,
-                ownerSignedAt,
-                ownerSignedName,
                 terms,
               }
             : estimate,
@@ -6012,8 +6123,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           secondContactId: signing.secondContactId,
           shareToken: tokens.shareToken,
           secondShareToken: tokens.secondShareToken,
-          ownerSignedAt,
-          ownerSignedName,
           terms,
         },
         label: current.number || current.name,
@@ -6064,17 +6173,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         estimateId: id,
         jobId: jobId || undefined,
       });
+      return true;
     },
     [
       addActivity,
-      companySettings.defaultEstimateTerms,
-      companySettings.name,
+      companySettings,
       ensureLeadForEstimate,
       moveOpportunity,
       recordCompanyAudit,
       syncPipelineValueFromEstimate,
       updateEstimate,
-      user,
       recordEstimateSignatureEvent,
     ]
   );
@@ -6362,18 +6470,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         secondAcceptedAt: null,
         ownerSignedAt: null,
         ownerSignedName: "",
+        ownerSignedImage: "",
+        ownerSignedStaffId: null,
+        ownerSignedTitle: "",
         signatureName: "",
         signatureImage: "",
         secondSignatureName: "",
         secondSignatureImage: "",
       };
       const apply = () =>
-        setState((prev) => ({
-          ...prev,
-          estimates: prev.estimates.map((estimate) =>
-            estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate
-          ),
-        }));
+        setState((prev) => {
+          const next = {
+            ...prev,
+            estimates: prev.estimates.map((estimate) =>
+              estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate
+            ),
+          };
+          bookRef.current = next;
+          return next;
+        });
       const supabase = maybeClient();
       if (supabase) {
         let { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
@@ -6413,6 +6528,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             .eq("id", id);
           error = retry.error;
           if (!error) toast.message(missingSignatureMessage());
+        }
+        if (error && isMissingAssigneeSignature(error)) {
+          const retry = await supabase
+            .from("estimates")
+            .update(withoutAssigneeSignatureColumns(estimatePatch(patch)))
+            .eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingAssigneeSignatureMessage());
         }
         if (error) {
           toast.error(error.message);
@@ -16440,6 +16563,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addEstimate,
       updateEstimate,
       sendEstimate,
+      signEstimateAsAssignee,
       acceptEstimate,
       declineEstimate,
       reopenEstimate,
@@ -16662,6 +16786,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addEstimate,
       updateEstimate,
       sendEstimate,
+      signEstimateAsAssignee,
       acceptEstimate,
       declineEstimate,
       reopenEstimate,

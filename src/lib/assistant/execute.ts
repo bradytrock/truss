@@ -10,6 +10,7 @@ import {
 import { isDeletedJob, uniqueIds } from "@/lib/job-record";
 import { localYmd } from "@/lib/format";
 import { estimateTotals, allPackageTotals, jobSoldAmount } from "@/lib/estimate-totals";
+import { assigneeSignatureReady, estimateAssigneeNames, staffCanSignEstimate } from "@/lib/estimate-signers";
 import { isGbbEstimate, parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import { compressReceipt, guessExpenseAccount, isExpenseAccount, isExpenseMethod, jobProfitAndLoss } from "@/lib/job-financials";
@@ -1004,7 +1005,21 @@ async function runTool(
     case "send_estimate": {
       const estimate = resolveEstimate(crm, arg(args, "estimate"));
       if (!estimate) return fail("No estimate matches that.");
-      await crm.sendEstimate(estimate.id);
+      const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+      const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
+      const names = estimateAssigneeNames({ job, opportunity, staff: crm.staff });
+      if (!staffCanSignEstimate(crm.effectiveStaff, names)) {
+        return fail(
+          names.length
+            ? `Someone assigned to this job has to send this estimate. Assigned: ${names.join(", ")}.`
+            : "Assign someone to this job before sending the estimate.",
+        );
+      }
+      if (!assigneeSignatureReady(estimate, names)) {
+        return fail("Open the estimate and sign it before sending. Your signature goes on the estimate first.");
+      }
+      const sent = await crm.sendEstimate(estimate.id);
+      if (!sent) return fail("The estimate was not sent.");
       const token = await crm.ensureEstimateShareToken(estimate.id);
       return ok(
         {
