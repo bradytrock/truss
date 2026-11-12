@@ -1,3 +1,4 @@
+import { emailStatusLabel } from "@/lib/email-status";
 import { contactAddressSource, type ContactAddressSource } from "@/lib/contacts";
 import { formatDateShort, formatPhone, localYmd } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
@@ -529,7 +530,7 @@ function buildActivity(
   const items: ContactBookActivity[] = activities.map((activity) => ({
     id: activity.id,
     title: ACTIVITY_TITLES[activity.type] ?? "Update",
-    detail: activity.body.trim(),
+    detail: [activity.body.trim(), emailStatusLabel(activity.emailStatus)].filter(Boolean).join(" · "),
     at: activity.createdAt,
     when: formatLastContactAt(activity.createdAt, now),
     kind: activity.type === "note" ? "note" : "event",

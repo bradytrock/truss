@@ -1,4 +1,5 @@
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { logAutomationEmail } from "@/lib/email-activity";
 import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { automationSendsGroup, fetchAutomationGroupPhones } from "@/lib/automations/group-text";
 import { mergeForJob, plannedRunsForEvent, runsAfterStageChange } from "@/lib/automations/queue";
@@ -211,6 +212,9 @@ async function runPlanned(
           p_note: note,
         });
         if (applyError) throw new Error(applyError.message);
+      },
+      onEmail: async (sent) => {
+        await logAutomationEmail(supabase, job.id, sent);
       },
     });
     await supabase.rpc("automation_mark_run", {

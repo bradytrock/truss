@@ -495,6 +495,10 @@ export interface Activity {
   body: string;
   createdAt: string;
   author: string;
+  /** Resend email id, when this activity is an outbound email we can track. */
+  resendId?: string;
+  /** queued, sent, delivered, bounced, and the other Resend last_event values. */
+  emailStatus?: string;
 }
 
 export interface Task {
