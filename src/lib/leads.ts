@@ -54,6 +54,77 @@ export function leadName(first: string, last: string, site: string) {
   return full || "New lead";
 }
 
+export type LeadCustomerKind = "homeowner" | "business";
+
+export function leadCustomerHint(kind: LeadCustomerKind) {
+  if (kind === "business") {
+    return "The LLC signs, and proposals and invoices go to it. Add the person you'll actually call.";
+  }
+  return "The homeowner signs, and proposals and invoices go to them.";
+}
+
+export type LeadIntakeFields = {
+  kind: LeadCustomerKind;
+  firstName: string;
+  lastName: string;
+  businessName: string;
+  contactName: string;
+  phone: string;
+  street: string;
+  source: string;
+};
+
+/** What still has to be filled before a new lead can save. */
+export function leadIntakeIssue(input: LeadIntakeFields): string | null {
+  if (input.kind === "business") {
+    if (!input.businessName.trim()) return "LLC or business name is required.";
+    if (!input.contactName.trim()) return "Name the person you'll call.";
+  } else if (!input.firstName.trim()) {
+    return "First name is required.";
+  }
+  if (!input.phone.trim()) return "A phone number is required.";
+  if (!input.street.trim()) return "Property address is required.";
+  if (!input.source.trim()) return "Pick a lead source.";
+  return null;
+}
+
+/** The person the assignee calls. Last name is optional for a homeowner. */
+export function leadPersonName(
+  input: Pick<LeadIntakeFields, "kind" | "firstName" | "lastName" | "contactName">,
+) {
+  if (input.kind === "business") return input.contactName.trim();
+  return `${input.firstName.trim()} ${input.lastName.trim()}`.trim();
+}
+
+export type LeadExtraDraft = {
+  name: string;
+  phone?: string;
+  email?: string;
+  /** A role or other field was set, so a blank name is a mistake rather than an unused row. */
+  started?: boolean;
+};
+
+export function leadExtraIssue(extras: readonly LeadExtraDraft[]): string | null {
+  for (const extra of extras) {
+    const name = extra.name.trim();
+    const phone = extra.phone?.trim() ?? "";
+    const email = extra.email?.trim() ?? "";
+    if (!name && !phone && !email && !extra.started) continue;
+    if (!name) return "Name each additional contact.";
+  }
+  return null;
+}
+
+export function leadExtrasToSave(extras: readonly LeadExtraDraft[]) {
+  return extras
+    .map((extra) => ({
+      name: extra.name.trim(),
+      phone: extra.phone?.trim() ?? "",
+      email: extra.email?.trim() ?? "",
+    }))
+    .filter((extra) => extra.name);
+}
+
 /** Job title: the LLC when the property is owned by one, otherwise the person's name. */
 export function leadRecordName(input: {
   first: string;

@@ -34,7 +34,7 @@ const CUSTOMERS: CreateMenuItem[] = [
   {
     action: "opportunity",
     label: "New lead",
-    description: "Homeowner, address, roof issue",
+    description: "Homeowner or LLC, address, trades",
     shortcut: "L",
     icon: "lead",
   },
