@@ -600,6 +600,7 @@ export function PhotoReportBuilder({
         ) : null}
       </div>
       <ShareLinkDialog
+        unsavedGuard={false}
         open={shareOpen}
         onOpenChange={setShareOpen}
         title="Send this page"
@@ -634,7 +635,7 @@ export function PhotoReportBuilder({
           })
         }
       />
-      <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+      <Dialog unsavedGuard={false} open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
         <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Remove this page?</DialogTitle>
@@ -656,6 +657,7 @@ export function PhotoReportBuilder({
         </DialogContent>
       </Dialog>
       <Dialog
+        unsavedGuard={false}
         open={pickerOpen}
         onOpenChange={(open) => {
           setPickerOpen(open);

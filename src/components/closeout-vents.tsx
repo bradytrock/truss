@@ -51,6 +51,7 @@ export function CloseoutVentDialog({
 
   return (
     <Dialog
+      unsavedGuard={false}
       open={open}
       onOpenChange={(next) => {
         if (!next) {

@@ -36,6 +36,7 @@ export function MaterialOrderFromTemplateDialog({
 
   return (
     <Dialog
+      unsavedGuard={false}
       open={open}
       onOpenChange={(next) => {
         if (!next) setTemplateId(null);
