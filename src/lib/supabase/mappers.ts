@@ -680,6 +680,12 @@ export function mapEstimate(row: EstimateRow): Estimate {
     secondAcceptedAt: row.second_accepted_at ?? null,
     ownerSignedAt: row.owner_signed_at ?? null,
     ownerSignedName: row.owner_signed_name ?? "",
+    ownerSignedImage: "owner_signed_image" in row ? String(row.owner_signed_image ?? "") : "",
+    ownerSignedStaffId:
+      "owner_signed_staff_id" in row && row.owner_signed_staff_id
+        ? String(row.owner_signed_staff_id)
+        : null,
+    ownerSignedTitle: "owner_signed_title" in row ? String(row.owner_signed_title ?? "") : "",
     createdAt: row.created_at,
     taxRate: Number(row.tax_rate ?? 0),
     discountKind: adjustmentKind(row.discount_kind),
@@ -874,6 +880,9 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.secondAcceptedAt !== undefined) row.second_accepted_at = patch.secondAcceptedAt;
   if (patch.ownerSignedAt !== undefined) row.owner_signed_at = patch.ownerSignedAt;
   if (patch.ownerSignedName !== undefined) row.owner_signed_name = patch.ownerSignedName;
+  if (patch.ownerSignedImage !== undefined) row.owner_signed_image = patch.ownerSignedImage;
+  if (patch.ownerSignedStaffId !== undefined) row.owner_signed_staff_id = patch.ownerSignedStaffId;
+  if (patch.ownerSignedTitle !== undefined) row.owner_signed_title = patch.ownerSignedTitle;
   if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
   if (patch.discountKind !== undefined) row.discount_kind = patch.discountKind;
   if (patch.discountValue !== undefined) row.discount_value = patch.discountValue;

@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import {
+  assigneeSignatureReady,
+  estimateAssigneeNames,
   joinCustomerNames,
   nextEstimateSignature,
   signatureCoversBothHomeowners,
   signatureFieldsForRole,
   signingRoleForName,
+  staffCanSignEstimate,
 } from "./estimate-signers.ts";
 import type { Estimate } from "./types.ts";
 
@@ -87,5 +90,64 @@ const fields = signatureFieldsForRole(draft, {
 assert.equal(fields.signatureName, printed);
 assert.equal(fields.secondSignatureName, "Tom Whitby");
 assert.equal(fields.signatureImage, fields.secondSignatureImage);
+
+const ink = "data:image/png;base64," + "a".repeat(120);
+const crew = ["Ada Lopez", "Sam Lee"];
+assert.deepEqual(
+  estimateAssigneeNames({
+    job: {
+      assigned: crew,
+      projectManager: "Someone Else",
+      superintendent: "",
+      salesRep: "",
+      ownerStaffId: "owner",
+    },
+    opportunity: null,
+    staff: [],
+  }),
+  crew,
+);
+assert.deepEqual(
+  estimateAssigneeNames({
+    job: {
+      assigned: [],
+      projectManager: "Ada Lopez",
+      superintendent: "Sam Lee",
+      salesRep: "",
+      ownerStaffId: "",
+    },
+    opportunity: { estimator: "Pat Kim", ownerStaffId: "" },
+    staff: [],
+  }),
+  ["Ada Lopez", "Sam Lee", "Pat Kim"],
+);
+assert.deepEqual(
+  estimateAssigneeNames({
+    job: null,
+    opportunity: { estimator: "", ownerStaffId: "lead-1" },
+    staff: [{ id: "lead-1", name: "Riley Quinn" }],
+  }),
+  ["Riley Quinn"],
+);
+assert.equal(staffCanSignEstimate({ name: "ada lopez" }, crew), true);
+assert.equal(staffCanSignEstimate({ name: "Riley Quinn" }, crew), false);
+assert.equal(
+  assigneeSignatureReady(
+    { ownerSignedAt: "2026-11-12T12:00:00.000Z", ownerSignedName: "Sam Lee", ownerSignedImage: ink },
+    crew,
+  ),
+  true,
+);
+assert.equal(
+  assigneeSignatureReady(
+    { ownerSignedAt: "2026-11-12T12:00:00.000Z", ownerSignedName: "Riley Quinn", ownerSignedImage: ink },
+    crew,
+  ),
+  false,
+);
+assert.equal(
+  assigneeSignatureReady({ ownerSignedAt: "2026-11-12T12:00:00.000Z", ownerSignedName: "Ada Lopez", ownerSignedImage: "" }, crew),
+  false,
+);
 
 console.log("estimate-signers.test.ts ok");

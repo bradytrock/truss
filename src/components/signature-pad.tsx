@@ -28,10 +28,12 @@ function pointFromEvent(canvas: HTMLCanvasElement, event: PointerEvent) {
 export function SignaturePad({
   className,
   disabled,
+  emptyHint = "Draw the homeowner’s signature in the box.",
   onChange,
 }: {
   className?: string;
   disabled?: boolean;
+  emptyHint?: string;
   onChange: (dataUrl: string | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -148,7 +150,7 @@ export function SignaturePad({
       />
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          {inked ? "Sign in the box the way you would on paper." : "Draw the homeowner’s signature in the box."}
+          {inked ? "Sign in the box the way you would on paper." : emptyHint}
         </p>
         <Button type="button" size="sm" variant="ghost" disabled={disabled || !inked} onClick={clear}>
           Clear
@@ -236,6 +238,139 @@ function CollectSignatureForm({
           <Button type="button" disabled={pending} onClick={() => void handleSubmit()}>
             {pending ? "Saving…" : "Sign and approve"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function AssigneeSignatureDialog({
+  open,
+  onOpenChange,
+  estimateNumber,
+  signer,
+  assignees,
+  pending,
+  consentText,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  estimateNumber: string;
+  /** The person using Truss, when they are assigned to the job. */
+  signer: { name: string; title: string } | null;
+  assignees: string[];
+  pending?: boolean;
+  consentText: string;
+  onSubmit: (input: { image: string }) => Promise<void> | void;
+}) {
+  const [session, setSession] = useState(0);
+  const [seenOpen, setSeenOpen] = useState(open);
+  if (open !== seenOpen) {
+    setSeenOpen(open);
+    if (open) setSession((value) => value + 1);
+  }
+  return (
+    <AssigneeSignatureForm
+      key={`${session}:${signer?.name ?? "blocked"}`}
+      open={open}
+      estimateNumber={estimateNumber}
+      signer={signer}
+      assignees={assignees}
+      pending={pending}
+      consentText={consentText}
+      onOpenChange={onOpenChange}
+      onSubmit={onSubmit}
+    />
+  );
+}
+
+function AssigneeSignatureForm({
+  open,
+  estimateNumber,
+  signer,
+  assignees,
+  pending,
+  consentText,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  estimateNumber: string;
+  signer: { name: string; title: string } | null;
+  assignees: string[];
+  pending?: boolean;
+  consentText: string;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (input: { image: string }) => Promise<void> | void;
+}) {
+  const [image, setImage] = useState<string | null>(null);
+  const [consented, setConsented] = useState(false);
+  const [error, setError] = useState("");
+  const who = assignees.length ? assignees.join(", ") : "";
+
+  async function handleSubmit() {
+    if (!signer) return;
+    if (!consented) {
+      setError("Check the box to sign this estimate.");
+      return;
+    }
+    const parsed = parseEstimateSignature({ name: signer.name, image: image ?? "" });
+    if (!parsed.ok) {
+      setError(parsed.error);
+      return;
+    }
+    setError("");
+    await onSubmit({ image: parsed.signature.image });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{signer ? "Sign this estimate" : "Sign before sending"}</DialogTitle>
+          <DialogDescription>
+            {signer
+              ? `${estimateNumber} stays a draft until you sign. Your signature is yours. This is not a contract.`
+              : who
+                ? `Someone assigned to this job has to sign ${estimateNumber} before it can be sent.`
+                : `Assign someone to this job before sending ${estimateNumber}.`}
+          </DialogDescription>
+        </DialogHeader>
+        {signer ? (
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="assignee-signer-name">Printed name</Label>
+              <Input id="assignee-signer-name" value={signer.name} disabled />
+              {signer.title ? <p className="text-xs text-muted-foreground">{signer.title}</p> : null}
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Signature</Label>
+              <SignaturePad disabled={pending} emptyHint="Draw your signature in the box." onChange={setImage} />
+            </div>
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={consented}
+                disabled={pending}
+                onCheckedChange={(value) => setConsented(Boolean(value))}
+              />
+              <span>{consentText}</span>
+            </label>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          </div>
+        ) : who ? (
+          <p className="text-sm text-muted-foreground">Assigned: {who}</p>
+        ) : null}
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>
+            {signer ? "Cancel" : "Close"}
+          </Button>
+          {signer ? (
+            <Button type="button" disabled={pending} onClick={() => void handleSubmit()}>
+              {pending ? "Saving…" : "Sign and send"}
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

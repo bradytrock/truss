@@ -40,6 +40,23 @@ export function missingOwnerSignatureMessage() {
   return `Saved in this browser. Run ${ESTIMATE_OWNER_SIGNATURE_SQL} in the SQL editor so sending a proposal keeps the project owner's signature in Postgres.`;
 }
 
+export const ESTIMATE_ASSIGNEE_SIGNATURE_SQL =
+  "supabase/migrations/20261112140000_estimate_assignee_signature.sql";
+
+export function isMissingAssigneeSignature(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("owner_signed_image") ||
+    message.includes("owner_signed_staff_id") ||
+    message.includes("owner_signed_title")
+  );
+}
+
+export function missingAssigneeSignatureMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_ASSIGNEE_SIGNATURE_SQL} in the SQL editor so a signature on an estimate is kept in Postgres.`;
+}
+
 export function isMissingEstimateWriter(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   if (isMissingSecondSigner(error)) return false;

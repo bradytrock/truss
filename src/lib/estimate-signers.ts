@@ -1,6 +1,7 @@
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { newShareToken } from "@/lib/share";
-import type { CurrentUser, Estimate, Job, Opportunity, StaffMember } from "@/lib/types";
+import { namesMatch } from "@/lib/seats";
+import { isNorthlineDemoName, type CurrentUser, type Estimate, type Job, type Opportunity, type StaffMember } from "@/lib/types";
 
 export type EstimateSigner = "primary" | "second" | "both";
 export type HomeownerSigner = "primary" | "second";
@@ -165,12 +166,66 @@ export function nextEstimateSignature(
   };
 }
 
-export function contractorSignedAt(
-  estimate: Pick<Estimate, "ownerSignedAt" | "sentAt" | "status">,
+export function contractorSignedAt(estimate: Pick<Estimate, "ownerSignedAt">) {
+  return estimate.ownerSignedAt ?? null;
+}
+
+export const ASSIGNEE_SIGN_CONSENT_TEXT = "I prepared this estimate. My signature is mine.";
+
+export const ASSIGNEE_SIGN_CONSENT_VERSION = "assignee-2026-11-12";
+
+function uniqueSignerNames(names: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const name of names) {
+    const trimmed = name?.trim() ?? "";
+    if (!trimmed || seen.has(trimmed.toLowerCase())) continue;
+    seen.add(trimmed.toLowerCase());
+    next.push(trimmed);
+  }
+  return next;
+}
+
+/** People who may sign an estimate before it is sent. */
+export function estimateAssigneeNames(input: {
+  job?: Pick<Job, "assigned" | "projectManager" | "superintendent" | "salesRep" | "ownerStaffId"> | null;
+  opportunity?: Pick<Opportunity, "estimator" | "ownerStaffId"> | null;
+  staff: Array<Pick<StaffMember, "id" | "name">>;
+}) {
+  const listed = uniqueSignerNames(input.job?.assigned ?? []);
+  if (listed.length) return listed;
+  const seeded = uniqueSignerNames(
+    [input.job?.projectManager, input.job?.superintendent, input.job?.salesRep, input.opportunity?.estimator].filter(
+      (name) => {
+        const trimmed = name?.trim() ?? "";
+        return Boolean(trimmed) && !isNorthlineDemoName(trimmed);
+      },
+    ),
+  );
+  if (seeded.length) return seeded;
+  const ownerId = input.job?.ownerStaffId || input.opportunity?.ownerStaffId || "";
+  const owner = ownerId ? input.staff.find((member) => member.id === ownerId) : undefined;
+  const name = owner?.name.trim() ?? "";
+  return name ? [name] : [];
+}
+
+export function staffCanSignEstimate(
+  staff: { name?: string | null } | null | undefined,
+  names: string[],
 ) {
-  if (estimate.ownerSignedAt) return estimate.ownerSignedAt;
-  if (estimate.status !== "draft" && estimate.sentAt) return estimate.sentAt;
-  return null;
+  const name = staff?.name?.trim() ?? "";
+  if (!name) return false;
+  return names.some((candidate) => namesMatch(candidate, name));
+}
+
+/** True when someone still assigned to the job has drawn their signature on this draft. */
+export function assigneeSignatureReady(
+  estimate: Pick<Estimate, "ownerSignedAt" | "ownerSignedName" | "ownerSignedImage">,
+  names: string[],
+) {
+  if (!estimate.ownerSignedAt) return false;
+  if (!isSignaturePng(estimate.ownerSignedImage)) return false;
+  return names.some((name) => namesMatch(name, estimate.ownerSignedName));
 }
 
 export function resolveProjectOwner(input: {
@@ -238,6 +293,8 @@ export function estimateSignatureLines(
     | "secondAcceptedAt"
     | "ownerSignedAt"
     | "ownerSignedName"
+    | "ownerSignedImage"
+    | "ownerSignedTitle"
     | "sentAt"
     | "status"
     | "signatureName"
@@ -251,6 +308,7 @@ export function estimateSignatureLines(
     role: "contractor" | "primary" | "second";
     party: "contractor" | "homeowner";
     name: string;
+    caption: string;
     signedAt: string | null;
     image: string;
   }> = [
@@ -258,13 +316,15 @@ export function estimateSignatureLines(
       role: "contractor",
       party: "contractor",
       name: estimate.ownerSignedName.trim() || names.contractor?.trim() || "Contractor",
-      signedAt: contractorSignedAt(estimate),
-      image: "",
+      caption: (estimate.ownerSignedTitle ?? "").trim() || "Prepared by",
+      signedAt: isSignaturePng(estimate.ownerSignedImage) ? contractorSignedAt(estimate) : null,
+      image: estimate.ownerSignedImage ?? "",
     },
     {
       role: "primary",
       party: "homeowner",
       name: estimate.signatureName.trim() || names.primary.trim() || "Homeowner",
+      caption: "Homeowner signature",
       signedAt: homeownerHasSigned(estimate, "primary") ? estimate.acceptedAt || estimate.sentAt : null,
       image: estimate.signatureImage,
     },
@@ -279,6 +339,7 @@ export function estimateSignatureLines(
       role: "second",
       party: "homeowner",
       name: estimate.secondSignatureName.trim() || names.second?.trim() || "Second homeowner",
+      caption: "Homeowner signature",
       signedAt: homeownerHasSigned(estimate, "second") ? estimate.secondAcceptedAt : null,
       image: estimate.secondSignatureImage,
     });
