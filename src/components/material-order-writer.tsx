@@ -208,21 +208,33 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
           pdf,
         }),
       });
-      const payload = (await response.json().catch(() => null)) as { error?: string; mocked?: boolean } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; mocked?: boolean; id?: string }
+        | null;
       if (!response.ok) {
-        throw new Error(payload?.error || "Could not email the supplier.");
+        const error = payload?.error || "Could not email the supplier.";
+        await crm.addActivity({
+          entityType: "job",
+          entityId: order.jobId,
+          type: "email",
+          body: `Could not email ${order.vendor} ${order.number}. ${error}`,
+          emailStatus: "failed",
+        });
+        throw new Error(error);
       }
-      const saved = await crm.updateMaterialOrder(order.id, {
-        status: "sent",
-        sentAt: new Date().toISOString(),
-      });
-      if (!saved) return;
       await crm.addActivity({
         entityType: "job",
         entityId: order.jobId,
         type: "email",
         body: `Emailed ${order.vendor} ${order.number} with the material order PDF (${formatMoney(total)}).`,
+        resendId: payload?.id || "",
+        emailStatus: payload?.mocked ? "mocked" : "queued",
       });
+      const saved = await crm.updateMaterialOrder(order.id, {
+        status: "sent",
+        sentAt: new Date().toISOString(),
+      });
+      if (!saved) return;
       toast.success(
         payload?.mocked
           ? `Marked sent. Email is not connected, so ${shortName} did not receive the PDF.`

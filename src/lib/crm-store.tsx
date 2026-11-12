@@ -12,6 +12,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { isMissingEmailDeliveryColumn, outboundEmailActivityBody } from "@/lib/email-status";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { isPendingPayment, roundCents } from "@/lib/payment-posting";
 import {
@@ -1186,6 +1187,8 @@ type CrmContextValue = CrmState & {
     entityId: string;
     type: ActivityType;
     body: string;
+    resendId?: string;
+    emailStatus?: string;
   }) => Promise<void>;
   sendTextMessage: (input: {
     to: string;
@@ -1227,7 +1230,11 @@ type CrmContextValue = CrmState & {
     contactId?: string | null;
     opportunityId?: string | null;
     name?: string;
+    resendId?: string;
+    emailStatus?: string;
+    error?: string;
   }) => Promise<void>;
+  refreshEmailStatuses: (activityIds: string[]) => Promise<boolean>;
   markThreadOpened: (threadKey: string) => Promise<void>;
   addThreadMember: (threadKey: string, profileId: string) => Promise<boolean>;
   removeThreadMember: (threadKey: string, profileId: string) => Promise<boolean>;
@@ -2416,15 +2423,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       entityId: string;
       type: ActivityType;
       body: string;
+      resendId?: string;
+      emailStatus?: string;
     }) => {
       const supabase = maybeClient();
+      const resendId = input.resendId?.trim() ?? "";
+      const emailStatus = input.emailStatus?.trim() ?? "";
       if (!supabase) {
         setState((prev) => ({
           ...prev,
           activities: [
             {
               id: crypto.randomUUID(),
-              ...input,
+              entityType: input.entityType,
+              entityId: input.entityId,
+              type: input.type,
+              body: input.body,
+              resendId,
+              emailStatus,
               createdAt: new Date().toISOString(),
               author: user.name,
             },
@@ -2433,6 +2449,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }));
         return;
       }
+      const delivery =
+        resendId || emailStatus ? { resend_id: resendId, email_status: emailStatus } : {};
       let { data, error } = await supabase
         .from("activities")
         .insert({
@@ -2442,9 +2460,26 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           type: input.type,
           body: input.body,
           author: user.name,
+          ...delivery,
         })
         .select("*")
         .single();
+      if (error && isMissingEmailDeliveryColumn(error) && (resendId || emailStatus)) {
+        const retry = await supabase
+          .from("activities")
+          .insert({
+            company_id: user.companyId,
+            entity_type: input.entityType,
+            entity_id: input.entityId,
+            type: input.type,
+            body: input.body,
+            author: user.name,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error && (input.type === "audit" || input.type === "text") && isInvalidEnumValue(error)) {
         const retry = await supabase
           .from("activities")
@@ -2813,6 +2848,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       contactId?: string | null;
       opportunityId?: string | null;
       name?: string;
+      resendId?: string;
+      emailStatus?: string;
+      error?: string;
     }) => {
       const email = input.to.trim();
       const subject = input.subject.replace(/[\r\n]+/g, " ").trim();
@@ -2830,20 +2868,33 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         (contact ? opportunityForContact(state.opportunities, contact.id)?.id : null) ||
         null;
       const who = input.name?.trim() || contact?.name || "homeowner";
-      const activityBody = `Emailed ${who} (${email}): ${subject}${url ? ` — ${url}` : ""}`;
+      const failed = input.emailStatus === "failed";
+      const activityBody = outboundEmailActivityBody({
+        name: who,
+        to: email,
+        subject,
+        url,
+        error: input.error,
+        failed,
+      });
+      const delivery = {
+        resendId: input.resendId,
+        emailStatus: input.emailStatus,
+      };
       if (job) {
-        await addActivity({ entityType: "job", entityId: job.id, type: "email", body: activityBody });
+        await addActivity({ entityType: "job", entityId: job.id, type: "email", body: activityBody, ...delivery });
       } else if (opportunityId) {
         await addActivity({
           entityType: "opportunity",
           entityId: opportunityId,
           type: "email",
           body: activityBody,
+          ...delivery,
         });
       }
       const shareMatch = url.match(/\/share\/e\/([A-Za-z0-9_-]+)/);
       const shareToken = shareMatch?.[1] ?? "";
-      if (shareToken) {
+      if (shareToken && !failed) {
         const estimate = state.estimates.find(
           (item) =>
             item.shareToken === shareToken ||
@@ -2869,13 +2920,43 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         action: "created",
         after: { to: email, subject, url, contactId: contact?.id ?? null, jobId: job?.id ?? null, opportunityId },
         label: subject,
-        detail: `Email to ${email}`,
+        detail: failed ? `Email to ${email} failed` : `Email to ${email}`,
         relatedJobId: job?.id ?? null,
         relatedOpportunityId: opportunityId,
       });
     },
     [addActivity, recordCompanyAudit, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities],
   );
+
+  const refreshEmailStatuses = useCallback(async (activityIds: string[]) => {
+    const ids = activityIds.filter((id) => looksLikeUuid(id));
+    if (!ids.length) return false;
+    try {
+      const response = await fetch("/api/email-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activityIds: ids }),
+      });
+      if (!response.ok) return false;
+      const data = (await response.json()) as {
+        updates?: { id: string; emailStatus: string }[];
+        pending?: boolean;
+      };
+      const updates = data.updates ?? [];
+      if (updates.length) {
+        const byId = new Map(updates.map((row) => [row.id, row.emailStatus]));
+        setState((prev) => ({
+          ...prev,
+          activities: prev.activities.map((activity) =>
+            byId.has(activity.id) ? { ...activity, emailStatus: byId.get(activity.id) } : activity,
+          ),
+        }));
+      }
+      return Boolean(data.pending);
+    } catch {
+      return false;
+    }
+  }, []);
 
   const sendTextMessage = useCallback(
     async (input: {
@@ -16425,6 +16506,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       unsendText,
       logOutboundText,
       logOutboundEmail,
+      refreshEmailStatuses,
       markThreadOpened,
       addThreadMember,
       removeThreadMember,
@@ -16647,6 +16729,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       unsendText,
       logOutboundText,
       logOutboundEmail,
+      refreshEmailStatuses,
       markThreadOpened,
       addThreadMember,
       removeThreadMember,

@@ -8,6 +8,7 @@ import {
   type CompanyEmailTemplates,
 } from "@/lib/email-templates";
 import { firstName } from "@/lib/phone";
+import type { LoggedJobEmail } from "@/lib/email-activity";
 import { RESEND_FROM_ADDRESS, sendResendEmail } from "@/lib/resend-mail";
 import { sendOfficeText } from "@/lib/photon-server";
 import type { WorkColumn } from "@/lib/work-board";
@@ -41,6 +42,7 @@ export async function executeAutomationActions(input: {
   setJobValue?: (amount: number) => Promise<void>;
   setJobStage?: (stage: WorkColumn) => Promise<boolean | void>;
   addNote?: (body: string) => Promise<void>;
+  onEmail?: (sent: LoggedJobEmail) => Promise<void>;
   estimateTotal?: number | null;
   dryRun?: boolean;
   emailTemplates?: CompanyEmailTemplates;
@@ -81,6 +83,7 @@ async function runAction(
     setJobValue?: (amount: number) => Promise<void>;
     setJobStage?: (stage: WorkColumn) => Promise<boolean | void>;
     addNote?: (body: string) => Promise<void>;
+    onEmail?: (sent: LoggedJobEmail) => Promise<void>;
     estimateTotal?: number | null;
     emailTemplates?: CompanyEmailTemplates;
   },
@@ -206,9 +209,18 @@ async function runAction(
       if (!texted.ok && !email) return { ok: false, delivery: "", error: texted.error };
     }
     if (!email) return { ok: false, delivery: "", error: "No email address or mobile number for that recipient." };
+    const sentSubject = custom?.subject || builtinSubject;
+    const recipientName =
+      to === "customer"
+        ? input.merge.contactName
+        : to === "staff"
+          ? staff?.name || ""
+          : to === "email" || to === "phone" || to === "group"
+            ? ""
+            : input.merge.staffName;
     const result = await sendResendEmail({
       to: email,
-      subject: custom?.subject || builtinSubject,
+      subject: sentSubject,
       text: custom
         ? systemEmailText({
             headline: custom.headline === custom.subject ? "" : custom.headline,
@@ -224,6 +236,19 @@ async function runAction(
         : `<p>${body.replace(/\n/g, "<br/>")}</p>`,
       replyTo: input.ownerEmail || RESEND_FROM_ADDRESS,
     });
+    const logged: LoggedJobEmail = {
+      to: email,
+      name: recipientName || "",
+      subject: sentSubject,
+      resendId: result.ok ? result.id : "",
+      emailStatus: !result.ok ? "failed" : result.mocked ? "mocked" : "queued",
+      error: result.ok ? "" : result.error,
+    };
+    try {
+      await input.onEmail?.(logged);
+    } catch {
+      // The send already happened. A missed activity line should not fail the automation.
+    }
     if (!result.ok) return { ok: false, delivery: "", error: result.error };
     return { ok: true, delivery: result.mocked ? "Email mocked" : "Email sent", error: "" };
   }

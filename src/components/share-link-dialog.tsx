@@ -125,6 +125,9 @@ export function ShareLinkDialog({
     name: string;
     url: string;
     contactId?: string;
+    resendId?: string;
+    emailStatus?: string;
+    error?: string;
   }) => void | Promise<void>;
 }) {
   const [pending, setPending] = useState<"copy" | "pdf" | "text" | "email" | null>(null);
@@ -462,10 +465,21 @@ export function ShareLinkDialog({
           }),
         });
         const data = (await response.json().catch(() => null)) as
-          | { ok?: boolean; mocked?: boolean; error?: string; to?: string }
+          | { ok?: boolean; mocked?: boolean; error?: string; to?: string; id?: string }
           | null;
+        const contactId = target.id.startsWith("custom") ? undefined : target.id;
         if (!response.ok || !data?.ok) {
-          toast.error(data?.error || `Could not email ${target.name}.`);
+          const error = data?.error || `Could not email ${target.name}.`;
+          await onEmailed?.({
+            to: target.email,
+            subject: subject.trim(),
+            name: target.name,
+            url: theirUrl,
+            contactId,
+            emailStatus: "failed",
+            error,
+          });
+          toast.error(error);
           return;
         }
         mocked = Boolean(data.mocked);
@@ -474,7 +488,9 @@ export function ShareLinkDialog({
           subject: subject.trim(),
           name: target.name,
           url: theirUrl,
-          contactId: target.id.startsWith("custom") ? undefined : target.id,
+          contactId,
+          resendId: data.id || "",
+          emailStatus: data.mocked ? "mocked" : "queued",
         });
       }
       if (mocked) {

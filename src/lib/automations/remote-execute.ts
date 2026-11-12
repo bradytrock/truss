@@ -1,4 +1,5 @@
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { logAutomationEmail } from "@/lib/email-activity";
 import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { fetchAutomationGroupPhones, sliceSendsGroup } from "@/lib/automations/group-text";
 import { buildAutomationMerge } from "@/lib/automations/merge";
@@ -156,6 +157,10 @@ export async function executeRemoteAutomation(input: {
         p_note: note,
       });
       if (error) throw new Error(error.message);
+    },
+    onEmail: async (sent) => {
+      if (!jobId) return;
+      await logAutomationEmail(input.supabase, jobId, sent);
     },
   });
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { logAutomationEmail } from "@/lib/email-activity";
 import { groupMessagePhones } from "@/lib/automations/group-text";
 import { planWorkflowSlice, settleWorkflow, workflowOf } from "@/lib/automations/workflow";
 import { estimateTotalForContext, mergeForJob, runsAfterStageChange } from "@/lib/automations/queue";
@@ -150,6 +151,10 @@ export async function POST(request: Request) {
           author: "Automation",
         });
         if (error) throw new Error(error.message);
+      },
+      onEmail: async (sent) => {
+        if (!jobState) return;
+        await logAutomationEmail(supabase, jobState.id, sent);
       },
     })
       : { ok: true as const, delivery: "", error: "", stageChanged: null };

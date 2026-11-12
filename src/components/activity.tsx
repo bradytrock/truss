@@ -5,11 +5,31 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
+import { emailStatusLabel, emailStatusNeedsRefresh, emailStatusTone } from "@/lib/email-status";
 import { formatRelative } from "@/lib/format";
 import { ACTIVITY_LABELS, type Activity, type ActivityType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const types = ["note", "call", "email", "text", "meeting", "site_walk"] as const;
+
+function EmailStatusBadge({ status }: { status?: string }) {
+  const label = emailStatusLabel(status);
+  const tone = emailStatusTone(status);
+  if (!label || !tone) return null;
+  return (
+    <span
+      className={cn(
+        "rounded-md px-1.5 py-0.5 text-[11px] font-medium",
+        tone === "ok" && "bg-emerald-500/15 text-emerald-800 dark:text-emerald-200",
+        tone === "bad" && "bg-destructive/10 text-destructive",
+        tone === "wait" && "bg-amber-500/15 text-amber-900 dark:text-amber-200",
+        tone === "muted" && "bg-muted text-muted-foreground",
+      )}
+    >
+      {label}
+    </span>
+  );
+}
 
 function personInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -122,6 +142,30 @@ export function ActivityList({
   empty: string;
   tone?: "default" | "record";
 }) {
+  const { refreshEmailStatuses } = useCrm();
+  const openKey = items
+    .filter((activity) => activity.resendId && emailStatusNeedsRefresh(activity.emailStatus))
+    .map((activity) => activity.id)
+    .sort()
+    .join(",");
+
+  useEffect(() => {
+    if (!openKey) return;
+    let stopped = false;
+    let timer = 0;
+    const ids = openKey.split(",");
+    async function pull() {
+      const pending = await refreshEmailStatuses(ids);
+      if (stopped || !pending) return;
+      timer = window.setTimeout(() => void pull(), 20000);
+    }
+    void pull();
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+    };
+  }, [openKey, refreshEmailStatuses]);
+
   if (items.length === 0) {
     if (tone === "record") return null;
     return <p className="py-8 text-sm text-muted-foreground">{empty}</p>;
@@ -141,6 +185,7 @@ export function ActivityList({
                 <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {ACTIVITY_LABELS[activity.type]}
                 </span>
+                <EmailStatusBadge status={activity.emailStatus} />
                 <span className="text-xs text-muted-foreground">{formatRelative(activity.createdAt)}</span>
               </div>
               <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{activity.body}</p>
@@ -176,6 +221,7 @@ export function ActivityList({
               <span className="text-xs text-muted-foreground">
                 {ACTIVITY_LABELS[activity.type]} · {formatRelative(activity.createdAt)}
               </span>
+              <EmailStatusBadge status={activity.emailStatus} />
             </div>
             <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
               {activity.body}

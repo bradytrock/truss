@@ -16,8 +16,10 @@ import {
   type EmailCampaignFilter,
   type EmailCampaignRecipient,
 } from "@/lib/marketing/email-campaigns";
+import { isMissingEmailDeliveryColumn, outboundEmailActivityBody } from "@/lib/email-status";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { looksLikeEmail } from "@/lib/share-text";
+import { looksLikeUuid } from "@/lib/supabase/schema-errors";
 import { selectAllRows } from "@/lib/supabase/load-book";
 import { mapCompany, mapContact, mapJob, mapStaff } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
@@ -335,6 +337,43 @@ export async function sendEmailCampaign(input: {
 
   if (sendRows.length) {
     await supabase.from("email_campaign_sends").insert(sendRows);
+    const activityRows = sendRows.flatMap((row) => {
+      if (!row.job_id || !looksLikeUuid(row.job_id)) return [];
+      const failed = row.status === "failed";
+      return [
+        {
+          company_id: row.company_id,
+          entity_type: "job" as const,
+          entity_id: row.job_id,
+          type: "email" as const,
+          author: senderName || "Marketing",
+          resend_id: row.resend_id,
+          email_status: failed ? "failed" : row.status === "mocked" ? "mocked" : "queued",
+          body: outboundEmailActivityBody({
+            name: row.recipient_name || row.email,
+            to: row.email,
+            subject: row.subject,
+            error: row.error,
+            failed,
+          }),
+        },
+      ];
+    });
+    if (activityRows.length) {
+      const logged = await supabase.from("activities").insert(activityRows);
+      if (logged.error && isMissingEmailDeliveryColumn(logged.error)) {
+        await supabase.from("activities").insert(
+          activityRows.map((row) => ({
+            company_id: row.company_id,
+            entity_type: row.entity_type,
+            entity_id: row.entity_id,
+            type: row.type,
+            author: row.author,
+            body: row.body,
+          })),
+        );
+      }
+    }
   }
   const skippedCount = skippedUnsubscribed + skippedCap;
   await supabase

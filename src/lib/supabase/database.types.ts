@@ -675,6 +675,8 @@ export type Database = {
           body: string;
           author: string;
           created_at: string;
+          resend_id: string;
+          email_status: string;
         };
         Insert: {
           id?: string;
@@ -685,6 +687,8 @@ export type Database = {
           body: string;
           author: string;
           created_at?: string;
+          resend_id?: string;
+          email_status?: string;
         };
         Update: Partial<Database["public"]["Tables"]["activities"]["Insert"]>;
         Relationships: [];
@@ -3883,6 +3887,16 @@ export type Database = {
           p_note: string;
         };
         Returns: Json;
+      };
+      log_job_email_activity: {
+        Args: {
+          p_job_id: string;
+          p_body: string;
+          p_author: string;
+          p_resend_id: string;
+          p_email_status: string;
+        };
+        Returns: string | null;
       };
       automation_estimate_bundle: {
         Args: { p_estimate_id: string };

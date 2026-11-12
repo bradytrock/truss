@@ -469,6 +469,8 @@ export function mapActivity(row: ActivityRow): Activity {
     body: row.body,
     createdAt: row.created_at,
     author: row.author,
+    resendId: row.resend_id ?? "",
+    emailStatus: row.email_status ?? "",
   };
 }
 
