@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,6 +31,7 @@ import { INVOICE_STATUS_LABELS, INVOICE_STATUSES, type InvoiceStatus } from "@/l
 
 export default function InvoicesPage() {
   const crm = useCrm();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<InvoiceStatus | "all" | "archived">("all");
   const [create, setCreate] = useState(false);
@@ -173,12 +175,21 @@ export default function InvoicesPage() {
               </TableHeader>
               <TableBody>
                 {rows.map(({ invoice, status: rowStatus, total, balance }) => (
-                  <TableRow key={invoice.id} className="relative">
+                  <TableRow
+                    key={invoice.id}
+                    className="cursor-pointer"
+                    onClick={(event) => {
+                      if (event.target instanceof Element && event.target.closest("a, button")) return;
+                      const href = `/invoices/${invoice.id}`;
+                      if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                        window.open(href, "_blank", "noopener,noreferrer");
+                        return;
+                      }
+                      router.push(href);
+                    }}
+                  >
                     <TableCell>
-                      <Link
-                        href={`/invoices/${invoice.id}`}
-                        className="font-medium hover:underline after:absolute after:inset-0"
-                      >
+                      <Link href={`/invoices/${invoice.id}`} className="font-medium hover:underline">
                         {invoice.number}
                       </Link>
                       <p className="text-xs text-muted-foreground">{invoice.name}</p>

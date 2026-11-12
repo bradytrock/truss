@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,6 +45,7 @@ export default function EstimatesPage() {
 
 function EstimatesList() {
   const crm = useCrm();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const fromTemplate = searchParams.get("from") ?? "";
   const [query, setQuery] = useState("");
@@ -203,12 +204,21 @@ function EstimatesList() {
                     marketForEstimate(estimate, crm.jobs, crm.opportunities),
                   );
                   return (
-                    <TableRow key={estimate.id} className="relative">
+                    <TableRow
+                      key={estimate.id}
+                      className="cursor-pointer"
+                      onClick={(event) => {
+                        if (event.target instanceof Element && event.target.closest("a, button")) return;
+                        const href = `/estimates/${estimate.id}`;
+                        if (event.metaKey || event.ctrlKey || event.shiftKey) {
+                          window.open(href, "_blank", "noopener,noreferrer");
+                          return;
+                        }
+                        router.push(href);
+                      }}
+                    >
                       <TableCell>
-                        <Link
-                          href={`/estimates/${estimate.id}`}
-                          className="font-medium hover:underline after:absolute after:inset-0"
-                        >
+                        <Link href={`/estimates/${estimate.id}`} className="font-medium hover:underline">
                           {estimate.number}
                         </Link>
                         <p className="text-xs text-muted-foreground">{estimate.name}</p>
