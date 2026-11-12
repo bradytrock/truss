@@ -60,11 +60,12 @@ export function customerContactDetails(record: CustomerRecord, book: PartyBook) 
 
 export function resolveCustomerName(record: CustomerRecord, book: PartyBook): string {
   const { client, contact, second } = resolveCustomerParties(record, book);
+  const company = client?.name.trim() ?? "";
+  if (company) return company;
   if (second?.name) {
-    const primary = contact?.name ?? client?.name ?? "Homeowner";
+    const primary = contact?.name ?? "Homeowner";
     return joinCustomerNames(primary, second.name);
   }
-  if (client) return client.name;
   return contact?.name ?? "Homeowner";
 }
 
@@ -192,6 +193,12 @@ export function homeownersOnJob(
   return contactsOnJob(job, contacts, extraIds).filter((contact) => isJobHomeowner(contact, job));
 }
 
+/** Company staff are people you call. They do not co-sign the way a second homeowner does. */
+function signsAsHomeowner(contact: Contact) {
+  if (!contact.clientId) return true;
+  return contact.title.toLowerCase().includes("homeowner");
+}
+
 /** Second signer when a job has two homeowners (primary + a related co-owner). */
 export function coOwnerContact(
   job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds"> | undefined,
@@ -200,7 +207,11 @@ export function coOwnerContact(
 ) {
   if (!job) return null;
   const primary = (primaryId || job.primaryContactId || "").trim();
-  return homeownersOnJob(job, contacts).find((contact) => contact.id !== primary) ?? null;
+  return (
+    homeownersOnJob(job, contacts).find(
+      (contact) => contact.id !== primary && signsAsHomeowner(contact),
+    ) ?? null
+  );
 }
 
 /** Primary + co-owner from the job — estimates should not invent people outside that set. */

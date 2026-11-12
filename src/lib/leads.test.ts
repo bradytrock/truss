@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_LEAD_STATE,
   formatJobSite,
+  leadCustomerHint,
+  leadExtraIssue,
+  leadExtrasToSave,
+  leadIntakeIssue,
   leadNeedsReferrer,
+  leadPersonName,
+  leadRecordName,
   leadReferrerAllowsFreeText,
   leadStateOrDefault,
   matchReferralPartners,
@@ -65,5 +71,57 @@ assert.deepEqual(
   ["p2"],
 );
 assert.equal(matchReferralPartners(book, "").length, 2);
+
+const homeowner = {
+  kind: "homeowner" as const,
+  firstName: "Riley",
+  lastName: "",
+  businessName: "",
+  contactName: "",
+  phone: "(214) 555-0100",
+  street: "100 Main",
+  source: "door_knock",
+};
+assert.equal(leadIntakeIssue(homeowner), null);
+assert.equal(leadIntakeIssue({ ...homeowner, firstName: "  " }), "First name is required.");
+assert.equal(leadIntakeIssue({ ...homeowner, phone: "" }), "A phone number is required.");
+assert.equal(leadIntakeIssue({ ...homeowner, street: "" }), "Property address is required.");
+assert.equal(leadIntakeIssue({ ...homeowner, source: "" }), "Pick a lead source.");
+assert.equal(leadPersonName(homeowner), "Riley");
+assert.equal(
+  leadRecordName({ ...homeowner, site: "100 Main, Plano, TX 75074" }),
+  "Riley — 100 Main, Plano, TX 75074",
+);
+assert.equal(
+  leadCustomerHint("homeowner"),
+  "The homeowner signs, and proposals and invoices go to them.",
+);
+
+const business = {
+  kind: "business" as const,
+  firstName: "",
+  lastName: "",
+  businessName: "Maple Street Holdings LLC",
+  contactName: "Riley Chen",
+  phone: "(214) 555-0199",
+  street: "100 Main",
+  source: "referral",
+};
+assert.equal(leadIntakeIssue(business), null);
+assert.equal(leadIntakeIssue({ ...business, businessName: "" }), "LLC or business name is required.");
+assert.equal(leadIntakeIssue({ ...business, contactName: " " }), "Name the person you'll call.");
+assert.equal(leadPersonName(business), "Riley Chen");
+assert.equal(
+  leadRecordName({ ...business, site: "100 Main" }),
+  "Maple Street Holdings LLC — 100 Main",
+);
+assert.match(leadCustomerHint("business"), /The LLC signs/);
+
+assert.equal(leadExtraIssue([{ name: "", phone: "", email: "" }]), null);
+assert.equal(leadExtraIssue([{ name: "", phone: "(214) 555-0101" }]), "Name each additional contact.");
+assert.equal(leadExtraIssue([{ name: "", started: true }]), "Name each additional contact.");
+assert.deepEqual(leadExtrasToSave([{ name: "  " }, { name: " Sam Ortiz ", phone: " 214 " }]), [
+  { name: "Sam Ortiz", phone: "214", email: "" },
+]);
 
 console.log("leads.test.ts ok");
