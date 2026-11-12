@@ -96,18 +96,6 @@ export function leadPersonName(
   return `${input.firstName.trim()} ${input.lastName.trim()}`.trim();
 }
 
-/** Job and pipeline title. An LLC is named for the company, a homeowner for the person. */
-export function leadRecordName(
-  input: Pick<LeadIntakeFields, "kind" | "firstName" | "lastName" | "businessName"> & { site: string },
-) {
-  if (input.kind === "business") {
-    const business = input.businessName.trim();
-    const site = input.site.trim();
-    return site ? `${business} — ${site}` : business || "New lead";
-  }
-  return leadName(input.firstName, input.lastName, input.site);
-}
-
 export type LeadExtraDraft = {
   name: string;
   phone?: string;
@@ -135,6 +123,51 @@ export function leadExtrasToSave(extras: readonly LeadExtraDraft[]) {
       email: extra.email?.trim() ?? "",
     }))
     .filter((extra) => extra.name);
+}
+
+/** Job title: the LLC when the property is owned by one, otherwise the person's name. */
+export function leadRecordName(input: {
+  first: string;
+  last: string;
+  site: string;
+  companyName?: string | null;
+}) {
+  const company = input.companyName?.trim() ?? "";
+  const site = input.site.trim();
+  if (company) return site ? `${company} — ${site}` : company;
+  return leadName(input.first, input.last, site);
+}
+
+/** Person on an LLC-owned job is the owner you call. Everyone else stays a homeowner. */
+export function leadContactTitle(companyName?: string | null) {
+  return companyName?.trim() ? "Owner" : "Homeowner";
+}
+
+export function companyNameKey(name: string) {
+  return name.trim().toLowerCase().replace(/[.,]/g, "").replace(/\s+/g, " ");
+}
+
+/** Reuse an LLC already in the book instead of opening a second company with the same name. */
+export function matchingCompany<T extends { name: string }>(companies: T[], name: string) {
+  const key = companyNameKey(name);
+  if (!key) return undefined;
+  return companies.find((company) => companyNameKey(company.name) === key);
+}
+
+export const RELATED_CONTACT_ROLES = [
+  { value: "property_manager", label: "Property manager" },
+  { value: "tenant", label: "Tenant" },
+  { value: "leasing", label: "Leasing agent" },
+  { value: "owner", label: "Owner" },
+  { value: "other", label: "Other" },
+] as const;
+
+export type RelatedContactRole = (typeof RELATED_CONTACT_ROLES)[number]["value"];
+
+export function relatedContactTitle(role: string, custom?: string | null) {
+  if (role === "other") return custom?.trim() || "Property manager";
+  const match = RELATED_CONTACT_ROLES.find((item) => item.value === role);
+  return match && match.value !== "other" ? match.label : "Property manager";
 }
 
 /** Realtor and referral seeds name who sent the lead. */

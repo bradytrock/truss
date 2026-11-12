@@ -908,6 +908,9 @@ export type Database = {
           second_accepted_at: string | null;
           owner_signed_at: string | null;
           owner_signed_name: string;
+          owner_signed_image: string;
+          owner_signed_staff_id: string | null;
+          owner_signed_title: string;
           created_at: string;
           tax_rate: number;
           discount_kind: string;
@@ -952,6 +955,9 @@ export type Database = {
           second_accepted_at?: string | null;
           owner_signed_at?: string | null;
           owner_signed_name?: string;
+          owner_signed_image?: string;
+          owner_signed_staff_id?: string | null;
+          owner_signed_title?: string;
           created_at?: string;
           tax_rate?: number;
           discount_kind?: string;

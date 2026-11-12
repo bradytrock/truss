@@ -2,7 +2,20 @@ import { joinCustomerNames } from "@/lib/estimate-signers";
 import { shareUrl } from "@/lib/share";
 import type { Client, Contact, CrmState, Estimate, Invoice, Job, Opportunity } from "@/lib/types";
 
-/** People who sign proposals: homeowners, not trades, adjusters, or referral partners. */
+/** Property staff and occupants stay on the job. They do not sign as a homeowner. */
+const PROJECT_CONTACT_TITLE =
+  /\b(property manager|tenant|leasing agent|leasing|occupant|resident|facility manager|facilities manager|landlord)\b/i;
+
+/** Legal entity billed as the customer. A person's name still joins with a co-owner. */
+const COMPANY_CUSTOMER =
+  /\b(llc|l\.l\.c\.?|pllc|inc|incorporated|corp|corporation|ltd|lp|llp|company|holdings|properties)\b/i;
+
+export function isCompanyCustomerName(name: string | null | undefined) {
+  const value = name?.trim() ?? "";
+  return Boolean(value) && COMPANY_CUSTOMER.test(value);
+}
+
+/** People who sign proposals: homeowners, not trades, adjusters, referral partners, or property staff. */
 export function isJobHomeowner(
   contact: Contact,
   job?: Pick<Job, "subcontractorIds"> | null,
@@ -10,6 +23,7 @@ export function isJobHomeowner(
   if (job?.subcontractorIds.includes(contact.id)) return false;
   if (contact.isReferralPartner) return false;
   if (contact.title.toLowerCase().includes("adjuster")) return false;
+  if (PROJECT_CONTACT_TITLE.test(contact.title)) return false;
   return true;
 }
 
@@ -60,12 +74,12 @@ export function customerContactDetails(record: CustomerRecord, book: PartyBook) 
 
 export function resolveCustomerName(record: CustomerRecord, book: PartyBook): string {
   const { client, contact, second } = resolveCustomerParties(record, book);
-  const company = client?.name.trim() ?? "";
-  if (company) return company;
+  if (client && isCompanyCustomerName(client.name)) return client.name;
   if (second?.name) {
-    const primary = contact?.name ?? "Homeowner";
+    const primary = contact?.name ?? client?.name ?? "Homeowner";
     return joinCustomerNames(primary, second.name);
   }
+  if (client?.name.trim()) return client.name.trim();
   return contact?.name ?? "Homeowner";
 }
 

@@ -483,6 +483,7 @@ export function ProposalSignature({
   });
   const homeowners = lines.filter((line) => line.party === "homeowner");
   const contractor = lines.find((line) => line.party === "contractor");
+  const prepared = contractor && isSignaturePng(contractor.image) ? contractor : null;
   return (
     <div className="space-y-4">
       <PaperSectionLabel>Authorization</PaperSectionLabel>
@@ -498,6 +499,7 @@ export function ProposalSignature({
         {homeowners.map((line) => (
           <SignatureLineCell key={line.role} line={line} />
         ))}
+        {prepared ? <SignatureLineCell line={prepared} /> : null}
       </div>
       <div>
         <p className="text-[10px] font-semibold tracking-[0.14em] text-[#6e6e6e] uppercase">Project manager</p>
@@ -538,7 +540,7 @@ function SignatureLineCell({
       )}
       <div className="mt-2 grid grid-cols-[minmax(0,1fr)_6rem] gap-4 text-xs text-muted-foreground">
         <p>
-          {line.party === "contractor" ? "Contractor" : "Homeowner signature"}
+          {line.caption}
           {signed ? ` · ${formatDate(line.signedAt)}` : ""}
         </p>
         <p>Date</p>

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_LEAD_STATE,
+  companyNameKey,
   formatJobSite,
+  leadContactTitle,
   leadCustomerHint,
   leadExtraIssue,
   leadExtrasToSave,
@@ -12,7 +14,9 @@ import {
   leadReferrerAllowsFreeText,
   leadStateOrDefault,
   matchReferralPartners,
+  matchingCompany,
   referralPartners,
+  relatedContactTitle,
   resolveLeadReferrer,
 } from "./leads.ts";
 
@@ -89,7 +93,12 @@ assert.equal(leadIntakeIssue({ ...homeowner, street: "" }), "Property address is
 assert.equal(leadIntakeIssue({ ...homeowner, source: "" }), "Pick a lead source.");
 assert.equal(leadPersonName(homeowner), "Riley");
 assert.equal(
-  leadRecordName({ ...homeowner, site: "100 Main, Plano, TX 75074" }),
+  leadRecordName({
+    first: homeowner.firstName,
+    last: homeowner.lastName,
+    site: "100 Main, Plano, TX 75074",
+    companyName: "",
+  }),
   "Riley — 100 Main, Plano, TX 75074",
 );
 assert.equal(
@@ -112,7 +121,12 @@ assert.equal(leadIntakeIssue({ ...business, businessName: "" }), "LLC or busines
 assert.equal(leadIntakeIssue({ ...business, contactName: " " }), "Name the person you'll call.");
 assert.equal(leadPersonName(business), "Riley Chen");
 assert.equal(
-  leadRecordName({ ...business, site: "100 Main" }),
+  leadRecordName({
+    first: "",
+    last: "",
+    site: "100 Main",
+    companyName: business.businessName,
+  }),
   "Maple Street Holdings LLC — 100 Main",
 );
 assert.match(leadCustomerHint("business"), /The LLC signs/);
@@ -123,5 +137,38 @@ assert.equal(leadExtraIssue([{ name: "", started: true }]), "Name each additiona
 assert.deepEqual(leadExtrasToSave([{ name: "  " }, { name: " Sam Ortiz ", phone: " 214 " }]), [
   { name: "Sam Ortiz", phone: "214", email: "" },
 ]);
+
+assert.equal(
+  leadRecordName({ first: "Jane", last: "Ortiz", site: "100 Main, Plano, TX", companyName: "" }),
+  "Ortiz — 100 Main, Plano, TX",
+);
+assert.equal(
+  leadRecordName({
+    first: "Jane",
+    last: "Ortiz",
+    site: "100 Main, Plano, TX",
+    companyName: " Maple Street Holdings LLC ",
+  }),
+  "Maple Street Holdings LLC — 100 Main, Plano, TX",
+);
+assert.equal(leadRecordName({ first: "Jane", last: "Ortiz", site: "", companyName: "Maple LLC" }), "Maple LLC");
+assert.equal(leadContactTitle(""), "Homeowner");
+assert.equal(leadContactTitle("Maple LLC"), "Owner");
+assert.equal(companyNameKey(" Maple Street Holdings, LLC "), "maple street holdings llc");
+assert.equal(
+  matchingCompany(
+    [
+      { id: "c1", name: "Maple Street Holdings, LLC" },
+      { id: "c2", name: "Other Co" },
+    ],
+    "maple street holdings llc",
+  )?.id,
+  "c1",
+);
+assert.equal(matchingCompany([{ id: "c1", name: "Maple LLC" }], "   "), undefined);
+assert.equal(relatedContactTitle("tenant"), "Tenant");
+assert.equal(relatedContactTitle("other", "  Facilities "), "Facilities");
+assert.equal(relatedContactTitle("other", " "), "Property manager");
+assert.equal(relatedContactTitle("nope"), "Property manager");
 
 console.log("leads.test.ts ok");

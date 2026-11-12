@@ -101,7 +101,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "create_lead",
     description:
-      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client, create the job anyway. Company admins and directors are notified that it came from the previous project manager's book. Set assignToPreviousPm true only when the user explicitly wants that project manager to own it. The UI confirms the fields before anything is saved.",
+      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client, create the job anyway. Company admins and directors are notified that it came from the previous project manager's book. Set assignToPreviousPm true only when the user explicitly wants that project manager to own it. For a rental or commercial property owned by an LLC, set llcName so the LLC is the customer on the job, and set relatedContactName when a property manager, tenant, or other person is also on the project. The UI confirms the fields before anything is saved.",
     status: "Opening a lead…",
     gate: "any",
     confirm: true,
@@ -130,6 +130,17 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         ),
         assignToPreviousPm: bool(
           "Optional. True assigns the lead to the previous project manager. Otherwise the job stays with you and company admins are notified.",
+        ),
+        llcName: str(
+          "Optional. Legal owner when the property is held by an LLC. The LLC becomes the customer on the job. Use for rentals and commercial properties.",
+        ),
+        relatedContactName: str(
+          "Optional. Someone else on the project, such as a property manager or tenant. Added as a related contact.",
+        ),
+        relatedContactPhone: str("Phone for the related contact."),
+        relatedContactEmail: str("Email for the related contact."),
+        relatedContactTitle: str(
+          "Role for the related contact. Property manager, Tenant, Leasing agent, or Owner. Defaults to Property manager.",
         ),
       },
       ["firstName", "lastName", "source"],
@@ -432,7 +443,8 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "send_estimate",
-    description: "Mark an estimate sent and mint a client link. Always confirm first.",
+    description:
+      "Mark an estimate sent and mint a client link. Someone assigned to the job must already have signed it on the estimate. Always confirm first.",
     status: "Sending the estimate…",
     gate: "ops",
     confirm: true,

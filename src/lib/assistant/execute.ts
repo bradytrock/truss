@@ -1,7 +1,16 @@
-import { defaultDeliveryForSource, formatJobSite, leadName, leadStateOrDefault, resolveLeadReferrer } from "@/lib/leads";
+import {
+  defaultDeliveryForSource,
+  formatJobSite,
+  leadContactTitle,
+  leadRecordName,
+  leadStateOrDefault,
+  matchingCompany,
+  resolveLeadReferrer,
+} from "@/lib/leads";
+import { isDeletedJob, uniqueIds } from "@/lib/job-record";
 import { localYmd } from "@/lib/format";
-import { isDeletedJob } from "@/lib/job-record";
 import { estimateTotals, allPackageTotals, jobSoldAmount } from "@/lib/estimate-totals";
+import { assigneeSignatureReady, estimateAssigneeNames, staffCanSignEstimate } from "@/lib/estimate-signers";
 import { isGbbEstimate, parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import { compressReceipt, guessExpenseAccount, isExpenseAccount, isExpenseMethod, jobProfitAndLoss } from "@/lib/job-financials";
@@ -486,6 +495,17 @@ async function runTool(
       const postalCode = arg(args, "postalCode");
       const site = formatJobSite({ street, city, state, postalCode });
       const fullName = `${firstName} ${lastName}`;
+      const company = arg(args, "llcName");
+      const extraName = arg(args, "relatedContactName");
+      const extraPhone = arg(args, "relatedContactPhone");
+      const extraEmail = arg(args, "relatedContactEmail");
+      const extraTitle = arg(args, "relatedContactTitle") || (extraName ? "Property manager" : "");
+      if (extraName && extraPhone && phone && phonesMatch(extraPhone, phone)) {
+        return fail("The related contact needs a different phone than the person on this lead.");
+      }
+      if (extraName && extraEmail && email && emailsMatch(extraEmail, email)) {
+        return fail("The related contact needs a different email than the person on this lead.");
+      }
       const book = crm.book;
       const referralContactId = arg(args, "referralContactId");
       const referralPartner = referralContactId
@@ -521,12 +541,25 @@ async function runTool(
           (phone && contact.phone && contact.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")) ||
           (email && contact.email && emailsMatch(contact.email, email)),
       );
+      const existingCompany = company ? matchingCompany(book.clients, company) : undefined;
+      const client = existingCompany
+        ? existingCompany
+        : company
+          ? await crm.addClient({
+              name: company,
+              type: "owner",
+              city,
+              state,
+              notes: "",
+            })
+          : null;
+      const clientId = client?.id ?? null;
       const contact =
         existing ??
         (await crm.addContact({
-          clientId: null,
+          clientId,
           name: fullName,
-          title: "Homeowner",
+          title: leadContactTitle(company),
           email,
           phone,
           ownerStaffId: ownerId,
@@ -539,11 +572,31 @@ async function runTool(
           phone: phone || existing.phone,
           email: email || existing.email,
           ownerStaffId: ownerId || existing.ownerStaffId,
+          ...(clientId && !existing.clientId ? { clientId } : {}),
         });
       }
+      const existingRelated = extraName
+        ? (extraPhone ? book.contacts.find((item) => phonesMatch(item.phone, extraPhone)) : undefined) ??
+          (extraEmail ? book.contacts.find((item) => emailsMatch(item.email, extraEmail)) : undefined)
+        : undefined;
+      const related =
+        extraName && existingRelated?.id !== contact.id
+          ? existingRelated ??
+            (await crm.addContact({
+              clientId,
+              name: extraName,
+              title: extraTitle,
+              email: extraEmail,
+              phone: extraPhone,
+              ownerStaffId: ownerId,
+              isReferralPartner: false,
+              listingWatchUrl: "",
+              listingWatchEnabled: false,
+            }))
+          : null;
       const created = await crm.addOpportunity({
-        name: leadName(firstName, lastName, site || city),
-        clientId: null,
+        name: leadRecordName({ first: firstName, last: lastName, site: site || city, companyName: company }),
+        clientId,
         primaryContactId: contact.id,
         stage: "pursuing",
         value: 0,
@@ -567,6 +620,11 @@ async function runTool(
         notes: arg(args, "notes"),
       });
       const job = created.costingJob;
+      if (related && job?.id) {
+        await crm.updateJob(job.id, {
+          relatedContactIds: uniqueIds([...(job.relatedContactIds ?? []), related.id]),
+        });
+      }
       await crm.addTask({
         title: `Call ${fullName} back`,
         dueAt: localYmd(new Date()),
@@ -601,7 +659,7 @@ async function runTool(
           name: created.name,
           jobId: job?.id,
           contactId: contact.id,
-          note: `Lead opened.${returningNote}`,
+          note: `Lead opened.${company ? ` Customer: ${company}.` : ""}${related ? ` Related contact: ${related.name}.` : ""}${returningNote}`,
           previousProjectManager: returning?.previousStaffName ?? null,
           previousJobCode: returning?.job?.code ?? null,
           completedAt: returning?.completedAt ?? null,
@@ -947,7 +1005,21 @@ async function runTool(
     case "send_estimate": {
       const estimate = resolveEstimate(crm, arg(args, "estimate"));
       if (!estimate) return fail("No estimate matches that.");
-      await crm.sendEstimate(estimate.id);
+      const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+      const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
+      const names = estimateAssigneeNames({ job, opportunity, staff: crm.staff });
+      if (!staffCanSignEstimate(crm.effectiveStaff, names)) {
+        return fail(
+          names.length
+            ? `Someone assigned to this job has to send this estimate. Assigned: ${names.join(", ")}.`
+            : "Assign someone to this job before sending the estimate.",
+        );
+      }
+      if (!assigneeSignatureReady(estimate, names)) {
+        return fail("Open the estimate and sign it before sending. Your signature goes on the estimate first.");
+      }
+      const sent = await crm.sendEstimate(estimate.id);
+      if (!sent) return fail("The estimate was not sent.");
       const token = await crm.ensureEstimateShareToken(estimate.id);
       return ok(
         {

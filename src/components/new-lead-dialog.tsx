@@ -37,6 +37,7 @@ import { phonesMatch } from "@/lib/job-messages";
 import {
   DEFAULT_LEAD_STATE,
   defaultDeliveryForSource,
+  RELATED_CONTACT_ROLES,
   formatJobSite,
   leadCustomerHint,
   leadExtraIssue,
@@ -46,6 +47,8 @@ import {
   leadNeedsReferrer,
   leadReferrerAllowsFreeText,
   matchReferralPartners,
+  matchingCompany,
+  relatedContactTitle,
   resolveLeadReferrer,
   type LeadCustomerKind,
   type LeadExtraDraft,
@@ -67,15 +70,6 @@ import {
   type Trade,
 } from "@/lib/types";
 import { companyLeadAssignees } from "@/lib/visibility";
-
-const BUSINESS_ROLES = [
-  "Property manager",
-  "Owner",
-  "Office manager",
-  "Facilities",
-  "Tenant",
-  "Bookkeeper",
-] as const;
 
 const ROLE_OTHER = "other";
 
@@ -101,8 +95,9 @@ function newKey() {
 }
 
 function contactRoleTitle(role: string, note: string) {
-  if (role === ROLE_OTHER) return note.trim() || "Point of contact";
-  return role.trim() || "Point of contact";
+  if (!role.trim()) return "Point of contact";
+  if (role === ROLE_OTHER && !note.trim()) return "Point of contact";
+  return relatedContactTitle(role, note);
 }
 
 function blankHome(): HomeExtra {
@@ -173,21 +168,17 @@ function RoleField({
       <Select
         value={role || null}
         onValueChange={(value) => onRole(String(value ?? ""))}
-        items={[
-          ...BUSINESS_ROLES.map((item) => ({ value: item, label: item })),
-          { value: ROLE_OTHER, label: "Other" },
-        ]}
+        items={RELATED_CONTACT_ROLES.map((item) => ({ value: item.value, label: item.label }))}
       >
         <SelectTrigger id={id} className={`${quickFieldClass} w-full`}>
           <SelectValue placeholder="Role" />
         </SelectTrigger>
         <SelectContent>
-          {BUSINESS_ROLES.map((item) => (
-            <SelectItem key={item} value={item}>
-              {item}
+          {RELATED_CONTACT_ROLES.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
             </SelectItem>
           ))}
-          <SelectItem value={ROLE_OTHER}>Other</SelectItem>
         </SelectContent>
       </Select>
       {role === ROLE_OTHER ? (
@@ -365,11 +356,10 @@ export function CreateOpportunityDialog({
       contactName: pocName,
     });
     const recordName = leadRecordName({
-      kind: customerKind,
-      firstName,
-      lastName,
-      businessName,
+      first: customerKind === "business" ? "" : firstName,
+      last: customerKind === "business" ? "" : lastName,
       site: site || city.trim(),
+      companyName: customerKind === "business" ? businessName : "",
     });
     const roleTitle = contactRoleTitle(pocRole, pocRoleNote);
     const owner = people.find((member) => member.id === ownerStaffId) ?? crm.viewer;
@@ -389,8 +379,7 @@ export function CreateOpportunityDialog({
     try {
       let clientId: string | null = null;
       if (customerKind === "business") {
-        const wanted = businessName.trim().toLowerCase();
-        const named = crm.book.clients.find((client) => client.name.trim().toLowerCase() === wanted);
+        const named = matchingCompany(crm.book.clients, businessName);
         if (named) clientId = named.id;
         else {
           const created = await crm.addClient({
@@ -411,7 +400,6 @@ export function CreateOpportunityDialog({
         email: string;
         phone: string;
         clientId: string | null;
-        replaceTitle: boolean;
       }) {
         const nextPhone = input.phone.trim();
         const nextEmail = input.email.trim();
@@ -433,21 +421,23 @@ export function CreateOpportunityDialog({
           known.unshift(created);
           return created;
         }
+        const title = existing.title.trim() ? existing.title : input.title;
+        const nextClientId = existing.clientId || input.clientId;
         await crm.updateContact(existing.id, {
           name: input.name || existing.name,
-          ...(input.replaceTitle ? { title: input.title } : {}),
+          ...(!existing.title.trim() && input.title.trim() ? { title: input.title } : {}),
           email: nextEmail || existing.email,
           phone: nextPhone || existing.phone,
-          ...(input.clientId ? { clientId: input.clientId } : {}),
+          ...(!existing.clientId && input.clientId ? { clientId: input.clientId } : {}),
           ownerStaffId: owner?.id || existing.ownerStaffId,
         });
         const next = {
           ...existing,
           name: input.name || existing.name,
-          title: input.replaceTitle ? input.title : existing.title,
+          title,
           email: nextEmail || existing.email,
           phone: nextPhone || existing.phone,
-          clientId: input.clientId || existing.clientId,
+          clientId: nextClientId,
         };
         const index = known.findIndex((item) => item.id === existing.id);
         if (index >= 0) known[index] = next;
@@ -460,7 +450,6 @@ export function CreateOpportunityDialog({
         email,
         phone,
         clientId,
-        replaceTitle: customerKind === "business",
       });
 
       const primaryPhone = phone.trim();
@@ -473,7 +462,6 @@ export function CreateOpportunityDialog({
                 phone: row.phone.trim(),
                 email: row.email.trim(),
                 title: "Homeowner",
-                replaceTitle: false,
               }))
               .filter((row) => row.name)
           : bizExtras
@@ -482,13 +470,16 @@ export function CreateOpportunityDialog({
                 phone: row.phone.trim(),
                 email: row.email.trim(),
                 title: contactRoleTitle(row.role, row.roleNote),
-                replaceTitle: true,
               }))
               .filter((row) => row.name);
       const extraContacts: Contact[] = [];
       for (const row of additional) {
-        if (primaryPhone && row.phone && phonesMatch(row.phone, primaryPhone)) continue;
-        if (!row.phone && primaryEmail && row.email && emailsMatch(row.email, primaryEmail)) continue;
+        const samePhone = Boolean(primaryPhone && row.phone && phonesMatch(row.phone, primaryPhone));
+        const sameEmail = Boolean(primaryEmail && row.email && emailsMatch(row.email, primaryEmail));
+        if (samePhone || sameEmail) {
+          toast.error("The related contact needs a different phone or email than the person on this lead.");
+          return;
+        }
         extraContacts.push(
           await ensureContact({
             ...row,
@@ -525,7 +516,11 @@ export function CreateOpportunityDialog({
       });
       const extraIds = extraContacts.map((item) => item.id);
       const relatedContactIds = [
-        ...new Set([...extraIds, ...(referral.contactId ? [referral.contactId] : [])]),
+        ...new Set([
+          ...(opportunity.costingJob?.relatedContactIds ?? []),
+          ...extraIds,
+          ...(referral.contactId ? [referral.contactId] : []),
+        ]),
       ];
       if (opportunity.costingJob?.id && (trades.length || extraIds.length)) {
         void crm

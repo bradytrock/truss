@@ -623,6 +623,7 @@ export function JobRecord({
   const hasWork = estimates.length + invoices.length + tasks.length + materialOrders.length > 0;
   const dateRange = formatJobRange(job.startDate, job.substantialCompletion);
   const homeownerName = primary?.name || client?.name || crm.customerName(job) || "Add a homeowner";
+  const partyLabel = client && primary ? "Contact" : client ? "Customer" : "Homeowner";
   const latestPage = reports[0];
   const jobMail = (crm.gmailMessages ?? [])
     .filter((message) => message.jobId === job.id)
@@ -1139,7 +1140,7 @@ export function JobRecord({
             <aside className="min-w-0 space-y-4">
               <section>
                 <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                  Homeowner
+                  {partyLabel}
                 </p>
                 <div className="flex items-center gap-3 rounded-[12px] border bg-card p-3">
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-sm font-medium text-rose-700">
@@ -1152,6 +1153,11 @@ export function JobRecord({
                     >
                       {homeownerName}
                     </Link>
+                    {client && primary ? (
+                      <Link href={`/clients/${client.id}`} className="block truncate text-xs text-muted-foreground hover:underline">
+                        {client.name}
+                      </Link>
+                    ) : null}
                     <p className="truncate text-xs text-muted-foreground">
                       {primary?.phone ? formatPhone(primary.phone) : "No phone"}
                     </p>
