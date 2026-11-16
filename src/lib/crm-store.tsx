@@ -121,8 +121,8 @@ import {
   templateLineFromCatalogItem,
 } from "@/lib/material-order-templates";
 import {
-  ASSIGNEE_SIGN_CONSENT_TEXT,
   ASSIGNEE_SIGN_CONSENT_VERSION,
+  assigneeSignConsentText,
   estimateAssigneeNames,
   estimateNeedsSecondSignature,
   mintEstimateSignerTokens,
@@ -1267,7 +1267,10 @@ type CrmContextValue = CrmState & {
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<boolean | void>;
-  signEstimateAsAssignee: (id: string, input: { image: string }) => Promise<boolean>;
+  signEstimateAsAssignee: (
+    id: string,
+    input: { image: string; consentText?: string },
+  ) => Promise<boolean>;
   acceptEstimate: (
     id: string,
     signature?: { name: string; image: string },
@@ -5918,7 +5921,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, [companySettings, recordCompanyAudit, state.estimates, syncPipelineValueFromEstimate]);
 
   const signEstimateAsAssignee = useCallback(
-    async (id: string, input: { image: string }) => {
+    async (id: string, input: { image: string; consentText?: string }) => {
       const book = bookRef.current;
       const current = book.estimates.find((estimate) => estimate.id === id);
       if (!current) return false;
@@ -5998,7 +6001,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         signerRole: "contractor",
         signerName: name,
         consented: true,
-        consentText: ASSIGNEE_SIGN_CONSENT_TEXT,
+        consentText: input.consentText?.trim() || assigneeSignConsentText(current.number),
         consentVersion: ASSIGNEE_SIGN_CONSENT_VERSION,
         capturedInOffice: true,
       });

@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Check, Copy, Download, ExternalLink, FileText, Link2, Mail, MessageSquare, Plus, RotateCcw, Send, X } from "lucide-react";
+import { SendSignStep } from "@/components/send-sign-step";
 import { smsSegmentCount } from "@/lib/automations/merge";
-import { initials } from "@/lib/format";
+import { formatDate, initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -144,6 +145,7 @@ export function ShareLinkDialog({
   emailTemplates,
   onDownloadPdf,
   onAddSigner,
+  contractorSign,
   onTexted,
   onEmailed,
   unsavedGuard = true,
@@ -178,6 +180,20 @@ export function ShareLinkDialog({
   onDownloadPdf?: () => Promise<void> | void;
   /** Creates the next homeowner on the job and returns false when it did not stick. */
   onAddSigner?: (input: { name: string; phone: string; email: string }) => Promise<boolean | void> | boolean | void;
+  /**
+   * Estimate send flow. Present only when sending (not when copying a link).
+   * The sheet opens on Sign until `onSign` saves the contractor signature.
+   */
+  contractorSign?: {
+    signed: boolean;
+    signer: { name: string; title: string } | null;
+    assignees: string[];
+    signedAt?: string | null;
+    signedName?: string | null;
+    signedTitle?: string | null;
+    consentText: string;
+    onSign: (input: { image: string }) => Promise<boolean | void> | boolean | void;
+  };
   onTexted?: (sent: {
     to: string;
     content: string;
@@ -205,7 +221,10 @@ export function ShareLinkDialog({
   const [message, setMessage] = useState("");
   const [subject, setSubject] = useState("");
   const [channels, setChannels] = useState<Record<string, ChannelChoice>>({});
-  const [phase, setPhase] = useState<"compose" | "sent">("compose");
+  const [phase, setPhase] = useState<"sign" | "compose" | "sent">("compose");
+  const [signedLocally, setSignedLocally] = useState(false);
+  const [signSession, setSignSession] = useState(0);
+  const [signing, setSigning] = useState(false);
   const [sentPeople, setSentPeople] = useState<SentPerson[]>([]);
   const [sentNotes, setSentNotes] = useState<{ textMocked: boolean; emailMocked: boolean }>({
     textMocked: false,
@@ -308,7 +327,10 @@ export function ShareLinkDialog({
         setSubject(composedSubject);
         setMessageBaseline(composedMessage);
         setSubjectBaseline(composedSubject);
-        setPhase("compose");
+        setPhase(contractorSign && !contractorSign.signed ? "sign" : "compose");
+        setSignedLocally(false);
+        setSignSession(0);
+        setSigning(false);
         setSentPeople([]);
         setSentNotes({ textMocked: false, emailMocked: false });
         setMessageMode("text");
@@ -863,6 +885,19 @@ export function ShareLinkDialog({
     setEditingMessage(false);
   }
 
+  async function continueFromSign(image: string) {
+    if (!contractorSign) return;
+    setSigning(true);
+    try {
+      const ok = await contractorSign.onSign({ image });
+      if (ok === false) return;
+      setSignedLocally(true);
+      setPhase("compose");
+    } finally {
+      setSigning(false);
+    }
+  }
+
   if (sheet) {
     const place = sheetAddress({
       street: jobStreet,
@@ -872,14 +907,12 @@ export function ShareLinkDialog({
       propertyAddress,
       fallback: documentName?.trim() || (kind === "invoice" ? "Invoice" : "Proposal"),
     });
-    const eyebrow = `${kind === "invoice" ? "SEND INVOICE" : "SEND PROPOSAL"}${
+    const eyebrow = `${kind === "invoice" ? "SEND INVOICE" : "PROPOSAL"}${
       documentNumber?.trim() ? ` · ${documentNumber.trim()}` : ""
     }`;
-    const peopleLabel = kind === "invoice" ? "Recipients" : "Signers";
+    const peopleLabel = kind === "invoice" ? "Recipients" : "Homeowner signers";
     const peopleHint =
-      kind === "invoice"
-        ? "Each person gets a private link · no login"
-        : "Each signer gets a private link · no login";
+      kind === "invoice" ? "Each person gets a private link · no login" : "Each gets a private link · no login";
     const addLabel = kind === "invoice" ? "Add another recipient" : "Add another signer";
     const previewUrl = primary?.url || url;
     const sms = smsSegmentCount(message);
@@ -894,15 +927,25 @@ export function ShareLinkDialog({
           : "Preview · add the project manager’s email before this can send";
     const delivered = sentPeople.filter((person) => person.textStatus === "sent" || person.emailStatus === "sent");
     const sentTo = joinedFirstNames(delivered.map((person) => person.name));
-    const sentHeadline = `${kind === "invoice" ? "Invoice" : "Proposal"} sent to ${sentTo}`;
+    const contractorSigned = Boolean(contractorSign && (contractorSign.signed || signedLocally));
+    const signedName = (contractorSign?.signedName || contractorSign?.signer?.name || "").trim();
+    const signedTitle = (contractorSign?.signedTitle || contractorSign?.signer?.title || "").trim();
+    const signedWhen = contractorSign?.signedAt || (signedLocally ? new Date().toISOString() : "");
+    const sentHeadline = `${
+      kind === "invoice" ? "Invoice" : contractorSigned ? "Signed proposal" : "Proposal"
+    } sent to ${sentTo}`;
     const sentDetail =
       kind === "invoice"
         ? delivered.length > 1
           ? "Each of them can open it from their phone — no login needed."
           : "They can open it from their phone — no login needed."
-        : delivered.length > 1
-          ? "Each of them can review and sign from their phone — no login needed."
-          : "They can review and sign from their phone — no login needed.";
+        : contractorSigned
+          ? delivered.length > 1
+            ? "Each of them can review and countersign from their phone — no login needed."
+            : "They can review and countersign from their phone — no login needed."
+          : delivered.length > 1
+            ? "Each of them can review and sign from their phone — no login needed."
+            : "They can review and sign from their phone — no login needed.";
     const sending = pending === "send";
 
     function setChannel(id: string, field: "text" | "email", checked: boolean) {
@@ -958,12 +1001,42 @@ export function ShareLinkDialog({
               </DialogTitle>
               {place.subtitle ? <p className="mt-1 text-sm text-muted-foreground">{place.subtitle}</p> : null}
               <DialogDescription className="sr-only">
-                {kind === "invoice"
-                  ? "Send this invoice by text or email. Each person gets a private link."
-                  : "Send this proposal by text or email. Each signer gets a private link."}
+                {phase === "sign"
+                  ? "Sign this proposal before it can be sent. The homeowner signs separately from their own link."
+                  : kind === "invoice"
+                    ? "Send this invoice by text or email. Each person gets a private link."
+                    : "Send this proposal by text or email. Each signer gets a private link."}
               </DialogDescription>
             </div>
           </div>
+
+          {contractorSign ? (
+            <div className="px-5 pt-4">
+              <FlowSteps
+                stage={phase === "sent" ? "sent" : phase === "sign" ? "sign" : "compose"}
+                sendLabel="Send to homeowner"
+              />
+              {phase === "compose" && contractorSigned && signedName ? (
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+                    Signed by {signedName}
+                    {signedTitle ? ` · ${signedTitle}` : ""}
+                    {signedWhen ? ` · ${formatDate(signedWhen)}` : ""}
+                  </p>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-medium text-primary"
+                    onClick={() => {
+                      setSignSession((value) => value + 1);
+                      setPhase("sign");
+                    }}
+                  >
+                    Re-sign
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {phase === "sent" ? (
             <div className="px-5 pt-6 pb-5">
@@ -983,6 +1056,18 @@ export function ShareLinkDialog({
                 </p>
               ) : null}
               <div className="mt-5 min-w-0 overflow-hidden rounded-[12px] border">
+                {contractorSigned && signedName ? (
+                  <div className="flex items-center gap-3 border-b px-3 py-2.5">
+                    <span className="w-14 shrink-0 text-sm text-muted-foreground">Signed</span>
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      {signedName}
+                      {signedWhen ? ` · ${formatDate(signedWhen)}` : ""}
+                    </span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                      Done
+                    </span>
+                  </div>
+                ) : null}
                 {sentPeople.map((person, index) => {
                   const theirUrl = person.url || url;
                   return (
@@ -992,20 +1077,20 @@ export function ShareLinkDialog({
                       ) : null}
                       {person.textStatus !== "skipped" ? (
                         <div className="flex items-center gap-3 border-t px-3 py-2.5 first:border-t-0">
-                          <span className="w-12 shrink-0 text-sm text-muted-foreground">Text</span>
+                          <span className="w-14 shrink-0 text-sm text-muted-foreground">Text</span>
                           <span className="min-w-0 flex-1 truncate text-sm">{person.phone || "—"}</span>
                           <StatusPill status={person.textStatus} />
                         </div>
                       ) : null}
                       {person.emailStatus !== "skipped" ? (
                         <div className="flex items-center gap-3 border-t px-3 py-2.5 first:border-t-0">
-                          <span className="w-12 shrink-0 text-sm text-muted-foreground">Email</span>
+                          <span className="w-14 shrink-0 text-sm text-muted-foreground">Email</span>
                           <span className="min-w-0 flex-1 truncate text-sm">{person.email || "—"}</span>
                           <StatusPill status={person.emailStatus} />
                         </div>
                       ) : null}
                       <div className="flex items-center gap-3 border-t px-3 py-2.5 first:border-t-0">
-                        <span className="w-12 shrink-0 text-sm text-muted-foreground">Link</span>
+                        <span className="w-14 shrink-0 text-sm text-muted-foreground">Link</span>
                         <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                           {theirUrl ? displayShareUrl(theirUrl) : "Preparing link"}
                         </span>
@@ -1036,6 +1121,34 @@ export function ShareLinkDialog({
                 </Button>
               </div>
             </div>
+          ) : phase === "sign" && contractorSign ? (
+            <SendSignStep
+              key={signSession}
+              signer={
+                contractorSign.signer
+                  ? {
+                      name: contractorSign.signer.name,
+                      title: contractorSign.signer.title,
+                      company: companyName?.trim() || "",
+                    }
+                  : null
+              }
+              notice={signStepNotice({
+                number: documentNumber || "",
+                signer: contractorSign.signer,
+                assignees: contractorSign.assignees,
+                homeowners: people
+                  .map((person) => firstName(person.name))
+                  .filter((name) => name && name !== "there"),
+              })}
+              consentText={contractorSign.consentText}
+              pending={signing}
+              onCancel={() => {
+                if (contractorSigned) setPhase("compose");
+                else onOpenChange(false);
+              }}
+              onSubmit={continueFromSign}
+            />
           ) : (
             <>
               <div className="px-5 pt-5">
@@ -1507,6 +1620,73 @@ export function ShareLinkDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function signStepNotice(input: {
+  number: string;
+  signer: { name: string } | null;
+  assignees: string[];
+  homeowners: string[];
+}) {
+  const label = input.number.trim() || "This proposal";
+  if (!input.signer) {
+    if (!input.assignees.length) {
+      return `Assign someone to this job before sending ${label}. It stays a draft until they sign.`;
+    }
+    const who = input.assignees.join(", ");
+    const verb = input.assignees.length === 1 ? "has" : "have";
+    return `${label} stays a draft and can’t be shared until it’s signed. ${who} ${verb} to sign it before it can be sent.`;
+  }
+  const names = input.homeowners.filter(Boolean);
+  const separate =
+    names.length === 0
+      ? "the homeowner signs separately from their own link"
+      : names.length === 1
+        ? `${names[0]} signs separately from a private link`
+        : `${joinedFirstNames(names)} sign separately from their own links`;
+  return `${label} stays a draft and can’t be shared until it’s signed. Your signature goes on the proposal as the contractor; ${separate}.`;
+}
+
+function FlowSteps({ stage, sendLabel }: { stage: "sign" | "compose" | "sent"; sendLabel: string }) {
+  const signDone = stage !== "sign";
+  const sendDone = stage === "sent";
+  const sendCurrent = stage === "compose";
+  return (
+    <div className="flex items-center gap-2">
+      <StepMark done={signDone} current={stage === "sign"} />
+      <span className="text-xs font-medium text-foreground">Sign estimate</span>
+      <span className="relative mx-1 h-0.5 min-w-6 flex-1 overflow-hidden rounded-full bg-muted">
+        <span
+          className={cn(
+            "absolute inset-y-0 left-0 bg-emerald-500",
+            sendDone ? "w-full" : signDone ? "w-1/2" : "w-0",
+          )}
+        />
+      </span>
+      <StepMark done={sendDone} current={sendCurrent} />
+      <span className={cn("text-xs font-medium", stage === "sign" ? "text-muted-foreground" : "text-foreground")}>
+        {sendLabel}
+      </span>
+    </div>
+  );
+}
+
+function StepMark({ done, current }: { done: boolean; current: boolean }) {
+  if (done) {
+    return (
+      <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+        <Check className="size-2.5" strokeWidth={3} />
+      </span>
+    );
+  }
+  if (current) {
+    return (
+      <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary">
+        <span className="size-1.5 rounded-full bg-white" />
+      </span>
+    );
+  }
+  return <span className="size-4 shrink-0 rounded-full bg-muted" />;
 }
 
 function StatusPill({ status }: { status: SentStatus }) {

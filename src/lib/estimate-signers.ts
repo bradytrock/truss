@@ -170,9 +170,14 @@ export function contractorSignedAt(estimate: Pick<Estimate, "ownerSignedAt">) {
   return estimate.ownerSignedAt ?? null;
 }
 
-export const ASSIGNEE_SIGN_CONSENT_TEXT = "I prepared this estimate. My signature is mine.";
+export function assigneeSignConsentText(number: string) {
+  const label = number.trim() || "this estimate";
+  return `I prepared and reviewed ${label} and approve sending it to the homeowner.`;
+}
 
-export const ASSIGNEE_SIGN_CONSENT_VERSION = "assignee-2026-11-12";
+export const ASSIGNEE_SIGN_CONSENT_TEXT = assigneeSignConsentText("");
+
+export const ASSIGNEE_SIGN_CONSENT_VERSION = "assignee-2026-11-16";
 
 function uniqueSignerNames(names: Array<string | null | undefined>) {
   const seen = new Set<string>();

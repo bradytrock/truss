@@ -29,11 +29,17 @@ export function SignaturePad({
   className,
   disabled,
   emptyHint = "Draw the homeowner’s signature in the box.",
+  hideFooter = false,
+  sheetHint,
   onChange,
 }: {
   className?: string;
   disabled?: boolean;
   emptyHint?: string;
+  /** The send sheet draws its own date line and Clear control. */
+  hideFooter?: boolean;
+  /** Centered hint drawn over an empty sheet pad. Hidden once ink is down. */
+  sheetHint?: string;
   onChange: (dataUrl: string | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -138,24 +144,33 @@ export function SignaturePad({
   }
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <canvas
-        ref={canvasRef}
-        className="h-36 w-full touch-none rounded-md border bg-white"
-        style={{ touchAction: "none" }}
-        onPointerDown={pointerDown}
-        onPointerMove={pointerMove}
-        onPointerUp={pointerUp}
-        onPointerCancel={pointerUp}
-      />
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          {inked ? "Sign in the box the way you would on paper." : emptyHint}
-        </p>
-        <Button type="button" size="sm" variant="ghost" disabled={disabled || !inked} onClick={clear}>
-          Clear
-        </Button>
+    <div className={cn(!hideFooter && "space-y-2", className)}>
+      <div className="relative">
+        <canvas
+          ref={canvasRef}
+          className={cn("w-full touch-none border bg-white", hideFooter ? "h-32 rounded-[12px]" : "h-36 rounded-md")}
+          style={{ touchAction: "none" }}
+          onPointerDown={pointerDown}
+          onPointerMove={pointerMove}
+          onPointerUp={pointerUp}
+          onPointerCancel={pointerUp}
+        />
+        {hideFooter && sheetHint && !inked ? (
+          <p className="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            {sheetHint}
+          </p>
+        ) : null}
       </div>
+      {hideFooter ? null : (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            {inked ? "Sign in the box the way you would on paper." : emptyHint}
+          </p>
+          <Button type="button" size="sm" variant="ghost" disabled={disabled || !inked} onClick={clear}>
+            Clear
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
