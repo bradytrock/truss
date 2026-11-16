@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  assigneeSignConsentText,
   assigneeSignatureReady,
   estimateAssigneeNames,
   joinCustomerNames,
@@ -148,6 +149,11 @@ assert.equal(
 assert.equal(
   assigneeSignatureReady({ ownerSignedAt: "2026-11-12T12:00:00.000Z", ownerSignedName: "Ada Lopez", ownerSignedImage: "" }, crew),
   false,
+);
+
+assert.equal(
+  assigneeSignConsentText("EST-1227"),
+  "I prepared and reviewed EST-1227 and approve sending it to the homeowner.",
 );
 
 console.log("estimate-signers.test.ts ok");

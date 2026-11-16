@@ -23,7 +23,7 @@ import { PaperArchivedBanner } from "@/components/paper-archive-button";
 import { ProposalDocument } from "@/components/proposal-document";
 import { SettingsToggle } from "@/components/settings-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
-import { AssigneeSignatureDialog, CollectSignatureDialog } from "@/components/signature-pad";
+import { CollectSignatureDialog } from "@/components/signature-pad";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,7 +80,7 @@ import {
 } from "@/lib/estimate-packages";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import {
-  ASSIGNEE_SIGN_CONSENT_TEXT,
+  assigneeSignConsentText,
   assigneeSignatureReady,
   estimateAssigneeNames,
   mintEstimateSignerTokens,
@@ -187,6 +187,7 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
   const [bookGroup, setBookGroup] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareRequiresSign, setShareRequiresSign] = useState(false);
   const [shareSigning, setShareSigning] = useState<{
     shareToken: string;
     secondShareToken: string;
@@ -199,7 +200,6 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [signOpen, setSignOpen] = useState(false);
-  const [assigneeSignOpen, setAssigneeSignOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
@@ -562,14 +562,16 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
     try {
       if (markSent) {
         const sent = await crm.sendEstimate(estimate.id);
-        if (sent === false) return;
+        if (sent === false) return false;
       }
       const tokens = await crm.ensureEstimateShareToken(estimate.id);
       setShareSigning(tokens);
       setShareOpen(true);
       if (markSent) setTab("preview");
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not prepare the share links.");
+      return false;
     } finally {
       setPending(false);
     }
@@ -580,8 +582,9 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
       toast.error("Add at least one included line before sending.");
       return;
     }
+    setShareRequiresSign(markSent);
     if (markSent && !assigneeAlreadySigned) {
-      setAssigneeSignOpen(true);
+      setShareOpen(true);
       return;
     }
     await finishShare(markSent);
@@ -1587,6 +1590,31 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
               }
             : undefined
         }
+        contractorSign={
+          shareRequiresSign
+            ? {
+                signed: assigneeAlreadySigned,
+                signer: actingCanSign ? { name: actingName, title: actingTitle } : null,
+                assignees: assigneeNames,
+                signedAt: estimate.ownerSignedAt,
+                signedName: estimate.ownerSignedName,
+                signedTitle: estimate.ownerSignedTitle ?? "",
+                consentText: assigneeSignConsentText(estimate.number),
+                onSign: async ({ image }) => {
+                  const saved = await crm.signEstimateAsAssignee(estimate.id, {
+                    image,
+                    consentText: assigneeSignConsentText(estimate.number),
+                  });
+                  if (!saved) return false;
+                  if (estimate.status === "draft") {
+                    const opened = await finishShare(true);
+                    if (!opened) return false;
+                  }
+                  return true;
+                },
+              }
+            : undefined
+        }
         onTexted={(sent) =>
           crm.logOutboundText({
             ...sent,
@@ -1603,26 +1631,6 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
             contactId: sent.contactId || estimate.contactId,
           })
         }
-      />
-      <AssigneeSignatureDialog
-        open={assigneeSignOpen}
-        onOpenChange={setAssigneeSignOpen}
-        estimateNumber={estimate.number}
-        signer={actingCanSign ? { name: actingName, title: actingTitle } : null}
-        assignees={assigneeNames}
-        pending={pending}
-        consentText={ASSIGNEE_SIGN_CONSENT_TEXT}
-        onSubmit={async ({ image }) => {
-          setPending(true);
-          try {
-            const saved = await crm.signEstimateAsAssignee(estimate.id, { image });
-            if (!saved) return;
-            setAssigneeSignOpen(false);
-            await finishShare(true);
-          } finally {
-            setPending(false);
-          }
-        }}
       />
       <CollectSignatureDialog
         open={signOpen}
