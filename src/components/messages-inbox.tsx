@@ -4,21 +4,25 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  AtSign,
   Check,
   ChevronDown,
   ChevronLeft,
+  CheckSquare,
   ChevronsUpDown,
   Eye,
-  Mail,
+  FileText,
   MapPin,
+  Paperclip,
   Pencil,
   Phone,
   Search,
-  Send,
   SlidersHorizontal,
+  Square,
   UserPlus,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -39,6 +43,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useCrm } from "@/lib/crm-store";
@@ -65,10 +71,11 @@ import {
   visibleInboxThreads,
 } from "@/lib/message-threads";
 import { formatInboxTime, formatPhone, formatTime, initials } from "@/lib/format";
-import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
+import { firstName, formatPhoneInput, looksLikePhone } from "@/lib/phone";
 import { mailHref } from "@/lib/job-emails";
 import { jobRecordHref } from "@/lib/job-record";
 import { estimateTotals } from "@/lib/estimate-totals";
+import { uploadViaApi } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
 import { fallbackChatReplies, type WebsiteChatThread } from "@/lib/website-chat";
 import { IMESSAGE_EFFECTS, IMESSAGE_TAPBACKS } from "@/lib/imessage";
@@ -85,6 +92,8 @@ import {
   inboxQueue,
   inboxRoleLabel,
   inboxSeen,
+  inboxSlashQuery,
+  inboxTextTemplates,
   inboxViewers,
   isAutomatedText,
   jobsForPeople,
@@ -342,11 +351,16 @@ export function MessagesInbox() {
   const [calls, setCalls] = useState<InboxCall[]>([]);
   const [channel, setChannel] = useState<InboxChannel>("all");
   const [composer, setComposer] = useState<ComposerMode>("text");
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [delivery, setDelivery] = useState<"text" | "email">("text");
+  const [slash, setSlash] = useState<{ query: string; start: number } | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [mentionOpen, setMentionOpen] = useState(false);
+  const [attaching, setAttaching] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [jobFocus, setJobFocus] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const showCompose = composeParam || (!wantedThread && Boolean(queryContact) && !queryThread);
   const webChatId = wantedThread?.startsWith("web:") ? wantedThread.slice(4) : "";
@@ -387,7 +401,10 @@ export function MessagesInbox() {
     setJobFocus(null);
     setChannel("all");
     setComposer("text");
-    setComposerOpen(false);
+    setDelivery("text");
+    setSlash(null);
+    setTemplatesOpen(false);
+    setMentionOpen(false);
     setDetailsOpen(false);
   }
 
@@ -634,11 +651,18 @@ export function MessagesInbox() {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTypingTarget(event.target) || peopleOpen) return;
       const key = event.key.toLowerCase();
-      if (key !== "j" && key !== "k" && key !== "r" && key !== "e") return;
+      if (key !== "j" && key !== "k" && key !== "r" && key !== "e" && key !== "n") return;
       event.preventDefault();
+      if (key === "n") {
+        if (!webChatId) {
+          setComposer((mode) => (mode === "note" ? delivery : "note"));
+          window.setTimeout(() => composerRef.current?.focus(), 0);
+        }
+        return;
+      }
       if (key === "r") {
         setComposer("text");
-        setComposerOpen(true);
+        setDelivery("text");
         window.setTimeout(() => composerRef.current?.focus(), 0);
         return;
       }
@@ -657,7 +681,7 @@ export function MessagesInbox() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeKey, doneKey, markDone, openRow, ordered.all, peopleOpen]);
+  }, [activeKey, delivery, doneKey, markDone, openRow, ordered.all, peopleOpen, webChatId]);
 
   const openCompose = useCallback(() => {
     setDraftPhone(formatPhoneInput(queryContact?.phone ?? ""));
@@ -682,6 +706,7 @@ export function MessagesInbox() {
       });
       if (ok) {
         setBody("");
+        setSlash(null);
         setEffect("");
         setReplyTo(null);
         const key = conversationThreadKey({
@@ -723,6 +748,7 @@ export function MessagesInbox() {
     try {
       await crm.addActivity({ ...target, type: "note", body: text });
       setBody("");
+      setSlash(null);
     } finally {
       setSending(false);
     }
@@ -730,7 +756,7 @@ export function MessagesInbox() {
 
   const requestReview = useCallback(() => {
     setComposer("text");
-    setComposerOpen(true);
+    setDelivery("text");
     setBody(reviewRequestDraft(selected?.title || activeContact?.name));
     setDetailsOpen(false);
     window.setTimeout(() => composerRef.current?.focus(), 0);
@@ -901,6 +927,71 @@ export function MessagesInbox() {
   });
   const scopeLabel = SCOPES.find((item) => item.id === scope)?.label ?? "My conversations";
   const viewerLabel = viewing[0] ? shortStaffName(viewing[0].name) : "";
+  const sendingAs = shortStaffName(crm.effectiveStaff?.name || crm.user.name) || "you";
+  const recipientName = textOf(selected?.title || activeContact?.name).trim();
+  const greetingName = recipientName ? firstName(recipientName) : "";
+  const textTemplates = inboxTextTemplates(recipientName);
+  const slashTemplates = slash
+    ? textTemplates.filter((item) => item.label.toLowerCase().includes(slash.query.toLowerCase()))
+    : [];
+  const mentionPeople = staff
+    .filter((member) => member.name?.trim())
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  function writeBody(next: string, cursor: number) {
+    setBody(next);
+    setSlash(composer === "note" || delivery === "email" ? null : inboxSlashQuery(next, cursor));
+    window.setTimeout(() => {
+      const node = composerRef.current;
+      node?.focus();
+      node?.setSelectionRange(cursor, cursor);
+    }, 0);
+  }
+
+  function insertAtCursor(snippet: string) {
+    const node = composerRef.current;
+    const start = node?.selectionStart ?? body.length;
+    const end = node?.selectionEnd ?? body.length;
+    const next = `${body.slice(0, start)}${snippet}${body.slice(end)}`;
+    writeBody(next, start + snippet.length);
+  }
+
+  function applyTemplate(templateBody: string) {
+    if (slash) {
+      const node = composerRef.current;
+      const cursor = node?.selectionStart ?? body.length;
+      const next = `${body.slice(0, slash.start)}${templateBody}${body.slice(cursor)}`;
+      writeBody(next, slash.start + templateBody.length);
+    } else {
+      const gap = body && !/\s$/.test(body) ? "\n" : "";
+      insertAtCursor(`${gap}${templateBody}`);
+    }
+    setTemplatesOpen(false);
+    setSlash(null);
+  }
+
+  async function attachFile(file: File) {
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error(`${file.name} is over 25 MB.`);
+      return;
+    }
+    setAttaching(true);
+    try {
+      const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
+      const path = panelJob ? `${panelJob.id}/${crypto.randomUUID()}.${ext}` : `${crypto.randomUUID()}.${ext}`;
+      const uploaded = await uploadViaApi(panelJob ? "job-files" : "company-files", file, path, file.name);
+      setBody((current) => {
+        const gap = current && !/\s$/.test(current) ? "\n" : "";
+        return `${current}${gap}${uploaded.publicUrl}`;
+      });
+      setSlash(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not attach that file.");
+    } finally {
+      setAttaching(false);
+    }
+  }
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -1025,6 +1116,9 @@ export function MessagesInbox() {
               </RecordErrorBoundary>
             )}
           </div>
+          <p className="border-t px-4 py-2 text-[11px] text-muted-foreground">
+            J / K to move · R to reply · N for note · E to close
+          </p>
         </aside>
 
         <section
@@ -1289,11 +1383,11 @@ export function MessagesInbox() {
             </form>
           ) : (
             <form
-              className="border-t bg-background px-3 py-2.5"
+              className="bg-[#f7f6f4] px-3 pt-1 pb-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (composer === "note") void saveNote();
-                else if (composer === "text") void send();
+                else if (delivery === "text") void send();
               }}
             >
               {showCompose || !selected ? (
@@ -1344,116 +1438,241 @@ export function MessagesInbox() {
                   />
                 </div>
               ) : null}
-              {(composerOpen || showCompose || body.trim() || replyTo) && composer === "email" ? (
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">Replies to mail go out from the mailbox.</p>
-                  <Button nativeButton={false} variant="outline" size="sm" render={<Link href={mailboxHref} />}>
-                    <Mail data-icon="inline-start" />
-                    Open mailbox
-                  </Button>
-                </div>
-              ) : null}
-              {(composerOpen || showCompose || body.trim() || replyTo) && composer !== "email" ? (
-                <div className="mb-2">
-                  {replyTo && composer === "text" ? (
-                    <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1 text-xs">
-                      <span className="min-w-0 truncate">Reply to “{replyTo.preview || "message"}”</span>
-                      <button type="button" className="shrink-0 text-muted-foreground" onClick={() => setReplyTo(null)}>
-                        Cancel
-                      </button>
-                    </div>
-                  ) : null}
-                  {composer === "text" ? (
-                    <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                      Effect
-                      <select
-                        value={effect}
-                        onChange={(event) => setEffect(event.target.value)}
-                        aria-label="Message effect"
-                        className="h-7 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs text-foreground"
+              <div className="rounded-lg border bg-background">
+                <div className="flex items-center px-2.5 pt-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="inline-flex items-center gap-1 text-xs text-muted-foreground outline-none hover:text-foreground">
+                      {composer === "note"
+                        ? "Internal note"
+                        : delivery === "email"
+                          ? activeContact?.email
+                            ? `Email · ${activeContact.email}`
+                            : "Email"
+                          : looksLikePhone(sendTo)
+                            ? `Text · ${formatPhone(sendTo)}`
+                            : "Text"}
+                      <ChevronDown className="size-3.5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setDelivery("text");
+                          setComposer("text");
+                        }}
                       >
-                        <option value="">None</option>
-                        {IMESSAGE_EFFECTS.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : null}
-                  <Textarea
-                    ref={composerRef}
-                    value={body}
-                    onChange={(event) => setBody(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        if (composer === "note") void saveNote();
-                        else void send();
-                      }
-                    }}
-                    placeholder={
-                      composer === "note"
-                        ? "Internal note — the customer will not see this"
-                        : "Write a text…"
-                    }
-                    rows={2}
-                    className="min-h-[44px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
-                  />
+                        Text
+                        {composer !== "note" && delivery === "text" ? <Check className="ml-auto size-3.5" /> : null}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setDelivery("email");
+                          setComposer("email");
+                          setSlash(null);
+                        }}
+                      >
+                        Email
+                        {delivery === "email" && composer !== "note" ? <Check className="ml-auto size-3.5" /> : null}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>iMessage effect</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => setEffect("")}>
+                        None
+                        {effect ? null : <Check className="ml-auto size-3.5" />}
+                      </DropdownMenuItem>
+                      {IMESSAGE_EFFECTS.map((item) => (
+                        <DropdownMenuItem key={item.id} onClick={() => setEffect(item.id)}>
+                          {item.label}
+                          {effect === item.id ? <Check className="ml-auto size-3.5" /> : null}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              ) : null}
-              <div className="flex items-center gap-1.5">
-                {(
-                  [
-                    ["text", "Text"],
-                    ["email", "Email"],
-                    ["note", "Internal note"],
-                  ] as const
-                ).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    aria-pressed={composer === mode}
-                    onClick={() => {
-                      setComposer(mode);
-                      setComposerOpen(true);
-                      if (mode !== "email") window.setTimeout(() => composerRef.current?.focus(), 0);
-                    }}
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-xs font-medium",
-                      composer === mode
-                        ? "bg-neutral-950 text-white"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                {replyTo && composer !== "note" && delivery === "text" ? (
+                  <div className="mx-2.5 mt-2 flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1 text-xs">
+                    <span className="min-w-0 truncate">Reply to “{replyTo.preview || "message"}”</span>
+                    <button type="button" className="shrink-0 text-muted-foreground" onClick={() => setReplyTo(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                ) : null}
+                {delivery === "email" && composer !== "note" ? (
+                  <p className="px-2.5 pt-2 text-xs text-muted-foreground">Replies to mail go out from the mailbox.</p>
+                ) : null}
+                {slash ? (
+                  <div className="mx-2.5 mt-2 overflow-hidden rounded-md border">
+                    {slashTemplates.length ? (
+                      slashTemplates.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="block w-full px-2 py-1.5 text-left text-xs hover:bg-muted"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => applyTemplate(item.body)}
+                        >
+                          {item.label}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-2 py-1.5 text-xs text-muted-foreground">No templates</p>
                     )}
+                  </div>
+                ) : null}
+                <Textarea
+                  ref={composerRef}
+                  value={body}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    const cursor = event.target.selectionStart ?? next.length;
+                    setBody(next);
+                    setSlash(composer === "note" || delivery === "email" ? null : inboxSlashQuery(next, cursor));
+                  }}
+                  onKeyDown={(event) => {
+                    if (slash && event.key === "Escape") {
+                      event.preventDefault();
+                      setSlash(null);
+                      return;
+                    }
+                    if (slash && event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      if (slashTemplates[0]) applyTemplate(slashTemplates[0].body);
+                      return;
+                    }
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      if (composer === "note") void saveNote();
+                      else if (delivery === "text") void send();
+                    }
+                  }}
+                  placeholder={
+                    composer === "note"
+                      ? greetingName
+                        ? `Internal note about ${greetingName} — they will not see this`
+                        : "Internal note — the customer will not see this"
+                      : delivery === "email"
+                        ? "Mail goes out from the mailbox"
+                        : greetingName
+                          ? `Write a text to ${greetingName}... (type / for templates)`
+                          : "Write a text... (type / for templates)"
+                  }
+                  rows={2}
+                  disabled={delivery === "email" && composer !== "note"}
+                  className="min-h-16 resize-none border-0 bg-transparent px-2.5 shadow-none focus-visible:ring-0 disabled:opacity-60"
+                />
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 pb-2">
+                  <button
+                    type="button"
+                    aria-pressed={composer === "note"}
+                    onClick={() => {
+                      setComposer((mode) => (mode === "note" ? delivery : "note"));
+                      setSlash(null);
+                      composerRef.current?.focus();
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                   >
-                    {label}
+                    {composer === "note" ? <CheckSquare className="size-3.5" /> : <Square className="size-3.5" />}
+                    Note
                   </button>
-                ))}
-                <span className="ml-auto flex items-center gap-2">
-                  {body.trim() && composer !== "email" ? (
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={sending || (composer === "note" ? !noteTarget : !looksLikePhone(sendTo))}
-                    >
-                      {sending ? "Saving…" : (
-                        <>
-                          <Send data-icon="inline-start" />
-                          {composer === "note" ? "Save" : "Send"}
-                        </>
+                  <Popover open={templatesOpen} onOpenChange={setTemplatesOpen}>
+                    <PopoverTrigger className="inline-flex items-center gap-1.5 text-xs text-muted-foreground outline-none hover:text-foreground">
+                      <FileText className="size-3.5" />
+                      Templates
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-56 p-1">
+                      {textTemplates.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => applyTemplate(item.body)}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </Popover>
+                  <button
+                    type="button"
+                    disabled={attaching}
+                    onClick={() => fileRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    <Paperclip className="size-3.5" />
+                    Attach
+                  </button>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.target.value = "";
+                      if (file) void attachFile(file);
+                    }}
+                  />
+                  <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
+                    <PopoverTrigger className="inline-flex items-center gap-1.5 text-xs text-muted-foreground outline-none hover:text-foreground">
+                      <AtSign className="size-3.5" />
+                      Mention
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="max-h-64 w-56 overflow-y-auto p-1">
+                      {mentionPeople.length ? (
+                        mentionPeople.map((member) => (
+                          <button
+                            key={member.id}
+                            type="button"
+                            className="block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => {
+                              insertAtCursor(`@${shortStaffName(member.name)} `);
+                              setMentionOpen(false);
+                            }}
+                          >
+                            {shortStaffName(member.name)}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-2 py-1.5 text-xs text-muted-foreground">No teammates yet</p>
                       )}
-                    </Button>
-                  ) : null}
-                  <span className="text-xs text-muted-foreground">
-                    {composer === "note"
-                      ? noteTarget
-                        ? "Hidden from the customer"
-                        : "Open a job before saving a note"
-                      : looksLikePhone(sendTo)
-                        ? `To ${formatPhone(sendTo)}`
-                        : "Choose a recipient"}
+                    </PopoverContent>
+                  </Popover>
+                  <span className="ml-auto flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Sending as {sendingAs}</span>
+                    {composer !== "note" && delivery === "email" ? (
+                      <Button
+                        nativeButton={false}
+                        size="sm"
+                        className="bg-[#9a6244] text-white hover:bg-[#855438]"
+                        render={<Link href={mailboxHref} />}
+                      >
+                        Open mail
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="sm"
+                        title={composer === "note" && !noteTarget ? "Open a job before saving a note" : undefined}
+                        className="bg-[#9a6244] text-white hover:bg-[#855438]"
+                        disabled={
+                          sending ||
+                          attaching ||
+                          (composer === "note" ? !body.trim() || !noteTarget : !body.trim() || !looksLikePhone(sendTo))
+                        }
+                      >
+                        {attaching
+                          ? "Attaching…"
+                          : sending
+                            ? composer === "note"
+                              ? "Saving…"
+                              : "Sending…"
+                            : composer === "note"
+                              ? "Save note"
+                              : "Send text"}
+                      </Button>
+                    )}
                   </span>
-                </span>
+                </div>
               </div>
             </form>
           )}

@@ -432,6 +432,40 @@ export function reviewRequestDraft(name: string | null | undefined) {
   return `Hi ${firstName(name || "")}, thanks for having us out. If the work went well, a short review helps the crew a lot.`;
 }
 
+export type InboxTextTemplate = { id: string; label: string; body: string };
+
+export function inboxTextTemplates(name: string | null | undefined): InboxTextTemplate[] {
+  const who = firstName(name || "");
+  return [
+    { id: "on-my-way", label: "On my way", body: `Hi ${who}, I'm on my way.` },
+    {
+      id: "running-late",
+      label: "Running late",
+      body: `Hi ${who}, running a few minutes late. I'll text when I'm close.`,
+    },
+    {
+      id: "proposal",
+      label: "Proposal follow-up",
+      body: `Hi ${who}, your proposal is ready whenever you are. Reply here with any questions.`,
+    },
+    { id: "review", label: "Review request", body: reviewRequestDraft(name) },
+    {
+      id: "materials",
+      label: "Materials confirmed",
+      body: `Hi ${who}, materials are confirmed. We can start as planned.`,
+    },
+  ];
+}
+
+/** The `/query` token sitting at the cursor, if the writer is asking for a template. */
+export function inboxSlashQuery(value: string, cursor: number) {
+  const upto = value.slice(0, Math.max(0, Math.min(cursor, value.length)));
+  const match = upto.match(/(?:^|\s)\/([^\s/]*)$/);
+  if (!match) return null;
+  const query = match[1] ?? "";
+  return { query, start: upto.length - query.length - 1 };
+}
+
 export type InboxCall = {
   id: string;
   direction: "inbound" | "outbound";

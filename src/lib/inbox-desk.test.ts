@@ -10,7 +10,9 @@ import {
   inboxQueue,
   inboxRoleLabel,
   inboxSeen,
+  inboxSlashQuery,
   inboxStage,
+  inboxTextTemplates,
   inboxViewers,
   isAutomatedText,
   reviewRequestDraft,
@@ -205,6 +207,9 @@ assert.deepEqual(inboxNextAction({ job: { status: "precon", contractValue: 618 }
 assert.equal(inboxNextAction({ job: { status: "in_progress" } })?.column, "punch");
 assert.equal(inboxMoney(2611.04), "$2,611.04");
 assert.equal(inboxMoney(618), "$618");
+assert.equal(inboxTextTemplates("Mike Hawbaker").find((item) => item.id === "on-my-way")?.body, "Hi Mike, I'm on my way.");
+assert.deepEqual(inboxSlashQuery("See you /pro", 12), { query: "pro", start: 8 });
+assert.equal(inboxSlashQuery("No slash", 8), null);
 
 const people = [
   { id: "kim", name: "Kim Stone" },
