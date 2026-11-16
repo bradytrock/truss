@@ -105,9 +105,12 @@ import {
 import { moneyAmount } from "@/lib/money-input";
 import { archiveStamp } from "@/lib/paper-archive";
 import {
+  canAddSecondHomeowner,
   coOwnerContact,
   customerContactDetails,
   jobHomeownersForEstimate,
+  relatedContactIdsWithHomeowner,
+  secondHomeownerDraft,
   shareContactsForEstimate,
 } from "@/lib/parties";
 import {
@@ -1551,6 +1554,39 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
         sender={emailOwner}
         recipients={shareContactsForEstimate(shareEstimate, crm)}
         onDownloadPdf={downloadPdf}
+        onAddSigner={
+          job &&
+          estimate.status !== "accepted" &&
+          estimate.status !== "declined" &&
+          canAddSecondHomeowner(job, crm.contacts)
+            ? async ({ name, phone, email }) => {
+                try {
+                  const primaryContact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;
+                  const created = await crm.addContact(
+                    secondHomeownerDraft({
+                      name,
+                      phone,
+                      email,
+                      clientId: primaryContact?.clientId ?? job.clientId ?? null,
+                      ownerStaffId: primaryContact?.ownerStaffId || crm.user.staffId,
+                    }),
+                  );
+                  const ok = await crm.updateJob(job.id, {
+                    relatedContactIds: relatedContactIdsWithHomeowner(job.relatedContactIds, created.id),
+                  });
+                  if (!ok) {
+                    toast.error("Could not add them to the job.");
+                    return false;
+                  }
+                  toast.success(`${created.name} is on this job and gets their own link.`);
+                  return true;
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Could not add that person.");
+                  return false;
+                }
+              }
+            : undefined
+        }
         onTexted={(sent) =>
           crm.logOutboundText({
             ...sent,

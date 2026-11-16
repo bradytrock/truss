@@ -89,6 +89,8 @@ export type ShareRecipient = {
   phone: string;
   email: string;
   url?: string;
+  /** Contact title, usually Homeowner. */
+  role?: string;
 };
 
 function addRecipient(list: ShareRecipient[], contact: Contact | undefined, url?: string) {
@@ -100,6 +102,7 @@ function addRecipient(list: ShareRecipient[], contact: Contact | undefined, url?
     phone: contact.phone.trim(),
     email: contact.email.trim(),
     url,
+    role: contact.title.trim() || "Homeowner",
   });
 }
 
