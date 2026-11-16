@@ -55,6 +55,8 @@ import {
 } from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
+import { messageThreads } from "@/lib/job-messages";
+import { openedAtFor, threadUnreadCount } from "@/lib/message-threads";
 import { openDialerPopup } from "@/lib/calls/popup";
 import { useSoftphone } from "@/lib/calls/softphone";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
@@ -519,7 +521,20 @@ function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
 }
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const { effectiveStaff, returningClientLeads, tasks, jobs } = useCrm();
+  const { effectiveStaff, returningClientLeads, tasks, jobs, book, user } = useCrm();
+  const inboxUnread = useMemo(() => {
+    const messages = Array.isArray(book?.messages) ? book.messages : [];
+    const contacts = Array.isArray(book?.contacts) ? book.contacts : [];
+    const opportunities = Array.isArray(book?.opportunities) ? book.opportunities : [];
+    const opens = Array.isArray(book?.messageThreadOpens) ? book.messageThreadOpens : [];
+    try {
+      return messageThreads(messages, contacts, jobs, opportunities).reduce((count, thread) => {
+        return count + (threadUnreadCount(thread, openedAtFor(opens, user.id, thread.key)) > 0 ? 1 : 0);
+      }, 0);
+    } catch {
+      return 0;
+    }
+  }, [book, jobs, user.id]);
   const homeBadge =
     actionableReturningClientNotices(returningClientLeads, effectiveStaff).length +
     actionableJobCodeReviews(tasks, jobs, effectiveStaff).length;
@@ -583,6 +598,11 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
                 {item.href === "/" && homeBadge > 0 ? (
                   <span className="ml-auto min-w-4 rounded-full bg-primary px-1.5 text-center text-[10px] font-medium text-primary-foreground">
                     {homeBadge}
+                  </span>
+                ) : null}
+                {item.href === "/messages" && inboxUnread > 0 ? (
+                  <span className="ml-auto min-w-4 rounded-full bg-primary px-1.5 text-center text-[10px] font-medium text-primary-foreground">
+                    {inboxUnread > 99 ? "99+" : inboxUnread}
                   </span>
                 ) : null}
               </Link>

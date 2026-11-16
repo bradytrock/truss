@@ -5,20 +5,25 @@ import { firstName } from "@/lib/phone";
 import type {
   Activity,
   ClientType,
+  Estimate,
+  EstimateSignatureEvent,
   GmailMessage,
+  Invoice,
   Job,
   JobMarket,
   JobStatus,
   Opportunity,
+  Payment,
   PipelineStage,
   ScheduleEvent,
   TextMessage,
 } from "@/lib/types";
 import { CLIENT_TYPE_LABELS, EVENT_KIND_LABELS, JOB_STATUS_LABELS, STAGE_LABELS } from "@/lib/types";
+import type { WorkColumn } from "@/lib/work-board";
 
 export type InboxScope = "mine" | "all" | "unread" | "unassigned";
 export type InboxQueue = "needs_reply" | "waiting";
-export type InboxChannel = "all" | "texts" | "email" | "calls" | "notes";
+export type InboxChannel = "all" | "messages" | "texts" | "email" | "calls" | "notes" | "activity";
 export type InboxChip = "Referral" | "New lead" | "Web" | "Automated";
 
 const AUTO_KINDS = new Set(["automation", "automated", "system", "workflow", "auto"]);
@@ -262,6 +267,120 @@ export function inboxStage(input: {
   return { current: "New", next: "", detail };
 }
 
+export type InboxNextAction = {
+  title: string;
+  stage: string;
+  action: string;
+  /** Work-board column the action moves the job to. Empty when the action opens the record. */
+  column: WorkColumn | null;
+};
+
+const NEXT_WORK: Partial<Record<JobStatus, { action: string; column: WorkColumn; verb: string }>> = {
+  in_progress: { action: "Start punch", column: "punch", verb: "punch next" },
+  punch: { action: "Close out", column: "complete", verb: "close out" },
+  on_hold: { action: "Resume", column: "in_progress", verb: "resume" },
+};
+
+/** The green next-step card: where this job is, and the one move that follows. */
+export function inboxNextAction(input: {
+  job?: { status: JobStatus; contractValue?: number } | null;
+  opportunity?: { stage: PipelineStage } | null;
+}): InboxNextAction | null {
+  const job = input.job;
+  const opportunity = input.opportunity;
+  if (job?.status === "precon") {
+    const sold = opportunity?.stage === "awarded" || (job.contractValue ?? 0) > 0;
+    return {
+      title: sold ? "Job sold → start precon" : "Preconstruction → start production",
+      stage: "Preconstruction",
+      action: sold ? "Start precon" : "Start production",
+      column: sold ? null : "in_progress",
+    };
+  }
+  if (job) {
+    const next = NEXT_WORK[job.status];
+    const stage = JOB_STATUS_LABELS[job.status] || "Job";
+    if (!next) return { title: stage, stage, action: "", column: null };
+    return {
+      title: `${stage} → ${next.verb}`,
+      stage,
+      action: next.action,
+      column: next.column,
+    };
+  }
+  if (opportunity) {
+    const stage = STAGE_LABELS[opportunity.stage] || "Lead";
+    const verb = (NEXT_STAGE[opportunity.stage] || "").replace(/\s+next$/, "").toLowerCase();
+    return {
+      title: verb ? `${stage} → ${verb}` : stage,
+      stage,
+      action: verb ? verb.charAt(0).toUpperCase() + verb.slice(1) : "",
+      column: null,
+    };
+  }
+  return null;
+}
+
+export function inboxMoney(value: number) {
+  const cents = Math.round(Math.abs(value) * 100) % 100;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: cents === 0 ? 0 : 2,
+    maximumFractionDigits: cents === 0 ? 0 : 2,
+  }).format(value);
+}
+
+const VIEWING_WINDOW_MS = 15 * 60 * 1000;
+
+export function inboxViewers(input: {
+  opens: Array<{ profileId: string; threadKey: string; openedAt: string }> | null | undefined;
+  people: Array<{ id: string; name: string }>;
+  threadKey: string;
+  selfProfileId?: string;
+  now?: number;
+}) {
+  if (!input.threadKey) return [];
+  const now = input.now ?? Date.now();
+  const names = new Map(input.people.map((person) => [person.id, person.name]));
+  const seen = new Set<string>();
+  const viewers: Array<{ id: string; name: string }> = [];
+  for (const open of input.opens ?? []) {
+    if (!open || open.threadKey !== input.threadKey) continue;
+    if (input.selfProfileId && open.profileId === input.selfProfileId) continue;
+    const at = new Date(open.openedAt).getTime();
+    if (!Number.isFinite(at) || now - at > VIEWING_WINDOW_MS || now < at) continue;
+    if (seen.has(open.profileId)) continue;
+    seen.add(open.profileId);
+    const name = names.get(open.profileId);
+    if (!name) continue;
+    viewers.push({ id: open.profileId, name });
+  }
+  return viewers;
+}
+
+export function inboxSeen(input: {
+  opens: Array<{ profileId: string; threadKey: string; openedAt: string }> | null | undefined;
+  people: Array<{ id: string; name: string }>;
+  threadKey: string;
+}) {
+  const opened = new Set(
+    (input.opens ?? [])
+      .filter((open) => open && open.threadKey === input.threadKey)
+      .map((open) => open.profileId),
+  );
+  const seen: Array<{ id: string; name: string }> = [];
+  const unseen: Array<{ id: string; name: string }> = [];
+  const used = new Set<string>();
+  for (const person of input.people) {
+    if (!person?.id || used.has(person.id)) continue;
+    used.add(person.id);
+    if (opened.has(person.id)) seen.push(person);
+    else unseen.push(person);
+  }
+  return { seen, unseen };
+}
+
 export function inboxRoleLabel(input: {
   title?: string | null;
   clientType?: ClientType | null;
@@ -336,7 +455,8 @@ export type InboxTimelineEntry =
       durationSeconds: number | null;
       status: string;
     }
-  | { id: string; at: string; kind: "note"; author: string; body: string };
+  | { id: string; at: string; kind: "note"; author: string; body: string }
+  | { id: string; at: string; kind: "event"; label: string; icon: "open" | "payment" | "work" };
 
 function matchesFocusedJob(itemJobId: string | null | undefined, focusJobId: string | null, primaryJobId: string | null) {
   if (!focusJobId) return true;
@@ -365,6 +485,10 @@ export function buildInboxTimeline(input: {
   opportunityIds: string[];
   clientIds?: string[];
   channel: InboxChannel;
+  signatureEvents?: EstimateSignatureEvent[];
+  estimates?: Array<Pick<Estimate, "id" | "number" | "jobId" | "opportunityId">>;
+  payments?: Payment[];
+  invoices?: Array<Pick<Invoice, "id" | "number" | "jobId">>;
 }): InboxTimelineEntry[] {
   const contacts = new Set(input.contactIds.filter(Boolean));
   const jobs = new Set(input.jobIds.filter(Boolean));
@@ -414,7 +538,9 @@ export function buildInboxTimeline(input: {
 
   for (const activity of input.activities) {
     if (!activity?.id) continue;
-    if (activity.type !== "note" && activity.type !== "call" && activity.type !== "email") continue;
+    const work =
+      activity.type === "meeting" || activity.type === "site_walk" || activity.type === "stage_change";
+    if (activity.type !== "note" && activity.type !== "call" && activity.type !== "email" && !work) continue;
     const onJob = activity.entityType === "job" && jobs.has(activity.entityId);
     const onOpportunity = activity.entityType === "opportunity" && opportunities.has(activity.entityId);
     const onClient = activity.entityType === "client" && clients.has(activity.entityId);
@@ -462,6 +588,18 @@ export function buildInboxTimeline(input: {
       });
       continue;
     }
+    if (work) {
+      const who = shortStaffName(activity.author);
+      const body = (activity.body || "").trim();
+      entries.push({
+        id: `event:${activity.id}`,
+        at: activity.createdAt || "",
+        kind: "event",
+        icon: "work",
+        label: [who, body].filter(Boolean).join(" · ") || "Activity",
+      });
+      continue;
+    }
     entries.push({
       id: `note:${activity.id}`,
       at: activity.createdAt || "",
@@ -471,13 +609,80 @@ export function buildInboxTimeline(input: {
     });
   }
 
+  const estimateById = new Map((input.estimates ?? []).map((estimate) => [estimate.id, estimate]));
+  const opened = new Map<string, EstimateSignatureEvent[]>();
+  for (const event of input.signatureEvents ?? []) {
+    if (!event?.id || !event.estimateId) continue;
+    const estimate = estimateById.get(event.estimateId);
+    if (!estimate) continue;
+    const onJob = Boolean(estimate.jobId && jobs.has(estimate.jobId));
+    const onOpportunity = Boolean(estimate.opportunityId && opportunities.has(estimate.opportunityId));
+    if (!onJob && !onOpportunity) continue;
+    if (!matchesFocusedJob(estimate.jobId, input.focusJobId, input.primaryJobId)) continue;
+    if (event.kind === "opened") {
+      const groupKey = `${event.estimateId}:${(event.signerName || "").trim().toLowerCase()}`;
+      const group = opened.get(groupKey) ?? [];
+      group.push(event);
+      opened.set(groupKey, group);
+      continue;
+    }
+    if (event.kind !== "signed" && event.kind !== "declined") continue;
+    const who = (event.signerName || "").trim() ? firstName(event.signerName) : "Someone";
+    const number = estimate.number ? ` ${estimate.number}` : "";
+    entries.push({
+      id: `sign:${event.id}`,
+      at: event.createdAt || "",
+      kind: "event",
+      icon: "open",
+      label: `${who} ${event.kind} proposal${number}`,
+    });
+  }
+  for (const [groupKey, group] of opened) {
+    const latest = [...group].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || "")).at(-1);
+    if (!latest) continue;
+    const estimate = estimateById.get(latest.estimateId);
+    const who = (latest.signerName || "").trim() ? firstName(latest.signerName) : "Someone";
+    const number = estimate?.number || "a proposal";
+    entries.push({
+      id: `open:${groupKey}`,
+      at: latest.createdAt || "",
+      kind: "event",
+      icon: "open",
+      label:
+        group.length > 1
+          ? `${who} opened ${number} · ${group.length}×`
+          : `${who} opened proposal ${number}`,
+    });
+  }
+
+  const invoiceById = new Map((input.invoices ?? []).map((invoice) => [invoice.id, invoice]));
+  for (const payment of input.payments ?? []) {
+    if (!payment?.id || payment.postingStatus === "rejected") continue;
+    const invoice = payment.invoiceId ? invoiceById.get(payment.invoiceId) : undefined;
+    const jobId = payment.jobId || invoice?.jobId || null;
+    if (!jobId || !jobs.has(jobId)) continue;
+    if (!matchesFocusedJob(jobId, input.focusJobId, input.primaryJobId)) continue;
+    const who = shortStaffName(payment.createdBy) || "Office";
+    const amount = Number.isFinite(payment.amount) ? inboxMoney(payment.amount) : "";
+    const onInvoice = invoice?.number ? ` on ${invoice.number}` : "";
+    entries.push({
+      id: `pay:${payment.id}`,
+      at: payment.paidAt || "",
+      kind: "event",
+      icon: "payment",
+      label: amount ? `${who} recorded payment of ${amount}${onInvoice}` : `${who} recorded a payment${onInvoice}`,
+    });
+  }
+
   const channel = input.channel;
   return entries
     .filter((entry) => {
       if (channel === "all") return true;
+      if (channel === "messages") return entry.kind === "text" || entry.kind === "email";
       if (channel === "texts") return entry.kind === "text";
       if (channel === "email") return entry.kind === "email";
       if (channel === "calls") return entry.kind === "call";
+      if (channel === "activity") return entry.kind === "call" || entry.kind === "event";
       return entry.kind === "note";
     })
     .sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));

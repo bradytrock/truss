@@ -5,9 +5,13 @@ import {
   formatCallDuration,
   formatInboxDay,
   inboxChips,
+  inboxMoney,
+  inboxNextAction,
   inboxQueue,
   inboxRoleLabel,
+  inboxSeen,
   inboxStage,
+  inboxViewers,
   isAutomatedText,
   reviewRequestDraft,
   shortStaffName,
@@ -191,3 +195,133 @@ const notesOnly = buildInboxTimeline({
 });
 assert.equal(notesOnly.length, 1);
 assert.equal(notesOnly[0]?.kind, "note");
+
+assert.deepEqual(inboxNextAction({ job: { status: "precon", contractValue: 618 }, opportunity: { stage: "awarded" } }), {
+  title: "Job sold → start precon",
+  stage: "Preconstruction",
+  action: "Start precon",
+  column: null,
+});
+assert.equal(inboxNextAction({ job: { status: "in_progress" } })?.column, "punch");
+assert.equal(inboxMoney(2611.04), "$2,611.04");
+assert.equal(inboxMoney(618), "$618");
+
+const people = [
+  { id: "kim", name: "Kim Stone" },
+  { id: "tyler", name: "Tyler Ross" },
+];
+assert.deepEqual(
+  inboxViewers({
+    opens: [{ profileId: "kim", threadKey: "t1", openedAt: "2026-10-20T17:50:00.000Z" }],
+    people,
+    threadKey: "t1",
+    selfProfileId: "me",
+    now: new Date("2026-10-20T18:00:00.000Z").getTime(),
+  }).map((person) => person.id),
+  ["kim"],
+);
+assert.deepEqual(inboxSeen({ opens: [{ profileId: "kim", threadKey: "t1", openedAt: "2026-10-01T00:00:00.000Z" }], people, threadKey: "t1" }), {
+  seen: [{ id: "kim", name: "Kim Stone" }],
+  unseen: [{ id: "tyler", name: "Tyler Ross" }],
+});
+
+const desk = buildInboxTimeline({
+  messages: [inbound],
+  emails: [email],
+  calls: [],
+  activities: [note],
+  contactIds: ["con_brady"],
+  phone: "",
+  focusJobId: null,
+  primaryJobId: "job_a",
+  jobIds: ["job_a"],
+  opportunityIds: [],
+  channel: "all",
+  estimates: [{ id: "est_1", number: "EST-1133", jobId: "job_a", opportunityId: null }],
+  signatureEvents: [
+    {
+      id: "open_1",
+      estimateId: "est_1",
+      kind: "opened",
+      signerRole: "",
+      contactId: "con_brady",
+      signerName: "Mike Hawbaker",
+      tokenSuffix: "",
+      tokenSha256: "",
+      ipAddress: "",
+      forwardedFor: "",
+      userAgent: "",
+      acceptLanguage: "",
+      timeZone: "",
+      deliveryChannel: "",
+      deliveryTo: "",
+      consentText: "",
+      consentVersion: "",
+      documentSha256: "",
+      capturedInOffice: false,
+      staffId: null,
+      createdAt: "2026-10-16T15:18:00.000Z",
+    },
+    {
+      id: "open_2",
+      estimateId: "est_1",
+      kind: "opened",
+      signerRole: "",
+      contactId: "con_brady",
+      signerName: "Mike Hawbaker",
+      tokenSuffix: "",
+      tokenSha256: "",
+      ipAddress: "",
+      forwardedFor: "",
+      userAgent: "",
+      acceptLanguage: "",
+      timeZone: "",
+      deliveryChannel: "",
+      deliveryTo: "",
+      consentText: "",
+      consentVersion: "",
+      documentSha256: "",
+      capturedInOffice: false,
+      staffId: null,
+      createdAt: "2026-10-17T01:06:00.000Z",
+    },
+  ],
+  invoices: [{ id: "inv_1", number: "INV-1024", jobId: "job_a" }],
+  payments: [
+    {
+      id: "pay_1",
+      invoiceId: "inv_1",
+      jobId: "job_a",
+      amount: 2611.04,
+      method: "check",
+      paidAt: "2026-10-17T21:14:00.000Z",
+      reference: "",
+      receiptUrl: "",
+      receiptStoragePath: null,
+      qbStatus: "not_in_qb",
+      createdBy: "Brady Jones",
+    },
+  ],
+});
+assert.equal(
+  desk.find((entry) => entry.kind === "event" && entry.icon === "open")?.label,
+  "Mike opened EST-1133 · 2×",
+);
+assert.equal(
+  desk.find((entry) => entry.kind === "event" && entry.icon === "payment")?.label,
+  "Brady J. recorded payment of $2,611.04 on INV-1024",
+);
+const messagesOnly = buildInboxTimeline({ ...{
+  messages: [inbound],
+  emails: [email],
+  calls: [],
+  activities: [note],
+  contactIds: ["con_brady"],
+  phone: "",
+  focusJobId: null,
+  primaryJobId: "job_a",
+  jobIds: ["job_a"],
+  opportunityIds: [],
+  channel: "messages" as const,
+}});
+assert.deepEqual(messagesOnly.map((entry) => entry.kind), ["text", "email"]);

@@ -4,16 +4,18 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronsUpDown,
+  Eye,
   Mail,
   MapPin,
   Pencil,
   Phone,
   Search,
   Send,
-  Smartphone,
+  SlidersHorizontal,
   UserPlus,
   X,
 } from "lucide-react";
@@ -62,16 +64,15 @@ import {
   viewerFromStaff,
   visibleInboxThreads,
 } from "@/lib/message-threads";
-import { formatCurrency, formatInboxTime, formatPhone, formatTime, initials } from "@/lib/format";
+import { formatInboxTime, formatPhone, formatTime, initials } from "@/lib/format";
 import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
 import { mailHref } from "@/lib/job-emails";
-import { jobPaperHref, jobRecordHref, mapsUrl } from "@/lib/job-record";
+import { jobRecordHref } from "@/lib/job-record";
 import { estimateTotals } from "@/lib/estimate-totals";
 import { cn } from "@/lib/utils";
 import { fallbackChatReplies, type WebsiteChatThread } from "@/lib/website-chat";
 import { IMESSAGE_EFFECTS, IMESSAGE_TAPBACKS } from "@/lib/imessage";
 import {
-  appointmentLabel,
   buildInboxTimeline,
   firstHttpUrl,
   formatCallDuration,
@@ -79,9 +80,12 @@ import {
   hostOf,
   inboxAddress,
   inboxChips,
+  inboxMoney,
+  inboxNextAction,
   inboxQueue,
   inboxRoleLabel,
-  inboxStage,
+  inboxSeen,
+  inboxViewers,
   isAutomatedText,
   jobsForPeople,
   nextAppointment,
@@ -104,7 +108,6 @@ import {
 } from "@/lib/inbox-desk";
 import type { Estimate, Job, Opportunity, TextMessage } from "@/lib/types";
 const CLOSED_KEY = "truss.inbox.closed";
-const PAGE_OPENED_AT = new Date().toISOString();
 
 function textOf(value: unknown) {
   return typeof value === "string" ? value : "";
@@ -192,13 +195,21 @@ type InboxListRow = {
   unassigned: boolean;
 };
 
-const CHANNELS: { id: InboxChannel; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "texts", label: "Texts" },
-  { id: "email", label: "Email" },
-  { id: "calls", label: "Calls" },
+const FILTERS: { id: InboxChannel; label: string }[] = [
+  { id: "all", label: "Everything" },
+  { id: "messages", label: "Messages" },
   { id: "notes", label: "Notes" },
+  { id: "activity", label: "Activity" },
 ];
+
+const SCOPES: { id: InboxScope; label: string }[] = [
+  { id: "mine", label: "My conversations" },
+  { id: "all", label: "All conversations" },
+  { id: "unread", label: "Unread" },
+  { id: "unassigned", label: "Unassigned" },
+];
+
+type ComposerMode = "text" | "email" | "note";
 
 export function MessagesInbox() {
   const crm = useCrm();
@@ -330,6 +341,9 @@ export function MessagesInbox() {
   const closed = useSyncExternalStore(subscribeClosed, getClosedSnapshot, () => EMPTY_CLOSED);
   const [calls, setCalls] = useState<InboxCall[]>([]);
   const [channel, setChannel] = useState<InboxChannel>("all");
+  const [composer, setComposer] = useState<ComposerMode>("text");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [jobFocus, setJobFocus] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -372,6 +386,8 @@ export function MessagesInbox() {
     setEffect("");
     setJobFocus(null);
     setChannel("all");
+    setComposer("text");
+    setComposerOpen(false);
     setDetailsOpen(false);
   }
 
@@ -541,9 +557,8 @@ export function MessagesInbox() {
   }, [automatedOnly, decorated, rows, scope]);
 
   const ordered = useMemo(() => {
-    const needs = listRows.filter((row) => row.queue === "needs_reply").sort((a, b) => b.at.localeCompare(a.at));
-    const waiting = listRows.filter((row) => row.queue === "waiting").sort((a, b) => b.at.localeCompare(a.at));
-    return { needs, waiting, all: [...needs, ...waiting] };
+    const all = [...listRows].sort((a, b) => b.at.localeCompare(a.at) || a.title.localeCompare(b.title));
+    return { all };
   }, [listRows]);
 
   const unreadTotal = decorated.filter((row) => row.unread).length + visibleWebChats.filter((chat) => {
@@ -573,6 +588,10 @@ export function MessagesInbox() {
         ],
         clientIds: activeContact?.clientId ? [activeContact.clientId] : [],
         channel,
+        signatureEvents: Array.isArray(book?.estimateSignatureEvents) ? book.estimateSignatureEvents : [],
+        estimates,
+        payments: Array.isArray(book?.payments) ? book.payments : [],
+        invoices: Array.isArray(book?.invoices) ? book.invoices : [],
       })
     : [];
 
@@ -618,7 +637,9 @@ export function MessagesInbox() {
       if (key !== "j" && key !== "k" && key !== "r" && key !== "e") return;
       event.preventDefault();
       if (key === "r") {
-        composerRef.current?.focus();
+        setComposer("text");
+        setComposerOpen(true);
+        window.setTimeout(() => composerRef.current?.focus(), 0);
         return;
       }
       if (key === "e") {
@@ -708,7 +729,8 @@ export function MessagesInbox() {
   }, [activeContact?.clientId, body, crm, panelJob, selected?.opportunityId]);
 
   const requestReview = useCallback(() => {
-    setChannel("texts");
+    setComposer("text");
+    setComposerOpen(true);
     setBody(reviewRequestDraft(selected?.title || activeContact?.name));
     setDetailsOpen(false);
     window.setTimeout(() => composerRef.current?.focus(), 0);
@@ -851,6 +873,34 @@ export function MessagesInbox() {
     email: activeContact?.email,
     compose: Boolean(activeContact?.email),
   });
+  const threadPeople = (() => {
+    if (!selected) return [];
+    const crew = implicitThreadCrew(selected, staff, profiles, jobs, opportunities);
+    const added = addedThreadPeople(selected.key, profiles, members).map((row) => row.profile);
+    const byId = new Map<string, { id: string; name: string }>();
+    for (const person of [...crew, ...added]) {
+      const name = textOf(person?.name).trim();
+      if (!person?.id || !name) continue;
+      byId.set(person.id, { id: person.id, name });
+    }
+    return [...byId.values()];
+  })();
+  const viewerDirectory = profiles
+    .filter((person) => person?.id && textOf(person.name).trim())
+    .map((person) => ({ id: person.id, name: person.name }));
+  const viewing = inboxViewers({
+    opens,
+    people: viewerDirectory.length > 0 ? viewerDirectory : threadPeople,
+    threadKey: selected?.key ?? "",
+    selfProfileId: crm.user.id,
+  });
+  const seen = inboxSeen({
+    opens,
+    people: threadPeople,
+    threadKey: selected?.key ?? "",
+  });
+  const scopeLabel = SCOPES.find((item) => item.id === scope)?.label ?? "My conversations";
+  const viewerLabel = viewing[0] ? shortStaffName(viewing[0].name) : "";
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -876,7 +926,7 @@ export function MessagesInbox() {
           <ErrorBanner message={crm.messagesError} onRetry={() => void crm.reload()} />
         </div>
       ) : null}
-      <div className="grid h-full min-h-0 flex-1 lg:grid-cols-[minmax(16.5rem,20rem)_minmax(0,1fr)] xl:grid-cols-[minmax(16.5rem,20rem)_minmax(0,1fr)_18.5rem]">
+      <div className="grid h-full min-h-0 flex-1 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)_20rem]">
         <aside
           className={cn(
             "flex min-h-0 flex-col overflow-hidden border-b bg-background lg:border-r lg:border-b-0",
@@ -884,17 +934,32 @@ export function MessagesInbox() {
           )}
         >
           <div className="border-b px-3 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <h1 className="font-heading text-xl font-medium">Inbox</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-heading text-lg font-medium">Inbox</h1>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+                  {scopeLabel}
+                  <ChevronDown className="size-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-44">
+                  {SCOPES.map((item) => (
+                    <DropdownMenuItem key={item.id} onClick={() => chooseScope(item.id)}>
+                      {item.label}
+                      {item.id === "unread" ? ` · ${unreadTotal}` : ""}
+                      {item.id === "unassigned" ? ` · ${unassignedTotal}` : ""}
+                      {scope === item.id ? <Check className="ml-auto size-3.5" /> : null}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="border-primary text-primary hover:bg-primary/5 hover:text-primary"
+                size="icon"
+                className="ml-auto bg-[#9a6244] text-white hover:bg-[#855438]"
+                aria-label="New message"
                 onClick={openCompose}
               >
-                <Pencil data-icon="inline-start" />
-                New
+                <Pencil />
               </Button>
             </div>
             <div className="relative mt-3">
@@ -902,32 +967,38 @@ export function MessagesInbox() {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search contacts, jobs, messages"
+                placeholder="Search"
                 aria-label="Search conversations"
-                className="pl-8"
+                className="bg-muted/40 pr-8 pl-8"
               />
-            </div>
-            <div className="mt-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Inbox filters">
-              <Pill active={scope === "mine"} onClick={() => chooseScope("mine")}>
-                Mine
-              </Pill>
-              <Pill active={scope === "all"} onClick={() => chooseScope("all")}>
-                All
-              </Pill>
-              <Pill active={scope === "unread"} onClick={() => chooseScope("unread")}>
-                Unread · {unreadTotal}
-              </Pill>
-              <Pill active={scope === "unassigned"} onClick={() => chooseScope("unassigned")}>
-                Unassigned · {unassignedTotal}
-              </Pill>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <Pill active={automatedOnly} onClick={() => setAutomatedOnly((value) => !value)}>
-                Automated
-              </Pill>
-              <Link href={mailHref()} className="text-xs text-muted-foreground hover:text-foreground">
-                Mailbox
-              </Link>
+              <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                <PopoverTrigger
+                  className="absolute top-1/2 right-1.5 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground"
+                  aria-label="Filter conversations"
+                >
+                  <SlidersHorizontal className="size-3.5" />
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-52 p-2">
+                  <button
+                    type="button"
+                    aria-pressed={automatedOnly}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm",
+                      automatedOnly ? "bg-muted" : "hover:bg-muted",
+                    )}
+                    onClick={() => setAutomatedOnly((value) => !value)}
+                  >
+                    Automated only
+                    {automatedOnly ? <Check className="size-3.5" /> : null}
+                  </button>
+                  <Link
+                    href={mailHref()}
+                    className="mt-1 flex rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    Open mailbox
+                  </Link>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -939,8 +1010,8 @@ export function MessagesInbox() {
                     : crm.messagesReady
                       ? "No conversations yet. Text a homeowner — replies land here and on the job."
                       : "Loading texts…"
-                  : scope === "mine"
-                    ? "Nothing assigned to you. All still has the rest of the inbox."
+                    : scope === "mine"
+                    ? "Nothing assigned to you. Switch to All conversations for the rest of the inbox."
                     : "No conversations match."}
               </p>
             ) : (
@@ -948,14 +1019,12 @@ export function MessagesInbox() {
                 fallbackTitle="The thread list could not open"
                 fallbackDescription="The conversation is still on the right."
               >
-                <Queue title="Needs reply" rows={ordered.needs} activeKey={activeKey} onOpen={openRow} />
-                <Queue title="Waiting on customer" rows={ordered.waiting} activeKey={activeKey} onOpen={openRow} />
+                {ordered.all.map((row) => (
+                  <ThreadRow key={row.key} row={row} active={row.key === activeKey} onOpen={openRow} />
+                ))}
               </RecordErrorBoundary>
             )}
           </div>
-          <p className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-            J / K to move · R to reply · E to close
-          </p>
         </aside>
 
         <section
@@ -1002,7 +1071,7 @@ export function MessagesInbox() {
               <>
                 <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2">
                   <Avatar>
-                    <AvatarFallback className="bg-rose-100 text-rose-800">
+                    <AvatarFallback className="bg-[#eceae6] text-foreground">
                       {initials(textOf(selected.title)) || "#"}
                     </AvatarFallback>
                   </Avatar>
@@ -1014,16 +1083,20 @@ export function MessagesInbox() {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  {viewerLabel ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#ece7f8] py-1 pr-2.5 pl-1 text-xs text-[#5c4d86]">
+                      <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#ddd4f3] text-[9px] font-semibold">
+                        {initials(viewing[0]?.name) || "·"}
+                      </span>
+                      {viewerLabel} is viewing
+                    </span>
+                  ) : null}
                   {selected.phone ? (
                     <Button nativeButton={false} variant="outline" size="sm" render={<a href={`tel:${selected.phone}`} />}>
                       <Phone data-icon="inline-start" />
                       Call
                     </Button>
                   ) : null}
-                  <Button nativeButton={false} variant="outline" size="sm" render={<Link href={mailboxHref} />}>
-                    <Mail data-icon="inline-start" />
-                    Email
-                  </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       render={<Button type="button" variant="outline" size="sm" disabled={!activeContact} />}
@@ -1084,32 +1157,32 @@ export function MessagesInbox() {
             )}
           </header>
 
-          {selected && !selectedWeb ? (
-            <>
-              <div className="flex gap-1.5 overflow-x-auto border-b px-3 py-2">
-                <Pill active={focusJobId == null} onClick={() => setJobFocus("all")}>
-                  All jobs
+          {selected && !selectedWeb && relatedJobs.length > 1 ? (
+            <div className="flex gap-1.5 overflow-x-auto border-b px-3 py-2">
+              <Pill active={focusJobId == null} onClick={() => setJobFocus("all")}>
+                All jobs
+              </Pill>
+              {relatedJobs.map((job) => (
+                <Pill key={job.id} active={focusJobId === job.id} onClick={() => setJobFocus(job.id)}>
+                  <span className="max-w-[16rem] truncate">
+                    {job.code ? `${job.code} · ` : ""}
+                    {job.street || job.name || "Job"}
+                  </span>
                 </Pill>
-                {relatedJobs.map((job) => (
-                  <Pill key={job.id} active={focusJobId === job.id} onClick={() => setJobFocus(job.id)}>
-                    <span className="max-w-[16rem] truncate">
-                      {job.code ? `${job.code} · ` : ""}
-                      {job.street || job.name || "Job"}
-                    </span>
-                  </Pill>
-                ))}
-              </div>
-              <div className="flex gap-1.5 overflow-x-auto border-b px-3 py-2" role="tablist" aria-label="Conversation channel">
-                {CHANNELS.map((item) => (
-                  <Pill key={item.id} active={channel === item.id} onClick={() => setChannel(item.id)}>
-                    {item.label}
-                  </Pill>
-                ))}
-              </div>
-            </>
+              ))}
+            </div>
+          ) : null}
+          {selected && !selectedWeb ? (
+            <div className="flex gap-1.5 overflow-x-auto border-b px-3 py-2" role="tablist" aria-label="Conversation channel">
+              {FILTERS.map((item) => (
+                <Pill key={item.id} active={channel === item.id} onClick={() => setChannel(item.id)}>
+                  {item.label}
+                </Pill>
+              ))}
+            </div>
           ) : null}
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/30">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#f7f6f4]">
             {selectedWeb ? (
               <RecordErrorBoundary
                 fallbackTitle="This conversation could not open"
@@ -1152,6 +1225,8 @@ export function MessagesInbox() {
                   entries={timeline}
                   channel={channel}
                   contactName={textOf(selected.title)}
+                  seen={seen.seen}
+                  unseen={seen.unseen}
                   onReact={(message, emoji) => void react(message, emoji)}
                   onReply={(message) =>
                     setReplyTo({
@@ -1212,35 +1287,17 @@ export function MessagesInbox() {
                 </div>
               </div>
             </form>
-          ) : channel === "email" && selected ? (
-            <div className="flex items-center justify-between gap-3 border-t bg-background px-4 py-3">
-              <p className="text-xs text-muted-foreground">Replies to mail go out from the mailbox.</p>
-              <Button nativeButton={false} variant="outline" size="sm" render={<Link href={mailboxHref} />}>
-                <Mail data-icon="inline-start" />
-                Open mailbox
-              </Button>
-            </div>
-          ) : channel === "calls" && selected ? (
-            <div className="flex items-center justify-between gap-3 border-t bg-background px-4 py-3">
-              <p className="text-xs text-muted-foreground">Calls on this number show up in the thread.</p>
-              {selected.phone ? (
-                <Button nativeButton={false} size="sm" render={<a href={`tel:${selected.phone}`} />}>
-                  <Phone data-icon="inline-start" />
-                  Call
-                </Button>
-              ) : null}
-            </div>
           ) : (
             <form
-              className="space-y-2 border-t bg-background p-3"
+              className="border-t bg-background px-3 py-2.5"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (channel === "notes") void saveNote();
-                else void send();
+                if (composer === "note") void saveNote();
+                else if (composer === "text") void send();
               }}
             >
               {showCompose || !selected ? (
-                <div className="space-y-2">
+                <div className="mb-2 space-y-2">
                   <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                     <PopoverTrigger
                       className={cn(buttonVariants({ variant: "outline" }), "h-8 w-full justify-between font-normal")}
@@ -1287,79 +1344,116 @@ export function MessagesInbox() {
                   />
                 </div>
               ) : null}
-              {replyTo && channel !== "notes" ? (
-                <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1 text-xs">
-                  <span className="min-w-0 truncate">Reply to “{replyTo.preview || "message"}”</span>
-                  <button type="button" className="shrink-0 text-muted-foreground" onClick={() => setReplyTo(null)}>
-                    Cancel
-                  </button>
+              {(composerOpen || showCompose || body.trim() || replyTo) && composer === "email" ? (
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">Replies to mail go out from the mailbox.</p>
+                  <Button nativeButton={false} variant="outline" size="sm" render={<Link href={mailboxHref} />}>
+                    <Mail data-icon="inline-start" />
+                    Open mailbox
+                  </Button>
                 </div>
               ) : null}
-              {channel !== "notes" ? (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  Effect
-                  <select
-                    value={effect}
-                    onChange={(event) => setEffect(event.target.value)}
-                    aria-label="Message effect"
-                    className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs text-foreground"
-                  >
-                    <option value="">None</option>
-                    {IMESSAGE_EFFECTS.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <div className="rounded-xl border bg-background px-3 py-2">
-                <Textarea
-                  ref={composerRef}
-                  value={body}
-                  onChange={(event) => setBody(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      if (channel === "notes") void saveNote();
-                      else void send();
+              {(composerOpen || showCompose || body.trim() || replyTo) && composer !== "email" ? (
+                <div className="mb-2">
+                  {replyTo && composer === "text" ? (
+                    <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1 text-xs">
+                      <span className="min-w-0 truncate">Reply to “{replyTo.preview || "message"}”</span>
+                      <button type="button" className="shrink-0 text-muted-foreground" onClick={() => setReplyTo(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : null}
+                  {composer === "text" ? (
+                    <label className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+                      Effect
+                      <select
+                        value={effect}
+                        onChange={(event) => setEffect(event.target.value)}
+                        aria-label="Message effect"
+                        className="h-7 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs text-foreground"
+                      >
+                        <option value="">None</option>
+                        {IMESSAGE_EFFECTS.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  <Textarea
+                    ref={composerRef}
+                    value={body}
+                    onChange={(event) => setBody(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        if (composer === "note") void saveNote();
+                        else void send();
+                      }
+                    }}
+                    placeholder={
+                      composer === "note"
+                        ? "Internal note — the customer will not see this"
+                        : "Write a text…"
                     }
-                  }}
-                  placeholder={
-                    channel === "notes"
-                      ? "Internal note — the customer will not see this"
-                      : "Write a text…"
-                  }
-                  rows={2}
-                  className="min-h-[44px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
-                />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Smartphone className="size-3" />
-                  {channel === "notes"
-                    ? noteTarget
-                      ? "Saved on the job. Hidden from the customer."
-                      : "Open a job or contact before saving a note."
-                    : looksLikePhone(sendTo)
-                      ? "Enter to send. Shift+Enter for a new line."
-                      : "Choose a contact or enter a valid mobile number."}
-                </p>
-                <Button
-                  type="submit"
-                  disabled={
-                    sending ||
-                    !body.trim() ||
-                    (channel === "notes" ? !noteTarget : !looksLikePhone(sendTo))
-                  }
-                >
-                  {sending ? "Saving…" : channel === "notes" ? "Save note" : (
-                    <>
-                      <Send data-icon="inline-start" />
-                      Send
-                    </>
-                  )}
-                </Button>
+                    rows={2}
+                    className="min-h-[44px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
+                  />
+                </div>
+              ) : null}
+              <div className="flex items-center gap-1.5">
+                {(
+                  [
+                    ["text", "Text"],
+                    ["email", "Email"],
+                    ["note", "Internal note"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={composer === mode}
+                    onClick={() => {
+                      setComposer(mode);
+                      setComposerOpen(true);
+                      if (mode !== "email") window.setTimeout(() => composerRef.current?.focus(), 0);
+                    }}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-medium",
+                      composer === mode
+                        ? "bg-neutral-950 text-white"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+                <span className="ml-auto flex items-center gap-2">
+                  {body.trim() && composer !== "email" ? (
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={sending || (composer === "note" ? !noteTarget : !looksLikePhone(sendTo))}
+                    >
+                      {sending ? "Saving…" : (
+                        <>
+                          <Send data-icon="inline-start" />
+                          {composer === "note" ? "Save" : "Send"}
+                        </>
+                      )}
+                    </Button>
+                  ) : null}
+                  <span className="text-xs text-muted-foreground">
+                    {composer === "note"
+                      ? noteTarget
+                        ? "Hidden from the customer"
+                        : "Open a job before saving a note"
+                      : looksLikePhone(sendTo)
+                        ? `To ${formatPhone(sendTo)}`
+                        : "Choose a recipient"}
+                  </span>
+                </span>
               </div>
             </form>
           )}
@@ -1424,31 +1518,6 @@ function Pill({
   );
 }
 
-function Queue({
-  title,
-  rows,
-  activeKey,
-  onOpen,
-}: {
-  title: string;
-  rows: InboxListRow[];
-  activeKey: string;
-  onOpen: (row: InboxListRow) => void;
-}) {
-  if (rows.length === 0) return null;
-  return (
-    <section>
-      <div className="flex items-center justify-between px-4 pt-4 pb-1">
-        <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{title}</p>
-        <span className="text-xs text-muted-foreground">{rows.length}</span>
-      </div>
-      {rows.map((row) => (
-        <ThreadRow key={row.key} row={row} active={row.key === activeKey} onOpen={onOpen} />
-      ))}
-    </section>
-  );
-}
-
 function ThreadRow({
   row,
   active,
@@ -1458,63 +1527,34 @@ function ThreadRow({
   active: boolean;
   onOpen: (row: InboxListRow) => void;
 }) {
-  const needs = row.queue === "needs_reply";
+  const owner = row.owner ? `Owner: ${row.owner}` : row.unassigned ? "Unassigned" : "";
   return (
     <button
       type="button"
       onClick={() => onOpen(row)}
       className={cn(
-        "flex w-full items-start gap-2.5 border-l-2 px-3 py-2.5 text-left",
-        active && needs && "border-rose-400 bg-rose-50",
-        active && !needs && "border-neutral-900 bg-muted/70",
-        !active && "border-transparent hover:bg-muted/40",
+        "flex w-full items-start gap-2.5 border-l-[3px] px-3 py-3 text-left",
+        active ? "border-[#9a6244] bg-[#faf7f4]" : "border-transparent hover:bg-muted/40",
       )}
     >
-      <span className="relative mt-0.5">
-        <Avatar>
-          <AvatarFallback className={cn(needs ? "bg-rose-100 text-rose-800" : "bg-muted text-foreground")}>
-            {initials(row.title) || "#"}
-          </AvatarFallback>
-        </Avatar>
-        {row.unread ? (
-          <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-background" />
-        ) : null}
-      </span>
+      <Avatar className="mt-0.5">
+        <AvatarFallback className="bg-[#eceae6] text-[11px] text-foreground">
+          {initials(row.title) || "#"}
+        </AvatarFallback>
+      </Avatar>
       <span className="min-w-0 flex-1">
-        <span className="flex items-baseline justify-between gap-2">
-          <span className={cn("truncate text-sm", row.unread ? "font-semibold" : "font-medium")}>{row.title}</span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{formatInboxTime(row.at)}</span>
+        <span className="flex items-center gap-1.5">
+          <span className={cn("min-w-0 truncate text-sm", row.unread ? "font-semibold" : "font-medium")}>{row.title}</span>
+          {row.unread ? <span className="size-1.5 shrink-0 rounded-full bg-rose-500" aria-label="Unread" /> : null}
+          <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{formatInboxTime(row.at)}</span>
         </span>
-        <span className={cn("mt-0.5 line-clamp-1 text-xs", row.unread ? "text-foreground" : "text-muted-foreground")}>
-          {row.preview}
-        </span>
-        <span className="mt-1 flex items-center gap-1.5">
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-            {row.code ? <span className="text-[11px] text-muted-foreground">{row.code}</span> : null}
-            {row.unreadCount > 0 ? (
-              <span className="inline-flex min-w-4 items-center justify-center rounded bg-neutral-950 px-1 text-[10px] font-semibold text-white">
-                {row.unreadCount > 99 ? "99+" : row.unreadCount}
-              </span>
-            ) : null}
-            {row.estimateNumber ? <MetaChip>{row.estimateNumber}</MetaChip> : null}
-            {row.chips.map((chip) => (
-              <MetaChip key={chip}>{chip}</MetaChip>
-            ))}
-          </span>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
-            {row.owner || (row.unassigned ? "Unassigned" : "")}
-          </span>
+        <span className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{row.preview}</span>
+        <span className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+          {row.code ? <span className="truncate">{row.code}</span> : null}
+          {owner ? <span className="truncate">{owner}</span> : null}
         </span>
       </span>
     </button>
-  );
-}
-
-function MetaChip({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex rounded-full border bg-background px-1.5 py-px text-[10px] text-muted-foreground">
-      {children}
-    </span>
   );
 }
 
@@ -1536,6 +1576,8 @@ function DeskTimeline({
   entries,
   channel,
   contactName,
+  seen,
+  unseen,
   onReact,
   onReply,
   onUnsend,
@@ -1543,20 +1585,28 @@ function DeskTimeline({
   entries: InboxTimelineEntry[];
   channel: InboxChannel;
   contactName: string;
+  seen: Array<{ id: string; name: string }>;
+  unseen: Array<{ id: string; name: string }>;
   onReact: (message: TextMessage, emoji: string) => void;
   onReply: (message: TextMessage) => void;
   onUnsend: (message: TextMessage) => void;
 }) {
   const last = entries[entries.length - 1];
+  const empty =
+    channel === "all"
+      ? "Nothing in this conversation yet."
+      : channel === "messages"
+        ? "No messages in this conversation yet."
+        : channel === "notes"
+          ? "No internal notes yet."
+          : channel === "activity"
+            ? "No activity on this conversation yet."
+            : `Nothing in ${channel} yet.`;
   if (entries.length === 0) {
-    return (
-      <p className="px-4 py-8 text-sm text-muted-foreground">
-        {channel === "all" ? "Nothing in this conversation yet." : `Nothing in ${channel} yet.`}
-      </p>
-    );
+    return <p className="px-4 py-8 text-sm text-muted-foreground">{empty}</p>;
   }
   return (
-    <ConversationScroll scrollKey={`${entries.length}:${last?.id ?? ""}`}>
+    <ConversationScroll scrollKey={`${entries.length}:${last?.id ?? ""}:${seen.length}`}>
       <div className="space-y-3 px-4 py-4">
         {entries.map((entry, index) => {
           const prior = entries[index - 1];
@@ -1565,7 +1615,7 @@ function DeskTimeline({
           return (
             <div key={entry.id}>
               {showDay ? (
-                <p className="py-2 text-center text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+                <p className="py-2 text-center text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
                   {day}
                 </p>
               ) : null}
@@ -1579,8 +1629,36 @@ function DeskTimeline({
             </div>
           );
         })}
+        {seen.length > 0 ? <SeenBy seen={seen} unseen={unseen} /> : null}
       </div>
     </ConversationScroll>
+  );
+}
+
+function SeenBy({
+  seen,
+  unseen,
+}: {
+  seen: Array<{ id: string; name: string }>;
+  unseen: Array<{ id: string; name: string }>;
+}) {
+  const missing = unseen.slice(0, 3).map((person) => shortStaffName(person.name)).filter(Boolean);
+  return (
+    <p className="flex items-center gap-1.5 pt-2 text-[11px] text-muted-foreground">
+      <span>Seen by</span>
+      <span className="flex -space-x-1">
+        {seen.slice(0, 4).map((person) => (
+          <span
+            key={person.id}
+            title={person.name}
+            className="inline-flex size-5 items-center justify-center rounded-full border border-[#f7f6f4] bg-[#eceae6] text-[9px] font-semibold text-foreground"
+          >
+            {initials(person.name)}
+          </span>
+        ))}
+      </span>
+      {missing.length > 0 ? <span>· not {missing.join(", ")}</span> : null}
+    </p>
   );
 }
 
@@ -1609,39 +1687,55 @@ function TimelineEntry({
             : "Inbound call";
     return (
       <div className="flex justify-center">
-        <p className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1.5 text-xs shadow-sm">
-          <Phone className="size-3.5 text-muted-foreground" />
+        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Phone className="size-3.5" />
           {[label, duration, formatTime(entry.at)].filter(Boolean).join(" · ")}
+        </p>
+      </div>
+    );
+  }
+  if (entry.kind === "event") {
+    return (
+      <div className="flex justify-center">
+        <p className="inline-flex items-center gap-1.5 text-center text-xs text-muted-foreground">
+          {entry.icon === "payment" ? (
+            <Check className="size-3.5 shrink-0" />
+          ) : entry.icon === "open" ? (
+            <Eye className="size-3.5 shrink-0" />
+          ) : (
+            <span className="size-1.5 shrink-0 rounded-full bg-current" />
+          )}
+          <span>
+            {entry.label}
+            {entry.at ? ` · ${formatTime(entry.at)}` : ""}
+          </span>
         </p>
       </div>
     );
   }
   if (entry.kind === "note") {
     return (
-      <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-2.5 text-sm">
-        <p className="text-[11px] text-amber-800">
-          Internal note · {shortStaffName(entry.author) || "Office"} · {formatTime(entry.at)} · not visible to customer
+      <div className="rounded-lg border border-[#eadc9a] bg-[#f8f1d8] px-3 py-2.5 text-sm">
+        <p className="text-[11px] text-[#8a7340]">
+          {shortStaffName(entry.author) || "Office"} · Internal note · {formatTime(entry.at)} · not visible to customer
         </p>
-        <p className="mt-1 whitespace-pre-wrap">{entry.body}</p>
+        <NoteBody body={entry.body} />
       </div>
     );
   }
   if (entry.kind === "email") {
+    const outbound = entry.message.direction !== "inbound";
+    const who = shortStaffName(entry.message.fromName) || (outbound ? "Office" : contactName || "Homeowner");
     return (
-      <div>
+      <div className={cn("max-w-[28rem]", outbound ? "ml-auto" : "mr-auto")}>
         <div className="rounded-xl border bg-background px-3 py-2.5 shadow-sm">
-          <div className="flex items-start gap-2">
-            <Mail className="mt-0.5 size-4 text-muted-foreground" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{entry.message.subject || "Email"}</p>
-              <p className="mt-0.5 line-clamp-3 text-xs text-muted-foreground">
-                {entry.message.snippet || entry.message.bodyText}
-              </p>
-            </div>
-          </div>
+          <p className="text-sm font-medium">{entry.message.subject || "Email"}</p>
+          <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">
+            {entry.message.snippet || entry.message.bodyText}
+          </p>
         </div>
-        <p className="mt-1 text-right text-[10px] text-muted-foreground">
-          Email · {formatTime(entry.at)}
+        <p className={cn("mt-1 text-[11px] text-muted-foreground", outbound ? "text-right" : "text-left")}>
+          {[who, "Email", formatTime(entry.at), outbound ? "Delivered" : ""].filter(Boolean).join(" · ")}
         </p>
       </div>
     );
@@ -1672,16 +1766,15 @@ function TextBubble({
   const tone = textStatusTone(message.status);
   return (
     <div className={cn("group max-w-[36rem]", outbound ? "ml-auto" : "mr-auto")}>
-      {outbound && (automated || onMyWayText(message) || message.jobId) ? (
-        <p className="mb-1 flex flex-wrap justify-end gap-1 text-[10px] text-muted-foreground">
-          {automated ? <span className="rounded-full bg-background px-1.5 py-0.5">Automated</span> : null}
-          {onMyWayText(message) ? <span className="rounded-full bg-background px-1.5 py-0.5">On-my-way</span> : null}
+      {outbound && automated ? (
+        <p className="mb-1 text-right">
+          <span className="rounded-full bg-[#ece8f6] px-1.5 py-0.5 text-[10px] text-[#5c4d86]">Automation</span>
         </p>
       ) : null}
       <div
         className={cn(
           "rounded-2xl px-3 py-2.5 text-sm",
-          outbound ? "bg-rose-50" : "border bg-background shadow-sm",
+          automated ? "bg-[#ece8f6]" : outbound ? "bg-[#f6e4e0]" : "border bg-background shadow-sm",
         )}
       >
         {message.mediaUrl ? (
@@ -1691,9 +1784,7 @@ function TextBubble({
         {addonNote(message) ? (
           <p className="mb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{addonNote(message)}</p>
         ) : null}
-        {body ? (
-          <p className={cn("whitespace-pre-wrap", message.status === "unsent" && "italic opacity-70")}>{body}</p>
-        ) : null}
+        {body ? <MessageBody body={body} unsent={message.status === "unsent"} /> : null}
         {showTracker ? (
           <a
             href={tracker}
@@ -1740,9 +1831,14 @@ function TextBubble({
           tone === "bad" ? "text-destructive" : tone === "ok" && outbound ? "text-emerald-600" : "text-muted-foreground",
         )}
       >
-        {outbound
-          ? `${formatTime(message.createdAt)} · ${textStatusLabel(message.status, message.direction)}`
-          : `${contactName || "Homeowner"} · ${formatTime(message.createdAt)}`}
+        {[
+          outbound ? (automated ? "Automation" : shortStaffName(message.createdBy) || "Office") : contactName || "Homeowner",
+          "Text",
+          formatTime(message.createdAt),
+          outbound ? textStatusLabel(message.status, message.direction) : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")}
       </p>
     </div>
   );
@@ -1821,54 +1917,47 @@ function JobContext({
   const sent = jobEstimates.find(
     (estimate) => estimate.status === "sent" || estimate.status === "viewed" || estimate.status === "accepted",
   );
-  const draft = jobEstimates.find((estimate) => estimate.status === "draft");
-  const inspected = Boolean(
-    job &&
-      events.some(
-        (event) =>
-          event.jobId === job.id && event.kind === "inspection" && event.startsAt <= PAGE_OPENED_AT,
-      ),
-  );
-  const stage = inboxStage({
-    job,
-    opportunity,
-    inspected,
-    hasSentEstimate: Boolean(sent),
-  });
   const upcoming = nextAppointment(events, job?.id);
   const recentPhotos = photos
     .filter((photo) => job && photo.jobId === job.id && !photo.deletedAt && photo.imageUrl)
     .sort((a, b) => (b.takenAt || "").localeCompare(a.takenAt || ""))
     .slice(0, 3);
   const rep = job?.salesRep || opportunity?.estimator || "";
-  const money = (estimate: Estimate | undefined) => {
-    if (!estimate) return "";
-    try {
-      const total = estimateTotals(
-        estimate,
-        lines.filter((line) => line.estimateId === estimate.id),
-      ).total;
-      return total > 0 ? formatCurrency(total) : "";
-    } catch {
-      return "";
+  const estimateValue = (() => {
+    if (sent) {
+      try {
+        const total = estimateTotals(
+          sent,
+          lines.filter((line) => line.estimateId === sent.id),
+        ).total;
+        if (total > 0) return total;
+      } catch {
+        return job?.contractValue ?? 0;
+      }
     }
-  };
-  const sentMoney = money(sent) || (job && job.contractValue > 0 ? formatCurrency(job.contractValue) : "");
-  const draftMoney = money(draft);
+    return job?.contractValue ?? 0;
+  })();
   const views = sent ? signatureEvents.filter((event) => event.estimateId === sent.id && event.kind === "opened").length : 0;
-  const mapQuery = [address.street, address.line2].filter((part) => part && part !== "No address yet").join(", ");
-  const facts = [
-    { label: "Claim #", value: claim?.claimNumber?.trim() || "—" },
-    { label: "Carrier", value: claim?.carrier?.trim() || "—" },
-    {
-      label: "Estimate",
-      value: sentMoney ? (views > 0 ? `${sentMoney} · viewed` : sentMoney) : "—",
-    },
-    { label: "Rep", value: rep || "—" },
-    { label: "Draft", value: draftMoney || "—" },
-    { label: "Next appointment", value: appointmentLabel(upcoming) || "—" },
-  ];
-  const estimateHref = (sent || draft) ? `/estimates/${(draft || sent)!.id}` : job ? jobPaperHref(job.id) : "/estimates";
+  const estimateLabel =
+    estimateValue > 0 ? `${inboxMoney(estimateValue)}${views > 0 ? " · viewed" : ""}` : "—";
+  const invoices = Array.isArray(book?.invoices) ? book.invoices : [];
+  const payments = Array.isArray(book?.payments) ? book.payments : [];
+  const invoiceIds = new Set(invoices.filter((invoice) => job && invoice.jobId === job.id).map((invoice) => invoice.id));
+  const paid = payments.reduce((sum, payment) => {
+    if (!payment || payment.postingStatus === "rejected") return sum;
+    const onJob = Boolean(job && (payment.jobId === job.id || (payment.invoiceId && invoiceIds.has(payment.invoiceId))));
+    if (!onJob || !Number.isFinite(payment.amount)) return sum;
+    return sum + payment.amount;
+  }, 0);
+  const blanks = [
+    claim?.claimNumber?.trim() ? "" : "claim #",
+    claim?.carrier?.trim() ? "" : "carrier",
+    rep.trim() ? "" : "rep",
+    upcoming ? "" : "appointment",
+  ].filter(Boolean);
+  const next = inboxNextAction({ job, opportunity });
+  const [moving, setMoving] = useState(false);
+  const recordHref = job ? jobRecordHref(job.id) : opportunity ? `/opportunities/${opportunity.id}` : "/jobs";
 
   if (!job && !opportunity) {
     return (
@@ -1882,86 +1971,149 @@ function JobContext({
     <div className="px-4 py-4">
       <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
         {job ? "Job" : "Lead"}
-        {(job?.code || opportunity?.code) ? ` · ${job?.code || opportunity?.code}` : ""}
+        {job?.code || opportunity?.code ? ` · ${job?.code || opportunity?.code}` : ""}
       </p>
       <h2 className="mt-1 font-heading text-xl leading-tight font-medium">{address.street}</h2>
       {address.line2 ? <p className="mt-0.5 text-sm text-muted-foreground">{address.line2}</p> : null}
-      <p className="mt-3 text-sm">
-        <span className="font-medium text-emerald-700">{stage.current}</span>
-        {stage.next ? <span className="text-muted-foreground"> → {stage.next}</span> : null}
-      </p>
-      {stage.detail ? <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{stage.detail}</p> : null}
-      {mapQuery ? (
-        <a
-          href={mapsUrl(mapQuery)}
-          target="_blank"
-          rel="noreferrer"
-          className="relative mt-4 flex h-28 items-center justify-center rounded-lg bg-stone-200"
-        >
-          <MapPin className="size-6 text-rose-600 drop-shadow" />
-          <span className="sr-only">Open map</span>
-        </a>
-      ) : (
-        <div className="relative mt-4 flex h-28 items-center justify-center rounded-lg bg-stone-200">
-          <MapPin className="size-6 text-stone-400" />
+      {next ? (
+        <div className="mt-4 rounded-xl border border-[#d7eadc] bg-[#e8f4ec] px-3 py-3">
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-[#3d6b4a] uppercase">Next step</p>
+          <p className="mt-1 text-sm font-medium">{next.title}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Stage: {next.stage}</p>
+          {next.action && next.column && job ? (
+            <Button
+              type="button"
+              size="sm"
+              className="mt-3 bg-[#1f6b45] text-white hover:bg-[#185838]"
+              disabled={moving}
+              onClick={() => {
+                const column = next.column;
+                if (!column) return;
+                setMoving(true);
+                void crm.moveWork(job.id, column).finally(() => setMoving(false));
+              }}
+            >
+              {next.action}
+            </Button>
+          ) : next.action ? (
+            <Button
+              nativeButton={false}
+              size="sm"
+              className="mt-3 bg-[#1f6b45] text-white hover:bg-[#185838]"
+              render={<Link href={recordHref} />}
+            >
+              {next.action}
+            </Button>
+          ) : null}
         </div>
-      )}
-      <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3">
-        {facts.map((fact) => (
-          <div key={fact.label}>
-            <dt className="text-[10px] tracking-wide text-muted-foreground uppercase">{fact.label}</dt>
-            <dd className="mt-0.5 text-sm">{fact.value}</dd>
-          </div>
-        ))}
-      </dl>
+      ) : null}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Estimate</p>
+          {sent ? (
+            <Link href={`/estimates/${sent.id}`} className="mt-0.5 block text-sm hover:underline">
+              {estimateLabel}
+            </Link>
+          ) : (
+            <p className="mt-0.5 text-sm">{estimateLabel}</p>
+          )}
+        </div>
+        <div>
+          <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Owner</p>
+          <p className="mt-0.5 text-sm">{shortStaffName(rep) || "—"}</p>
+        </div>
+      </div>
+      <div className="mt-3">
+        <p className="text-[10px] tracking-wide text-muted-foreground uppercase">Paid</p>
+        <p className="mt-0.5 text-sm">{inboxMoney(paid)}</p>
+      </div>
+      {blanks.length > 0 ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          + {blanks.length} empty {blanks.length === 1 ? "field" : "fields"} ({blanks.join(", ")})
+        </p>
+      ) : null}
       <div className="mt-5 flex items-center justify-between">
         <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">Photos</p>
         {job ? (
-          <Link href={jobRecordHref(job.id, { tab: "photos" })} className="text-xs text-primary">
+          <Link href={jobRecordHref(job.id, { tab: "photos" })} className="text-xs text-muted-foreground hover:text-foreground">
             View all
           </Link>
         ) : null}
       </div>
-      {recentPhotos.length === 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">No photos on this job yet.</p>
-      ) : (
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {recentPhotos.map((photo) => (
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {Array.from({ length: 3 }, (_, index) => {
+          const photo = recentPhotos[index];
+          if (!photo) {
+            return (
+              <div
+                key={`empty-photo-${index}`}
+                className="flex aspect-square items-center justify-center rounded-md bg-[#f3f1ee] text-[11px] text-muted-foreground"
+              >
+                Photo
+              </div>
+            );
+          }
+          return (
             // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo.id} src={photo.imageUrl} alt={photo.caption || ""} className="h-16 w-full rounded-md bg-muted object-cover" />
-          ))}
-        </div>
-      )}
+            <img
+              key={photo.id}
+              src={photo.imageUrl}
+              alt={photo.caption || ""}
+              className="aspect-square w-full rounded-md bg-muted object-cover"
+            />
+          );
+        })}
+      </div>
       <div className="mt-5">
         <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">Quick actions</p>
         <div className="mt-2 flex flex-col gap-2">
-          <Button nativeButton={false} variant="outline" className="w-full" render={<Link href={estimateHref} />}>
-            Send estimate
-          </Button>
           <Button nativeButton={false} variant="outline" className="w-full" render={<Link href="/calendar" />}>
             Book appointment
           </Button>
           <Button type="button" variant="outline" className="w-full" disabled={!canReview} onClick={onReview}>
             Request review
           </Button>
-          {job ? (
-            <Button nativeButton={false} variant="outline" className="w-full" render={<Link href={jobRecordHref(job.id)} />}>
-              Open job
-            </Button>
-          ) : opportunity ? (
-            <Button
-              nativeButton={false}
-              variant="outline"
-              className="w-full"
-              render={<Link href={`/opportunities/${opportunity.id}`} />}
-            >
-              Open lead
-            </Button>
-          ) : null}
+          <Button nativeButton={false} variant="outline" className="w-full" render={<Link href={recordHref} />}>
+            {job ? "Open job" : "Open lead"}
+          </Button>
         </div>
         {contactName ? <p className="sr-only">Conversation with {contactName}</p> : null}
       </div>
     </div>
+  );
+}
+
+function MessageBody({ body, unsent }: { body: string; unsent?: boolean }) {
+  const parts = body.split(/(https?:\/\/[^\s<>"')\]]+)/g);
+  return (
+    <p className={cn("whitespace-pre-wrap", unsent && "italic opacity-70")}>
+      {parts.map((part, index) =>
+        part.startsWith("http") ? (
+          <a key={index} href={part} target="_blank" rel="noreferrer" className="break-all text-[#9a6244] underline">
+            {part}
+          </a>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
+function NoteBody({ body }: { body: string }) {
+  const parts = body.split(/(@[A-Za-z][\w'.-]*(?:\s[A-Z]\.)?)/g);
+  return (
+    <p className="mt-1 whitespace-pre-wrap text-sm">
+      {parts.map((part, index) =>
+        part.startsWith("@") ? (
+          <span key={index} className="font-medium text-[#9a6244]">
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+    </p>
   );
 }
 
