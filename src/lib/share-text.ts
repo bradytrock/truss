@@ -21,19 +21,22 @@ export function defaultShareText(input: {
   number: string;
   name: string;
   url: string;
+  /** Job site, when the text should name the property instead of the document title. */
+  propertyAddress?: string;
 }) {
   const who = firstName(input.customer);
   const company = input.company.trim() || "the contractor";
+  const place = input.propertyAddress?.trim() ?? "";
   if (input.kind === "invoice") {
-    const label = input.name.trim() ? ` (${input.name.trim()})` : "";
-    return `Hi ${who}, ${company} sent invoice ${input.number}${label}. Open it here:\n${input.url}`;
+    const label = place ? ` — ${place}` : input.name.trim() ? ` (${input.name.trim()})` : "";
+    return `Hi ${who}, ${company} sent invoice ${input.number}${label}. Open it here: ${input.url}`;
   }
   if (input.kind === "page") {
     const label = input.name.trim() || "document";
     return `Hi ${who}, ${company} sent ${label}. Open it here:\n${input.url}`;
   }
-  const job = input.name.trim() ? ` — ${input.name.trim()}` : "";
-  return `Hi ${who}, ${company} sent your proposal ${input.number}${job}. Review and sign here:\n${input.url}`;
+  const job = place ? ` — ${place}` : input.name.trim() ? ` — ${input.name.trim()}` : "";
+  return `Hi ${who}, ${company} sent your proposal ${input.number}${job}. Review and sign here: ${input.url}`;
 }
 
 export function defaultShareEmailSubject(input: {

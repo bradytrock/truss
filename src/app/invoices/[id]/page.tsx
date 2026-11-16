@@ -17,7 +17,7 @@ import { InvoiceFilesPanel } from "@/components/invoice-files";
 import { InvoicePayPanel } from "@/components/document-pay-panel";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
-import { shareContactsForInvoice } from "@/lib/parties";
+import { canAddSecondHomeowner, relatedContactIdsWithHomeowner, secondHomeownerDraft, shareContactsForInvoice } from "@/lib/parties";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { invoiceEditLock } from "@/lib/invoice-lines";
@@ -447,12 +447,47 @@ export default function InvoiceDetailPage() {
         documentNumber={record.number}
         documentName={record.name}
         propertyAddress={propertyAddress}
+        jobStreet={job?.street}
+        jobCity={job?.city}
+        jobState={job?.state}
+        jobPostalCode={job?.postalCode}
         companyName={crm.company.name}
         companyLogoUrl={cardHeaderLogo(crm.company)}
         emailTemplates={crm.company.emailTemplates}
         sender={emailOwner}
         recipients={shareContactsForInvoice(record, crm)}
         onDownloadPdf={downloadPdf}
+        onAddSigner={
+          job && canAddSecondHomeowner(job, crm.contacts)
+            ? async ({ name, phone, email }) => {
+                try {
+                  const primaryId = estimate?.contactId || job.primaryContactId;
+                  const primaryContact = primaryId ? crm.getContact(primaryId) : undefined;
+                  const created = await crm.addContact(
+                    secondHomeownerDraft({
+                      name,
+                      phone,
+                      email,
+                      clientId: primaryContact?.clientId ?? job.clientId ?? null,
+                      ownerStaffId: primaryContact?.ownerStaffId || crm.user.staffId,
+                    }),
+                  );
+                  const ok = await crm.updateJob(job.id, {
+                    relatedContactIds: relatedContactIdsWithHomeowner(job.relatedContactIds, created.id),
+                  });
+                  if (!ok) {
+                    toast.error("Could not add them to the job.");
+                    return false;
+                  }
+                  toast.success(`${created.name} will get this invoice too.`);
+                  return true;
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Could not add that person.");
+                  return false;
+                }
+              }
+            : undefined
+        }
         onTexted={(sent) =>
           crm.logOutboundText({
             ...sent,
