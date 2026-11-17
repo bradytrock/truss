@@ -27,7 +27,7 @@ export function cassioMcpTools() {
     {
       name: "log_client_communication",
       description:
-        "In a private text from the account owner, prepare a note, call, or text on a client. Ask them to reply YES, then call again. Does nothing in a group.",
+        "In a private text from the account owner, prepare a note, call, or text on the person's open job. Ask them to reply YES, then call again. Does nothing in a group.",
       inputSchema: {
         type: "object",
         properties: {

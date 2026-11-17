@@ -33,14 +33,17 @@ const prepared = await runCassioAction({
   audience: "owner_dm",
   latestText: "Log a call with Bryce Jones",
   seedChatId: "",
-  rpc: async (name) => {
-    if (name === "cassio_visible_client") return { ok: true, clientId: "c1", name: "Bryce Jones" };
-    if (name === "cassio_action_remember") return { ok: true, summary: "Log a call on Bryce Jones." };
+  rpc: async (name, args) => {
+    if (name === "cassio_visible_client") {
+      return { ok: true, clientId: "c1", name: "Bryce Jones", openJobId: "j1", openJobCode: "BJ081926-A" };
+    }
+    if (name === "cassio_action_remember") return { ok: true, summary: args.p_summary };
     return { ok: false };
   },
   sendSeed: async () => false,
   readBook: async () => "unused",
 });
 assert.match(prepared, /Reply YES/);
+assert.match(prepared, /job BJ081926-A/);
 
 console.log("cassio-actions.test.ts ok");

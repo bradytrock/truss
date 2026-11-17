@@ -8,6 +8,7 @@ Each person connects their own ZeroSettle number. ZeroSettle hosts Cassio on tha
    - `supabase/migrations/20261117170000_cassio_zerosettle_lines.sql`
    - `supabase/migrations/20261117180000_cassio_book.sql`
    - `supabase/migrations/20261117190000_cassio_actions.sql`
+   - `supabase/migrations/20261117200000_cassio_note_on_job.sql`
 2. Deploy this app so `/api/cassio/mcp` is on the public https site.
 3. On the host, set `SUPABASE_SERVICE_ROLE_KEY`. Lookups work without it. The text Cassio sends when a homeowner opens an estimate needs it.
 4. In ZeroSettle, the line is paid and the API token comes from that same account. Open [the ZeroSettle console](https://portal.zerosettle.io/imessage), mint an API token, and copy it. Do not paste it into chat or into source.
@@ -32,7 +33,7 @@ Book questions are answered only in a private text from the phone on your profil
 
 ## Communications and appointments
 
-In that private text, ask Cassio to log a note, call, or text on a client, or to book an appointment on a job. It repeats the change and waits for a reply that is only YES. Then it saves. A YES with extra words does not save.
+In that private text, ask Cassio to log a note, call, or text. It saves that on the person's open job, or on the contact only when there is no open job. Ask it to book an appointment on a job the same way. It repeats the change and waits for a reply that is only YES. Then it saves. A YES with extra words does not save.
 
 ## Seeds group
 

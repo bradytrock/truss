@@ -78,10 +78,13 @@ export async function runCassioAction(input: {
     if (!client || !body) return "Name the client and what to record.";
     const found = asRecord(await input.rpc("cassio_visible_client", { p_token: input.token, p_query: client }));
     if (!found || found.ok === false) return text(found?.error) || "No client in this book matched.";
-    const summary = `Log a ${kind} on ${text(found.name) || client}.`;
+    const jobCode = text(found.openJobCode);
+    const where = jobCode ? `job ${jobCode}` : text(found.name) || client;
+    const summary = `Log a ${kind} on ${where}.`;
     return remember(input.rpc, input.token, "communication", {
       clientId: found.clientId,
       name: found.name,
+      jobId: text(found.openJobId),
       kind,
       body,
     }, summary);

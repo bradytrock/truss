@@ -129,6 +129,15 @@ assert.match(actions, /cassio_action_commit/);
 assert.doesNotMatch(actions, /contract_value/);
 assert.doesNotMatch(actions, /photon/i);
 
+const noteOnJob = readFileSync(
+  new URL("../../supabase/migrations/20261117200000_cassio_note_on_job.sql", import.meta.url),
+  "utf8",
+);
+assert.match(noteOnJob, /entity_type, entity_id, type, body, author/);
+assert.match(noteOnJob, /'job', v_job/);
+assert.match(noteOnJob, /cassio_open_job/);
+assert.doesNotMatch(noteOnJob, /photon/i);
+
 for (const file of [
   "./zerosettle.ts",
   "./zerosettle-server.ts",
