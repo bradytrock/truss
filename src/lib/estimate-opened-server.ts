@@ -17,6 +17,7 @@ import { resolveSystemEmail, systemEmailText } from "@/lib/email-templates";
 import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { resolveStoredFileUrl } from "@/lib/storage/urls";
 import { firstName, looksLikePhone } from "@/lib/phone";
+import { channelOpen } from "@/lib/notification-prefs-api";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { sendOfficeText } from "@/lib/photon-server";
 import { looksLikeEmail } from "@/lib/share-text";
@@ -71,15 +72,21 @@ export async function notifyProjectManagerEstimateOpened(token: string) {
     const notify = parseEstimateOpenedNotify(data);
     if (!notify) return;
 
+    const staffId = notify.staffId ?? "";
+    const [textOn, emailOn] = await Promise.all([
+      channelOpen(supabase, staffId, "proposal_opened", "text"),
+      channelOpen(supabase, staffId, "proposal_opened", "email"),
+    ]);
+
     const sms = estimateOpenedSms(notify);
-    if (looksLikePhone(notify.phone) && sms) {
+    if (textOn && looksLikePhone(notify.phone) && sms) {
       const sent = await sendOfficeText({ to: notify.phone, content: sms });
       if (!sent.ok) {
         console.error("[share] estimate opened text", sent.error);
       }
     }
 
-    if (isResendConfigured() && looksLikeEmail(notify.email)) {
+    if (emailOn && isResendConfigured() && looksLikeEmail(notify.email)) {
       const from = formatResendFrom({
         senderName: "Office",
         companyName: notify.companyName || "Truss",

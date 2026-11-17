@@ -59,6 +59,8 @@ import { messageThreads } from "@/lib/job-messages";
 import { openedAtFor, threadUnreadCount } from "@/lib/message-threads";
 import { openDialerPopup } from "@/lib/calls/popup";
 import { useSoftphone } from "@/lib/calls/softphone";
+import { allowsNotification } from "@/lib/notification-prefs";
+import { useSavedNotificationPrefs } from "@/lib/notification-prefs-client";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { actionableJobCodeReviews } from "@/lib/job-code";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -522,6 +524,7 @@ function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const { effectiveStaff, returningClientLeads, tasks, jobs, book, user } = useCrm();
+  const notificationPrefs = useSavedNotificationPrefs(effectiveStaff?.id);
   const inboxUnread = useMemo(() => {
     const messages = Array.isArray(book?.messages) ? book.messages : [];
     const contacts = Array.isArray(book?.contacts) ? book.contacts : [];
@@ -535,9 +538,11 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
       return 0;
     }
   }, [book, jobs, user.id]);
-  const homeBadge =
-    actionableReturningClientNotices(returningClientLeads, effectiveStaff).length +
-    actionableJobCodeReviews(tasks, jobs, effectiveStaff).length;
+  const returningCount =
+    notificationPrefs && !allowsNotification(notificationPrefs, "returning_client", "in_app")
+      ? 0
+      : actionableReturningClientNotices(returningClientLeads, effectiveStaff).length;
+  const homeBadge = returningCount + actionableJobCodeReviews(tasks, jobs, effectiveStaff).length;
   const navOptions = {
     showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
     showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
@@ -1145,6 +1150,7 @@ export function UserMenu() {
         ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/profile")}>Profile</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/settings/notifications")}>Notifications</DropdownMenuItem>
         {viewer &&
         (canManageSettings(viewer.role, viewer) || canManageAutomations(viewer.role, viewer)) ? (
           <DropdownMenuItem

@@ -1,4 +1,5 @@
 import { leadAssignNeedsEmail } from "@/lib/lead-assign-email";
+import { channelOpen } from "@/lib/notification-prefs-api";
 import { sendVoiceLeadAssignEmails } from "@/lib/lead-assign-email-server";
 import { looksLikePhone } from "@/lib/phone";
 import { sendOfficeText } from "@/lib/photon-server";
@@ -157,6 +158,10 @@ async function notifyOwningPm(token: string, result: VoiceRpcResult) {
   const to = result.notifyPhone?.trim() ?? "";
   const content = result.notifySms?.trim() ?? "";
   if (!looksLikePhone(to) || !content) return { notified: false };
+  const staffId = result.notifyStaffId?.trim() ?? "";
+  if (staffId && !(await channelOpen(createAnonClient(), staffId, "missed_call", "text"))) {
+    return { notified: false };
+  }
   try {
     const sent = await sendOfficeText({ to, content, voiceToken: token });
     if (sent.ok && (result.jobId || result.opportunityId)) {

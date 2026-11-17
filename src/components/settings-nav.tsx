@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import {
+  Bell,
   Building2,
   FileText,
   Folder,
@@ -30,11 +31,28 @@ type NavItem = {
   admin: boolean;
   accounting: boolean;
   automations: boolean;
+  /** Every signed-in person, not only company admins. */
+  personal?: boolean;
 };
 
 type NavGroup = { id: string; label: string; items: NavItem[] };
 
 const GROUPS: NavGroup[] = [
+  {
+    id: "you",
+    label: "You",
+    items: [
+      {
+        href: "/settings/notifications",
+        label: "Notifications",
+        icon: Bell,
+        admin: false,
+        accounting: false,
+        automations: false,
+        personal: true,
+      },
+    ],
+  },
   {
     id: "company",
     label: "Company",
@@ -85,6 +103,7 @@ const GROUPS: NavGroup[] = [
 ];
 
 const CRUMBS: Array<[string, string]> = [
+  ["/settings/notifications", "Notifications"],
   ["/settings/people/teams", "Teams"],
   ["/settings/teams", "Teams"],
   ["/settings/people/calling", "Phone & texting"],
@@ -145,6 +164,7 @@ function itemVisible(
   item: NavItem,
   access: { admin: boolean; accounting: boolean; automations: boolean },
 ) {
+  if (item.personal) return true;
   return (
     (item.admin && access.admin) ||
     (item.accounting && access.accounting) ||

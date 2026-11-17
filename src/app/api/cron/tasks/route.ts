@@ -9,6 +9,7 @@ import {
 import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { formatDate } from "@/lib/format";
 import { firstName } from "@/lib/phone";
+import { emailChannelOpen } from "@/lib/notification-prefs-api";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { readSessionUser } from "@/lib/session-user";
@@ -85,6 +86,10 @@ export async function GET(request: Request) {
         overdue,
         deskUrl,
       };
+      if (!(await emailChannelOpen(supabase, reminder.assigneeEmail, "task_due", "email"))) {
+        delivered += 1;
+        continue;
+      }
       const builtinSubject = taskReminderSubject(reminder.title, overdue);
       const builtinText = taskReminderText(payload);
       const statusLine = overdue ? `${reminder.title} is overdue.` : `${reminder.title} is due today.`;

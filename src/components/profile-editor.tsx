@@ -34,6 +34,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { GoogleLocationSelect } from "@/components/google-locations-settings";
+import { NotificationSettings } from "@/components/notification-settings";
 import { PhoneInput } from "@/components/phone-input";
 import { TeamSelect } from "@/components/teams-settings";
 import { inviteExpiry, seatInviteStatus, staffStatusLabel } from "@/lib/accounts";
@@ -395,7 +396,7 @@ export function ProfileEditor({
             <form onSubmit={(event) => void onSubmit(event)} className="flex h-full min-h-0 flex-col">
               <SheetTitle className="sr-only">Profile for {member.name}</SheetTitle>
               <SheetDescription className="sr-only">
-                Name, card, sales goal, signature, and website chat for {member.name}.
+                Name, card, sales goal, signature, website chat, and notifications for {member.name}.
               </SheetDescription>
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
                 <section className="rounded-2xl border border-[#ece7e2] bg-white p-5 shadow-sm">
@@ -485,6 +486,20 @@ export function ProfileEditor({
                   </section>
                 ) : null}
 
+                {tab === "notifications" ? (
+                  <div role="tabpanel">
+                    <NotificationSettings
+                      key={member.id}
+                      member={member}
+                      teams={teams}
+                      companyId={crm.user.companyId}
+                      self={member.id === viewerId}
+                      profileUserId={member.id === crm.user.staffId ? crm.user.id : undefined}
+                      embedded
+                    />
+                  </div>
+                ) : null}
+                {tab === "notifications" ? null : (
                 <section className="rounded-2xl border border-[#ece7e2] bg-white p-5 shadow-sm" role="tabpanel">
                   {tab === "details" ? (
                     <DetailsTab
@@ -566,6 +581,7 @@ export function ProfileEditor({
                     />
                   ) : null}
                 </section>
+                )}
               </div>
 
               <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-[#ece7e2] bg-white px-4 py-3">

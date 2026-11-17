@@ -565,6 +565,22 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["staff_device_locations"]["Insert"]>;
         Relationships: [];
       };
+      notification_preferences: {
+        Row: {
+          staff_id: string;
+          company_id: string;
+          channels: Json;
+          updated_at: string;
+        };
+        Insert: {
+          staff_id: string;
+          company_id: string;
+          channels?: Json;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["notification_preferences"]["Insert"]>;
+        Relationships: [];
+      };
       weather_notices: {
         Row: {
           id: string;
@@ -3650,6 +3666,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      notification_allows: {
+        Args: { p_staff_id: string; p_kind: string; p_channel: string };
+        Returns: boolean;
+      };
+      notification_allows_email: {
+        Args: { p_email: string; p_kind: string; p_channel: string };
+        Returns: boolean;
+      };
       website_chat_lookup: {
         Args: { p_slug: string };
         Returns: Json;

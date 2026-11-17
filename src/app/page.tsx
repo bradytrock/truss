@@ -16,6 +16,8 @@ import { qbQueue } from "@/lib/job-financials";
 import { actionableJobCodeReviews } from "@/lib/job-code";
 import { jobRecordHref } from "@/lib/job-record";
 import { itemTitle, jobDocumentHref, pmReviewNotices } from "@/lib/qb-review";
+import { allowsNotification } from "@/lib/notification-prefs";
+import { useSavedNotificationPrefs } from "@/lib/notification-prefs-client";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { canViewAccounting, canViewProjectFinancials } from "@/lib/visibility";
 
@@ -25,6 +27,7 @@ export default function HomePage() {
   const [decidingCodeId, setDecidingCodeId] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
 
+  const notificationPrefs = useSavedNotificationPrefs(crm.effectiveStaff?.id);
   const reviewNotices = useMemo(() => {
     const staff = crm.effectiveStaff;
     if (!staff) return [];
@@ -36,13 +39,18 @@ export default function HomePage() {
       expenses: crm.expenses,
       payments: crm.payments,
       comments: crm.qbReviewComments ?? [],
+    }).filter((notice) => {
+      if (!notificationPrefs) return true;
+      const kind = notice.reason === "returned" ? "accounting_returned" : "file_mention";
+      return allowsNotification(notificationPrefs, kind, "in_app");
     });
-  }, [crm.effectiveStaff, crm.expenses, crm.invoices, crm.jobs, crm.payments, crm.qbReviewComments, crm.staff]);
+  }, [crm.effectiveStaff, crm.expenses, crm.invoices, crm.jobs, crm.payments, crm.qbReviewComments, crm.staff, notificationPrefs]);
 
-  const returningNotices = useMemo(
-    () => actionableReturningClientNotices(crm.returningClientLeads, crm.effectiveStaff),
-    [crm.effectiveStaff, crm.returningClientLeads],
-  );
+  const returningNotices = useMemo(() => {
+    const notices = actionableReturningClientNotices(crm.returningClientLeads, crm.effectiveStaff);
+    if (notificationPrefs && !allowsNotification(notificationPrefs, "returning_client", "in_app")) return [];
+    return notices;
+  }, [crm.effectiveStaff, crm.returningClientLeads, notificationPrefs]);
 
   const jobCodeReviews = useMemo(
     () => actionableJobCodeReviews(crm.tasks, crm.jobs, crm.effectiveStaff),

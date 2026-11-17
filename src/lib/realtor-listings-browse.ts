@@ -1,3 +1,4 @@
+import { channelOpen } from "@/lib/notification-prefs-api";
 import { sendOfficeText } from "@/lib/photon-server";
 import { createAnonClient } from "@/lib/supabase/anon";
 
@@ -193,7 +194,12 @@ export async function browseRealtorListingWatch(watch: RealtorListingWatch) {
       ? result.contactName
       : watch.contactName;
 
-  if (!browseError && newListings.length > 0) {
+  const ownerStaffId = typeof result.ownerStaffId === "string" ? result.ownerStaffId : watch.ownerStaffId;
+  const listingText =
+    !browseError &&
+    newListings.length > 0 &&
+    (!ownerStaffId || (await channelOpen(supabase, ownerStaffId, "realtor_listing", "text")));
+  if (listingText) {
     try {
       await notifyOwnerOfNewListings({
         ownerPhone,

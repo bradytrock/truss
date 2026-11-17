@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { crewWarningText, lightningText, outlookText, untilLabel } from "./alerts.ts";
 import { buildStormDesk, type DeskJob } from "./desk.ts";
 import { pointInGeometry } from "./geometry.ts";
+import { loadCompanyNotificationPrefs } from "@/lib/notification-prefs-api";
+import { allowsNotification, type AlertId, type NotificationPrefs } from "@/lib/notification-prefs";
 import { sendOfficeText } from "@/lib/photon-server";
 import type { Database } from "@/lib/supabase/database.types";
 import { buildStormLayers } from "./picture.ts";
@@ -36,6 +38,7 @@ export async function dispatchCompanyWeather(supabase: Db, companyId: string, op
     ...crew.map((person) => ({ id: person.staffId, lat: person.lat, lng: person.lng })),
   ];
   if (!points.length) return { companyId, texts: 0, mocked: 0, skipped: "" } satisfies DispatchResult;
+  const prefs = await loadCompanyNotificationPrefs(supabase, companyId);
   const layers = await buildStormLayers(points, jobs.map((job) => job.state));
   const desk = buildStormDesk(jobs, layers);
   const staffById = new Map(staff.map((person) => [person.id, person]));
@@ -56,7 +59,8 @@ export async function dispatchCompanyWeather(supabase: Db, companyId: string, op
         if (LEADER_ROLES.has(person.role)) addPlace(recipients, person.id, places[0]?.name || "the book");
       }
     }
-    const sent = await sendGrouped(supabase, companyId, alert.id, recipients, staffById, (names, zone) =>
+    const kind: AlertId = alert.route === "sms" ? "weather_warning" : "weather_watch";
+    const sent = await sendGrouped(supabase, companyId, alert.id, recipients, staffById, prefs, kind, (names, zone) =>
       crewWarningText({
         event: alert.event,
         until: untilInZone(alert, zone),
@@ -80,7 +84,7 @@ export async function dispatchCompanyWeather(supabase: Db, companyId: string, op
       if (crew.some((person) => person.staffId === hit.id)) addPlace(recipients, hit.id, "your location");
     }
     const bucket = lightningBucket();
-    const sent = await sendGrouped(supabase, companyId, `lightning-${bucket}`, recipients, staffById, (names) =>
+    const sent = await sendGrouped(supabase, companyId, `lightning-${bucket}`, recipients, staffById, prefs, "weather_lightning", (names) =>
       lightningText(peak, names),
     );
     texts += sent.texts;
@@ -102,6 +106,8 @@ export async function dispatchCompanyWeather(supabase: Db, companyId: string, op
         `outlook-${new Date().toISOString().slice(0, 10)}`,
         recipients,
         staffById,
+        prefs,
+        "weather_watch",
         () =>
           outlookText({
             jobs: hailJobs.length,
@@ -124,6 +130,8 @@ async function sendGrouped(
   sourceId: string,
   recipients: Map<string, string[]>,
   staffById: Map<string, StaffRow>,
+  prefs: Map<string, NotificationPrefs>,
+  kind: AlertId,
   bodyFor: (places: string[], timeZone: string) => string,
 ) {
   let texts = 0;
@@ -133,6 +141,7 @@ async function sendGrouped(
   const already = await receiptStaff(supabase, noticeId);
   for (const [staffId, places] of recipients) {
     if (already.has(staffId)) continue;
+    if (!allowsNotification(prefs.get(staffId), kind, "text")) continue;
     const person = staffById.get(staffId);
     const phone = person?.phone?.trim() ?? "";
     if (!phone) continue;
