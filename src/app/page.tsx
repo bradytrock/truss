@@ -10,6 +10,7 @@ import { ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { useCrm } from "@/lib/crm-store";
 import { closedWonThisMonth, homeGoalScope, homeQuota, wonDeals } from "@/lib/home-dashboard";
+import { buildHomeActivity } from "@/lib/home-activity";
 import { buildHomeDesk } from "@/lib/home-desk";
 import { localYmd } from "@/lib/format";
 import { qbQueue } from "@/lib/job-financials";
@@ -124,6 +125,27 @@ export default function HomePage() {
     });
   }, [crm, jobCodeReviews, returningNotices, reviewNotices]);
 
+  const activity = useMemo(
+    () =>
+      buildHomeActivity({
+        jobs: crm.jobs,
+        opportunities: crm.opportunities,
+        estimates: crm.estimates,
+        signatureEvents: crm.estimateSignatureEvents,
+        expenses: crm.expenses,
+        messages: crm.messages,
+        emails: crm.gmailMessages,
+        activities: crm.activities,
+        contacts: crm.contacts.map((contact) => ({
+          id: contact.id,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+        })),
+      }),
+    [crm],
+  );
+
   async function decideReturning(
     noticeId: string,
     decision: "take" | "decline" | "reassigned" | "kept" | "dismiss",
@@ -184,6 +206,7 @@ export default function HomePage() {
       {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : (
         <HomeDesk
           desk={desk}
+          activity={activity}
           busyId={completingId || decidingId || decidingCodeId}
           onCompleteTask={(id) => void completeTask(id)}
           onClearRow={(row) => void clearRow(row)}

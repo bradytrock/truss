@@ -5,6 +5,8 @@ import { useState, type ReactNode } from "react";
 import { Sparkles, TriangleAlert } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatCurrency, formatCurrencyFull } from "@/lib/format";
+import { HomeActivity } from "@/components/home-activity";
+import type { HomeActivityFeed } from "@/lib/home-activity";
 import type { DeskAction, DeskBadge, HomeDeskModel, HomeDeskRow } from "@/lib/home-desk";
 import { digitsOnly } from "@/lib/phone";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,7 @@ type FilterId = "all" | "calls" | "reviews" | "money";
 
 export function HomeDesk({
   desk,
+  activity,
   busyId,
   onCompleteTask,
   onClearRow,
@@ -38,6 +41,7 @@ export function HomeDesk({
   onJobCode,
 }: {
   desk: HomeDeskModel;
+  activity: HomeActivityFeed;
   busyId?: string | null;
   onCompleteTask: (taskId: string) => void;
   onClearRow: (row: { id: string; title: string; relatedId: string }) => void;
@@ -291,7 +295,7 @@ export function HomeDesk({
         ) : null}
       </section>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(16rem,0.8fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.95fr)]">
         <section className="rounded-2xl bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.08)]">
           <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
             <div>
@@ -350,41 +354,7 @@ export function HomeDesk({
           )}
         </section>
 
-        <section className="rounded-2xl bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.08)]">
-          <div className="px-5 pt-5 pb-3">
-            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Recent activity</h2>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">Calls, texts, inspections and job progress.</p>
-          </div>
-          {desk.activity.length === 0 ? (
-            <p className="border-t border-black/5 px-5 py-8 text-sm text-muted-foreground">Nothing logged yet.</p>
-          ) : (
-            <ul>
-              {desk.activity.map((item) => (
-                <li key={item.id} className="flex items-start gap-3 border-t border-black/5 px-5 py-3">
-                  <span
-                    className={cn(
-                      "mt-1.5 size-2 shrink-0 rounded-full",
-                      item.tone === "green" && "bg-[#3d8c5a]",
-                      item.tone === "red" && "bg-primary",
-                      item.tone === "blue" && "bg-[#2f5f9e]",
-                      item.tone === "gray" && "bg-[#b0b0b0]",
-                    )}
-                  />
-                  <div className="min-w-0">
-                    {item.href ? (
-                      <Link href={item.href} className="block text-[13.5px] font-medium text-foreground hover:underline">
-                        {item.title}
-                      </Link>
-                    ) : (
-                      <p className="text-[13.5px] font-medium text-foreground">{item.title}</p>
-                    )}
-                    <p className="truncate text-[12.5px] text-muted-foreground">{item.detail}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <HomeActivity feed={activity} />
       </div>
     </div>
   );
