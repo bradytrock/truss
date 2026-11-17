@@ -29,7 +29,25 @@ const single = parseCassioLine({
 assert.equal(single.lines.length, 1);
 assert.equal(single.lines[0]?.number, "+18055550100");
 assert.equal(single.creditsLeft, 500);
+assert.equal(single.active, true);
 assert.equal(resolveCassioLine(single, "").ok, true);
+
+const paidRestLine = parseCassioLine({
+  handle: "+18055550100",
+  profile: { name: "Example App" },
+  usage: { new_contacts: { used: 1, limit: 5, period: "day" } },
+});
+assert.equal(paidRestLine.active, true, "a paid line omits active");
+
+const readyWithoutFlag = parseCassioLine({ handle: "+18055550100", onboarding: "ready" });
+assert.equal(readyWithoutFlag.active, true);
+
+const stillSubscribing = parseCassioLine({
+  active: false,
+  onboarding: "subscribe",
+  handle: "+18055550100",
+});
+assert.equal(stillSubscribing.active, false);
 
 const many = parseCassioLine({
   active: true,
@@ -65,6 +83,14 @@ assert.doesNotMatch(body.first_message.join("\n"), /photon/i);
 assert.equal(body.timezone, "America/Chicago");
 
 assert.match(zerosettleFailure(402, null).message, /Subscribe/);
+assert.match(
+  zerosettleFailure(402, { error: { code: "ai_credits_exhausted", message: "Out of credits." } }).message,
+  /Out of credits/,
+);
+assert.doesNotMatch(
+  zerosettleFailure(402, { error: { code: "ai_credits_exhausted", message: "Out of credits." } }).message,
+  /not paid/,
+);
 assert.equal(zerosettleFailure(401, { error: { code: "unauthorized" } }).code, "unauthorized");
 
 const migration = readFileSync(

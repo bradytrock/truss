@@ -112,6 +112,20 @@ export function cassioLineQuery(choice: CassioLineChoice) {
   return "";
 }
 
+const UNPAID_ONBOARDING = new Set(["sign_up", "claim", "test", "subscribe"]);
+
+/**
+ * A paid REST line often omits `active` and just returns the number.
+ * `active: false` or an unfinished onboarding step is the unpaid case.
+ * HTTP 402 is handled separately, before this runs.
+ */
+export function cassioLineIsActive(data: Record<string, unknown>) {
+  const onboarding = asString(data.onboarding);
+  if (data.active === true || onboarding === "ready") return true;
+  if (data.active === false || UNPAID_ONBOARDING.has(onboarding)) return false;
+  return Boolean(asString(data.handle));
+}
+
 export function parseCassioLine(payload: unknown): ParsedCassioLine {
   const data = asRecord(payload) ?? {};
   const profile = asRecord(data.profile);
@@ -130,7 +144,7 @@ export function parseCassioLine(payload: unknown): ParsedCassioLine {
   const choices = lines.length ? lines : handle ? [{ id: "", number: handle, groupId: "" }] : [];
   const left = credits?.left;
   return {
-    active: data.active === true,
+    active: cassioLineIsActive(data),
     handle,
     yourNumber: asString(data.your_number),
     profileName: asString(profile?.name),
@@ -159,6 +173,9 @@ export function zerosettleFailure(status: number, payload: unknown) {
   const error = asRecord(asRecord(payload)?.error);
   const code = asString(error?.code);
   const message = asString(error?.message);
+  if (status === 402 && code && code !== "payment_required") {
+    return { code, message: message || `ZeroSettle returned ${code}.` };
+  }
   if (status === 402 || code === "payment_required") {
     return {
       code: code || "payment_required",
