@@ -1,4 +1,6 @@
+import { emailChannelOpen } from "@/lib/notification-prefs-api";
 import { formatResendFrom, sendResendEmail } from "@/lib/resend-mail";
+import { createAnonClient } from "@/lib/supabase/anon";
 import { looksLikeEmail } from "@/lib/share-text";
 import { websiteChatAdminSubject, websiteChatAdminText, websiteChatNotifyAdmins } from "@/lib/website-chat";
 
@@ -22,7 +24,15 @@ export async function notifyWebsiteChatAdmins(input: {
   const recipients = websiteChatNotifyAdmins(input.admins, input.ownerName)
     .map((admin) => (admin.email ?? "").trim())
     .filter((email, index, all) => looksLikeEmail(email) && all.indexOf(email) === index);
-  if (!recipients.length) return { sent: 0 };
+  const supabase = createAnonClient();
+  const allowed = (
+    await Promise.all(
+      recipients.map(async (email) =>
+        (await emailChannelOpen(supabase, email, "website_chat", "email")) ? email : "",
+      ),
+    )
+  ).filter(Boolean);
+  if (!allowed.length) return { sent: 0 };
 
   const subject = websiteChatAdminSubject(input.name, input.street);
   const text = websiteChatAdminText({
@@ -49,7 +59,7 @@ export async function notifyWebsiteChatAdmins(input: {
   });
 
   let sent = 0;
-  for (const to of recipients) {
+  for (const to of allowed) {
     const result = await sendResendEmail({ to, subject, text, html, from, replyTo });
     if (result.ok) sent += 1;
   }

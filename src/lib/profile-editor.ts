@@ -11,6 +11,7 @@ export const PROFILE_TABS = [
   { id: "goal", label: "Sales goal" },
   { id: "signature", label: "Signature" },
   { id: "chat", label: "Website chat" },
+  { id: "notifications", label: "Notifications" },
 ] as const;
 
 export type ProfileTab = (typeof PROFILE_TABS)[number]["id"];

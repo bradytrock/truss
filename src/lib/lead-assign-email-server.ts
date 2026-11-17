@@ -22,6 +22,7 @@ import {
   type LeadAssignRecipient,
   type LeadAssignStaff,
 } from "@/lib/lead-assign-email";
+import { channelOpen } from "@/lib/notification-prefs-api";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { looksLikeEmail } from "@/lib/share-text";
 import { createClient } from "@/lib/supabase/server";
@@ -54,6 +55,7 @@ export async function sendLeadAssignEmails(input: {
   companyName: string;
   replyTo: string;
   emailTemplates?: CompanyEmailTemplates;
+  supabase: Client;
 }): Promise<LeadAssignNotifyResult> {
   if (input.recipients.length === 0) {
     return { ok: true, sent: 0, failed: 0, skipped: 1 };
@@ -81,6 +83,8 @@ export async function sendLeadAssignEmails(input: {
   let failed = 0;
 
   for (const recipient of input.recipients) {
+    const kind = recipient.role === "team_lead" ? "lead_assigned_team" : "lead_assigned_you";
+    if (!(await channelOpen(input.supabase, recipient.staffId, kind, "email"))) continue;
     const roleSubject = leadAssignEmailSubject(
       recipient.role,
       input.fields.assignedToName,
@@ -213,6 +217,7 @@ export async function sendLeadAssignEmailsForOpportunity(
       (looksLikeEmail(company?.email ?? "") ? company!.email.trim() : "") ||
       (looksLikeEmail(input.replyToFallback ?? "") ? input.replyToFallback!.trim() : ""),
     emailTemplates: await loadCompanyEmailTemplates(supabase, input.companyId),
+    supabase,
   });
 }
 
@@ -242,6 +247,7 @@ export async function sendVoiceLeadAssignEmails(
     companyName: context.companyName,
     replyTo: context.companyEmail,
     emailTemplates: await loadCompanyEmailTemplates(supabase, context.companyId),
+    supabase,
   });
 }
 

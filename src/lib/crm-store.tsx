@@ -430,6 +430,7 @@ import {
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { leadAssignNeedsEmail, requestLeadAssignNotification } from "@/lib/lead-assign-email";
 import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
+import { channelOpen } from "@/lib/notification-prefs-api";
 import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
 import { expensesForJob, fillPayment, fileToDataUrl, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
 import {
@@ -3186,6 +3187,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const notifyReturningClientByText = useCallback(
+    async (members: StaffMember[], content: string) => {
+      const supabase = isSupabaseConfigured() ? createClient() : null;
+      for (const member of members) {
+        if (supabase && !(await channelOpen(supabase, member.id, "returning_client", "text"))) continue;
+        await notifyStaffByText(member, content);
+      }
+    },
+    [notifyStaffByText],
+  );
+
   const moveOpportunity = useCallback(
     async (
       id: string,
@@ -5304,14 +5316,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             // Local book or missing tasks table — notice still stands.
           }
         }),
-        ...smsAudience.map((member) => notifyStaffByText(member, sms)),
+        notifyReturningClientByText(smsAudience, sms),
       ]);
     },
     [
       addActivity,
       addTask,
       effectiveStaff,
-      notifyStaffByText,
+      notifyReturningClientByText,
       state.contacts,
       state.returningClientLeads,
       state.staff,
@@ -5456,9 +5468,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           }),
         });
         const audience = companyAdminsForNotice(state.staff, [actor.id, notice.previousStaffId].filter(Boolean));
-        for (const member of audience) {
-          await notifyStaffByText(member, sms);
-        }
+        await notifyReturningClientByText(audience, sms);
       }
       for (const task of state.tasks) {
         if (task.completed || task.relatedId !== notice.opportunityId || !isReturningClientTask(task)) continue;
@@ -5469,7 +5479,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addActivity,
       assignOpportunityOwner,
       effectiveStaff,
-      notifyStaffByText,
+      notifyReturningClientByText,
       state.contacts,
       state.jobs,
       state.returningClientLeads,

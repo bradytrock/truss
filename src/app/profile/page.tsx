@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -256,6 +257,19 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent className="pt-4">
             <WebsiteChatSnippet company={crm.company.slug} personId={seat.id} fieldId="profile-chat-snippet" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Notifications</CardTitle>
+            <CardDescription>
+              Choose how you hear about leads, jobs, tasks, and weather. The same switches are on every person’s profile.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <Button nativeButton={false} variant="outline" render={<Link href="/settings/notifications" />}>
+              Notification settings
+            </Button>
           </CardContent>
         </Card>
         <Card>
