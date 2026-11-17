@@ -1476,3 +1476,30 @@ export function isMissingCalling(error: { message?: string; code?: string } | nu
 export function missingCallingMessage() {
   return `Run ${CALLING_SQL} in the SQL editor so Photon + LiveKit calling tables and RPCs exist.`;
 }
+
+export const CASSIO_LINE_SQL = "supabase/migrations/20261117170000_cassio_zerosettle_lines.sql";
+
+export function isMissingCassioLine(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("cassio_lines") ||
+    message.includes("cassio_line_secrets") ||
+    message.includes("cassio_line_status") ||
+    message.includes("cassio_line_save") ||
+    message.includes("cassio_line_disconnect") ||
+    message.includes("cassio_line_secret");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingCassioLineMessage() {
+  return `Run ${CASSIO_LINE_SQL} in the SQL editor so each person can connect a ZeroSettle number for Cassio.`;
+}

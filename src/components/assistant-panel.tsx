@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowUp,
@@ -1056,6 +1057,12 @@ function EmptyState({
       </h2>
       <p className="mt-2 text-sm leading-relaxed text-[#6f6b66] dark:text-muted-foreground">
         Say it the way you&apos;d tell the office. {ASSISTANT_NAME} shows you what it&apos;ll change before anything is saved.
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-[#6f6b66] dark:text-muted-foreground">
+        <Link href="/settings/cassio" className="font-medium text-primary hover:underline">
+          Text {ASSISTANT_NAME} from your iPhone
+        </Link>{" "}
+        on your own ZeroSettle number. Client texts stay on the office line.
       </p>
       <p className="mt-5 text-[11px] font-medium tracking-[0.14em] text-[#8a8680]">START WITH</p>
       <div className="mt-2 grid grid-cols-4 gap-2">

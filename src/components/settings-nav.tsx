@@ -10,6 +10,7 @@ import {
   Folder,
   History,
   MapPin,
+  MessageSquare,
   Phone,
   Plug,
   Search,
@@ -46,6 +47,15 @@ const GROUPS: NavGroup[] = [
         href: "/settings/notifications",
         label: "Notifications",
         icon: Bell,
+        admin: false,
+        accounting: false,
+        automations: false,
+        personal: true,
+      },
+      {
+        href: "/settings/cassio",
+        label: "Cassio on iMessage",
+        icon: MessageSquare,
         admin: false,
         accounting: false,
         automations: false,
@@ -104,6 +114,7 @@ const GROUPS: NavGroup[] = [
 
 const CRUMBS: Array<[string, string]> = [
   ["/settings/notifications", "Notifications"],
+  ["/settings/cassio", "Cassio on iMessage"],
   ["/settings/people/teams", "Teams"],
   ["/settings/teams", "Teams"],
   ["/settings/people/calling", "Phone & texting"],

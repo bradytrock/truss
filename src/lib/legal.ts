@@ -56,6 +56,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     paragraphs: [
       "We use this information to run Truss for your company: sign-in, the job book, sharing a proposal or invoice, sending a text or email you asked us to send, card payments you start, QuickBooks posting you approve, EagleView orders you place, and reminders such as a task that is due.",
       "If you use Ask Cassio, the question and the records needed to answer it are sent to the language-model provider configured on the host so the assistant can act in your book. Do not paste secrets you do not want a model to see.",
+      "If you connect your own ZeroSettle number for Cassio, Truss sends that token and a short brief (your name and company) to ZeroSettle. ZeroSettle's hosted assistant answers texts on that number. Truss does not use that number for homeowner texts.",
     ],
   },
   {
@@ -68,6 +69,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "Backblaze B2 — file and photo storage.",
       "Stripe — card checkout and deposits.",
       "Photon — outbound texts for each office's project.",
+      "ZeroSettle — only when a person connects their own number so Cassio can text them. Office texts stay on Photon.",
       "Resend — estimate, invoice, invite, and other product email (from no-reply@trockroofer.com).",
       "Google — Calendar and Gmail if a seat connects their Google account.",
       "QuickBooks Desktop — via the Web Connector when you approve a push.",

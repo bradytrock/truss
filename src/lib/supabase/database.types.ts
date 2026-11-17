@@ -2156,6 +2156,56 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["company_stripe_accounts"]["Insert"]>;
         Relationships: [];
       };
+      cassio_lines: {
+        Row: {
+          staff_id: string;
+          company_id: string;
+          line_id: string;
+          line_number: string;
+          group_id: string;
+          your_number: string;
+          active: boolean;
+          managed_by: string;
+          profile_name: string;
+          token_hint: string;
+          credits_left: number | null;
+          crm_updates: boolean;
+          group_messages: boolean;
+          linked_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          staff_id: string;
+          company_id: string;
+          line_id?: string;
+          line_number?: string;
+          group_id?: string;
+          your_number?: string;
+          active?: boolean;
+          managed_by?: string;
+          profile_name?: string;
+          token_hint?: string;
+          credits_left?: number | null;
+          crm_updates?: boolean;
+          group_messages?: boolean;
+          linked_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["cassio_lines"]["Insert"]>;
+        Relationships: [];
+      };
+      cassio_line_secrets: {
+        Row: {
+          staff_id: string;
+          api_token: string;
+        };
+        Insert: {
+          staff_id: string;
+          api_token?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["cassio_line_secrets"]["Insert"]>;
+        Relationships: [];
+      };
       photon_connections: {
         Row: {
           company_id: string;
@@ -4001,6 +4051,33 @@ export type Database = {
       stripe_company_status: {
         Args: Record<string, never>;
         Returns: Json;
+      };
+      cassio_line_status: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      cassio_line_save: {
+        Args: {
+          p_line_id: string;
+          p_line_number: string;
+          p_group_id: string;
+          p_your_number: string;
+          p_active: boolean;
+          p_managed_by: string;
+          p_profile_name: string;
+          p_token_hint: string;
+          p_credits_left: number;
+          p_api_token: string;
+        };
+        Returns: Json;
+      };
+      cassio_line_disconnect: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      cassio_line_secret: {
+        Args: Record<string, never>;
+        Returns: string;
       };
       photon_company_status: {
         Args: Record<string, never>;

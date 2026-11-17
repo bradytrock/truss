@@ -1151,6 +1151,7 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/profile")}>Profile</DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/settings/notifications")}>Notifications</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/settings/cassio")}>Cassio on iMessage</DropdownMenuItem>
         {viewer &&
         (canManageSettings(viewer.role, viewer) || canManageAutomations(viewer.role, viewer)) ? (
           <DropdownMenuItem

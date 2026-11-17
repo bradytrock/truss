@@ -14,6 +14,7 @@ import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome
 import { CardAnalyticsReport } from "@/components/card-analytics-report";
 import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { StaffPhotoField } from "@/components/staff-photo-field";
+import { ASSISTANT_NAME } from "@/lib/product";
 import { cardUrl } from "@/lib/card";
 import { mintPersonCardSlug } from "@/lib/card-slug";
 import { useCrm } from "@/lib/crm-store";
@@ -257,6 +258,19 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent className="pt-4">
             <WebsiteChatSnippet company={crm.company.slug} personId={seat.id} fieldId="profile-chat-snippet" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>{ASSISTANT_NAME} on iMessage</CardTitle>
+            <CardDescription>
+              Connect your own ZeroSettle number. {ASSISTANT_NAME} texts you there. Client texts stay on the office line.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <Button nativeButton={false} variant="outline" render={<Link href="/settings/cassio" />}>
+              Assistant number
+            </Button>
           </CardContent>
         </Card>
         <Card>
