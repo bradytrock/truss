@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildHomeActivity } from "./home-activity.ts";
+import { buildHomeActivity, HOME_ACTIVITY_LIMIT, selectHomeActivity } from "./home-activity.ts";
 import type {
   Activity,
   Estimate,
@@ -210,8 +210,8 @@ const feed = buildHomeActivity({
 
 assert.equal(feed.counts.proposals, 2);
 assert.equal(feed.counts.messages, 2);
-assert.equal(feed.counts.expenses, 2);
-assert.equal(feed.counts.all, 7);
+assert.equal(feed.counts.expenses, 3);
+assert.equal(feed.counts.all, 8);
 assert.equal(feed.days[0]?.label, "Today");
 assert.equal(feed.days[1]?.label, "Yesterday");
 
@@ -277,5 +277,59 @@ assert.equal(linkOnly.days[0]?.groups[0]?.events[0]?.shareToken, "");
 const empty = buildHomeActivity({ now, jobs: [], opportunities: [], estimates: [] });
 assert.equal(empty.counts.all, 0);
 assert.deepEqual(empty.days, []);
+
+const older = feed.days.flatMap((day) => day.groups).find((group) => group.events.some((event) => event.title === "Old"));
+assert.equal(older?.title, "1 expense logged");
+assert.equal(older?.expenseTotal, 10);
+
+const today = selectHomeActivity(feed, { from: "2026-11-16", to: "2026-11-16" });
+assert.equal(today.counts.proposals, 2);
+assert.equal(today.counts.messages, 0);
+assert.equal(today.counts.expenses, 2);
+assert.equal(today.counts.all, 5);
+assert.equal(today.total, 5);
+
+const swapped = selectHomeActivity(feed, { from: "2026-11-16", to: "2026-11-15" });
+assert.equal(swapped.counts.messages, 2);
+assert.equal(swapped.counts.expenses, 2);
+assert.equal(swapped.total, 7);
+
+const fromOnly = selectHomeActivity(feed, { from: "2026-11-15" });
+assert.equal(fromOnly.counts.messages, 2);
+assert.equal(fromOnly.counts.expenses, 2);
+
+const oneExpense = selectHomeActivity(feed, { filter: "expenses", limit: 1 });
+assert.equal(oneExpense.total, 3);
+assert.equal(oneExpense.shown, 1);
+assert.equal(oneExpense.days[0]?.groups[0]?.title, "1 expense logged");
+assert.equal(oneExpense.days[0]?.groups[0]?.expenseTotal, 2059.2);
+assert.equal(oneExpense.days[0]?.groups[0]?.events[0]?.title, "Jason Schane");
+
+const many = buildHomeActivity({
+  now,
+  jobs: [job({ id: "arrow", code: "BJ101426-A", name: "Arrowwood", street: "545 Arrowwood Beach Circle", city: "Trinidad", state: "TX", postalCode: "75163" })],
+  opportunities: [],
+  estimates: [],
+  activities: Array.from({ length: 12 }, (_, index) => ({
+    id: `note-${index}`,
+    entityType: "job",
+    entityId: "arrow",
+    type: "note",
+    body: `Note ${index}`,
+    createdAt: at((index + 1) * 60),
+    author: "Brady Jones",
+  })) as Activity[],
+});
+const capped = selectHomeActivity(many, { limit: HOME_ACTIVITY_LIMIT });
+assert.equal(capped.total, 12);
+assert.equal(capped.shown, HOME_ACTIVITY_LIMIT);
+const cappedTitles = capped.days.flatMap((day) => day.groups.flatMap((group) => group.events.map((event) => event.title)));
+assert.equal(cappedTitles.length, 10);
+assert.equal(cappedTitles[0], "Note 0");
+assert.equal(cappedTitles.includes("Note 10"), false);
+assert.equal(cappedTitles.includes("Note 11"), false);
+const fullDay = selectHomeActivity(many, { from: "2026-11-16", to: "2026-11-16" });
+assert.equal(fullDay.total, 12);
+assert.equal(fullDay.shown, 12);
 
 console.log("home-activity tests passed");

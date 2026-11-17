@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   BadgeCheck,
-  ChevronDown,
   Eye,
   House,
   Mail,
@@ -17,15 +16,24 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/format";
-import type { HomeActivityEvent, HomeActivityFeed, HomeActivityGroup, HomeActivityIcon } from "@/lib/home-activity";
+import {
+  HOME_ACTIVITY_LIMIT,
+  selectHomeActivity,
+  type HomeActivityDay,
+  type HomeActivityEvent,
+  type HomeActivityFeed,
+  type HomeActivityFilter,
+  type HomeActivityGroup,
+  type HomeActivityIcon,
+} from "@/lib/home-activity";
 import { digitsOnly } from "@/lib/phone";
 import { copyText, shareUrl } from "@/lib/share";
 import { cn } from "@/lib/utils";
 
-type ActivityFilter = "all" | "proposals" | "messages" | "expenses";
-
-const FILTERS: Array<{ id: ActivityFilter; label: string; count: keyof HomeActivityFeed["counts"] }> = [
+const FILTERS: Array<{ id: HomeActivityFilter; label: string; count: keyof HomeActivityFeed["counts"] }> = [
   { id: "all", label: "All", count: "all" },
   { id: "proposals", label: "Proposals", count: "proposals" },
   { id: "messages", label: "Messages", count: "messages" },
@@ -55,20 +63,25 @@ const ICON_CLASS: Record<HomeActivityIcon, string> = {
 };
 
 export function HomeActivity({ feed }: { feed: HomeActivityFeed }) {
-  const [filter, setFilter] = useState<ActivityFilter>("all");
-  const [earlier, setEarlier] = useState(false);
-  const sections = feed.days
-    .map((day) => ({
-      ...day,
-      groups: day.groups.filter((group) => filter === "all" || group.bucket === filter),
-    }))
-    .filter((day) => day.groups.length > 0);
-  const visible = earlier ? sections : sections.slice(0, 1);
-  const hidden = sections.slice(1);
+  const [filter, setFilter] = useState<HomeActivityFilter>("all");
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveFilter, setArchiveFilter] = useState<HomeActivityFilter>("all");
+  const [mode, setMode] = useState<"date" | "range">("date");
+  const [day, setDay] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const preview = selectHomeActivity(feed, { filter, limit: HOME_ACTIVITY_LIMIT });
+  const archive = selectHomeActivity(feed, {
+    filter: archiveFilter,
+    from: mode === "date" ? day : from,
+    to: mode === "date" ? day : to,
+  });
+  const more = preview.total > preview.shown;
 
-  function viewAll() {
-    setFilter("all");
-    setEarlier(true);
+  function openArchive(next: HomeActivityFilter) {
+    setFilter(next);
+    setArchiveFilter(next);
+    setArchiveOpen(true);
   }
 
   return (
@@ -82,69 +95,166 @@ export function HomeActivity({ feed }: { feed: HomeActivityFeed }) {
               Live
             </span>
           </h2>
-          <button type="button" onClick={viewAll} className="shrink-0 text-[13px] font-medium text-[#474fcf] hover:underline">
+          <button type="button" onClick={() => openArchive("all")} className="shrink-0 text-[13px] font-medium text-[#474fcf] hover:underline">
             View all
           </button>
         </div>
         <p className="mt-0.5 text-[13px] text-muted-foreground">Calls, texts, inspections and job progress</p>
-        <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="Activity filters">
-          {FILTERS.map((item) => {
-            const active = filter === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setFilter(item.id)}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12.5px]",
-                  active ? "bg-[#151826] text-white" : "bg-[#f3f4f6] text-[#3c414f] hover:bg-[#eceef1]",
-                )}
-              >
-                <span className={active ? "font-medium" : undefined}>{item.label}</span>
-                <span className={active ? "text-white/65" : "text-[#8b909a]"}>{feed.counts[item.count]}</span>
-              </button>
-            );
-          })}
+        <div className="mt-3">
+          <FilterChips value={filter} counts={feed.counts} onChange={setFilter} />
         </div>
       </div>
 
-      {visible.length === 0 ? (
-        <p className="px-5 py-8 text-sm text-muted-foreground">
-          {feed.counts.all === 0 ? "Nothing logged yet." : "Nothing in this list."}
-        </p>
-      ) : (
-        <div className="space-y-4 px-4 pt-4 pb-2">
-          {visible.map((day) => (
-            <div key={day.id}>
-              <p className="px-1 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{day.label}</p>
-              <div className="mt-2 space-y-3">
-                {day.groups.map((group) => (
-                  <ActivityGroup key={group.id} group={group} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="px-4 pt-4 pb-2">
+        <ActivitySections days={preview.days} empty={feed.counts.all === 0 ? "Nothing logged yet." : "Nothing in this list."} />
+      </div>
 
-      {hidden.length > 0 ? (
+      {more ? (
         <div className="px-5 py-3 text-center">
           <button
             type="button"
-            className="inline-flex items-center gap-1 text-[13px] font-medium text-[#474fcf] hover:underline"
-            aria-expanded={earlier}
-            onClick={() => setEarlier((open) => !open)}
+            className="text-[13px] font-medium text-[#474fcf] hover:underline"
+            onClick={() => openArchive(filter)}
           >
-            {earlier ? "Hide earlier activity" : "Show earlier activity"}
-            <ChevronDown className={cn("size-4", earlier && "rotate-180")} />
+            See more
           </button>
         </div>
       ) : (
         <div className="h-4" />
       )}
+
+      <Dialog open={archiveOpen} onOpenChange={setArchiveOpen} unsavedGuard={false}>
+        <DialogContent className="sm:max-w-[34rem] [&_[data-slot=dialog-close]]:z-20">
+          <div className="sticky top-0 z-10 -mx-5 -mt-5 mb-4 bg-popover px-5 pt-5 pr-12 pb-3">
+            <DialogHeader>
+              <DialogTitle>Recent activity</DialogTitle>
+              <DialogDescription>Pick a date or a range. Leave it blank to see every item.</DialogDescription>
+            </DialogHeader>
+            <div className="mt-3 flex flex-wrap gap-1" role="group" aria-label="Date filter">
+              <ModeChip active={mode === "date"} onClick={() => setMode("date")}>
+                On a date
+              </ModeChip>
+              <ModeChip active={mode === "range"} onClick={() => setMode("range")}>
+                Date range
+              </ModeChip>
+              {mode === "date" && day ? (
+                <button type="button" className="px-2 text-[12.5px] font-medium text-[#474fcf] hover:underline" onClick={() => setDay("")}>
+                  Clear
+                </button>
+              ) : null}
+              {mode === "range" && (from || to) ? (
+                <button
+                  type="button"
+                  className="px-2 text-[12.5px] font-medium text-[#474fcf] hover:underline"
+                  onClick={() => {
+                    setFrom("");
+                    setTo("");
+                  }}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            {mode === "date" ? (
+              <label className="mt-3 block text-[12.5px] font-medium text-foreground">
+                Date
+                <Input type="date" value={day} max={feed.today} onChange={(event) => setDay(event.target.value)} className="mt-1" />
+              </label>
+            ) : (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="block text-[12.5px] font-medium text-foreground">
+                  From
+                  <Input type="date" value={from} max={to || feed.today} onChange={(event) => setFrom(event.target.value)} className="mt-1" />
+                </label>
+                <label className="block text-[12.5px] font-medium text-foreground">
+                  To
+                  <Input type="date" value={to} min={from || undefined} max={feed.today} onChange={(event) => setTo(event.target.value)} className="mt-1" />
+                </label>
+              </div>
+            )}
+            <div className="mt-3">
+              <FilterChips value={archiveFilter} counts={archive.counts} onChange={setArchiveFilter} />
+            </div>
+          </div>
+          <ActivitySections days={archive.days} empty={archiveEmpty(feed, mode, day, from, to)} />
+        </DialogContent>
+      </Dialog>
     </section>
   );
+}
+
+function FilterChips({
+  value,
+  counts,
+  onChange,
+}: {
+  value: HomeActivityFilter;
+  counts: HomeActivityFeed["counts"];
+  onChange: (id: HomeActivityFilter) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1" role="group" aria-label="Activity filters">
+      {FILTERS.map((item) => {
+        const active = value === item.id;
+        return (
+          <button
+            key={item.id}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(item.id)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12.5px]",
+              active ? "bg-[#151826] text-white" : "bg-[#f3f4f6] text-[#3c414f] hover:bg-[#eceef1]",
+            )}
+          >
+            <span className={active ? "font-medium" : undefined}>{item.label}</span>
+            <span className={active ? "text-white/65" : "text-[#8b909a]"}>{counts[item.count]}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ModeChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-2.5 py-1 text-[12.5px]",
+        active ? "bg-[#151826] font-medium text-white" : "bg-[#f3f4f6] text-[#3c414f] hover:bg-[#eceef1]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ActivitySections({ days, empty }: { days: HomeActivityDay[]; empty: string }) {
+  if (days.length === 0) return <p className="px-1 py-6 text-sm text-muted-foreground">{empty}</p>;
+  return (
+    <div className="space-y-4">
+      {days.map((day) => (
+        <div key={day.id}>
+          <p className="px-1 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{day.label}</p>
+          <div className="mt-2 space-y-3">
+            {day.groups.map((group) => (
+              <ActivityGroup key={group.id} group={group} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function archiveEmpty(feed: HomeActivityFeed, mode: "date" | "range", day: string, from: string, to: string) {
+  if (feed.counts.all === 0) return "Nothing logged yet.";
+  if (mode === "date" && day) return "Nothing on this date.";
+  if (mode === "range" && (from || to)) return "Nothing in this range.";
+  return "Nothing in this list.";
 }
 
 function ActivityGroup({ group }: { group: HomeActivityGroup }) {

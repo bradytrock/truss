@@ -13,8 +13,12 @@ import type {
   TextMessage,
 } from "@/lib/types";
 
-const WINDOW_DAYS = 14;
 const SKIP_MESSAGE_KINDS = new Set(["reaction", "rename", "membership", "effect", "poll", "edit"]);
+
+/** How many activity items the home card shows before the rest open in the date popup. */
+export const HOME_ACTIVITY_LIMIT = 10;
+
+export type HomeActivityFilter = "all" | "proposals" | "messages" | "expenses";
 
 export type HomeActivityBucket = "proposals" | "messages" | "expenses" | "progress";
 export type HomeActivityIcon =
@@ -256,8 +260,7 @@ function proposalGroups(args: {
         }),
       );
     }
-    if (!rows.some((row) => inWindow(row.at, args.now))) continue;
-    const kept = rows.filter((row) => inWindow(row.at, args.now) || (row.icon === "sent" && ageDays(row.at, args.now) <= 30));
+    const kept = rows.filter((row) => inWindow(row.at, args.now));
     if (!kept.length) continue;
     kept.sort(byNewestIcon);
     const header = siteHeader(job, opportunity, estimate);
@@ -615,8 +618,106 @@ function latestStamp(values: Array<string | null | undefined>) {
   return values.map((value) => stamp(value)).filter(Boolean).sort().at(-1) ?? "";
 }
 
-function ageDays(iso: string, now: Date) {
-  return (now.getTime() - new Date(iso).getTime()) / 86_400_000;
+export type HomeActivitySelection = {
+  days: HomeActivityDay[];
+  /** Events that match the filter and the date range. */
+  total: number;
+  /** Events included after the limit. */
+  shown: number;
+  counts: HomeActivityFeed["counts"];
+};
+
+/** Newest matching items, optionally capped and limited to a date or inclusive range. */
+export function selectHomeActivity(
+  feed: HomeActivityFeed,
+  query: { filter?: HomeActivityFilter; from?: string; to?: string; limit?: number } = {},
+): HomeActivitySelection {
+  const filter = query.filter ?? "all";
+  const bounds = dateBounds(query.from, query.to);
+  const matched = collectEvents(feed, "all", bounds);
+  const filtered = filter === "all" ? matched : matched.filter((item) => item.group.bucket === filter);
+  const limited = query.limit != null && query.limit >= 0 ? filtered.slice(0, query.limit) : filtered;
+  return {
+    days: regroup(limited, feed.today),
+    total: filtered.length,
+    shown: limited.length,
+    counts: {
+      all: matched.length,
+      proposals: matched.filter((item) => item.group.bucket === "proposals").length,
+      messages: matched.filter((item) => item.group.bucket === "messages").length,
+      expenses: matched.filter((item) => item.group.bucket === "expenses").length,
+    },
+  };
+}
+
+function collectEvents(feed: HomeActivityFeed, filter: HomeActivityFilter, bounds: { start: string; end: string }) {
+  const chosen: Array<{ group: HomeActivityGroup; event: HomeActivityEvent }> = [];
+  for (const day of feed.days) {
+    for (const group of day.groups) {
+      if (filter !== "all" && group.bucket !== filter) continue;
+      for (const event of group.events) {
+        const eventDay = localYmd(new Date(event.at));
+        if (bounds.start && eventDay < bounds.start) continue;
+        if (bounds.end && eventDay > bounds.end) continue;
+        chosen.push({ group, event });
+      }
+    }
+  }
+  chosen.sort((left, right) => right.event.at.localeCompare(left.event.at) || left.event.id.localeCompare(right.event.id));
+  return chosen;
+}
+
+function dateBounds(from: string | undefined, to: string | undefined) {
+  const start = (from ?? "").trim();
+  const end = (to ?? "").trim();
+  if (start && end && start > end) return { start: end, end: start };
+  return { start, end };
+}
+
+function regroup(items: Array<{ group: HomeActivityGroup; event: HomeActivityEvent }>, today: string): HomeActivityDay[] {
+  const groups = new Map<string, HomeActivityGroup>();
+  for (const item of items) {
+    const existing = groups.get(item.group.id);
+    if (existing) {
+      existing.events.push(item.event);
+      continue;
+    }
+    groups.set(item.group.id, { ...item.group, events: [item.event], expenseTotal: 0 });
+  }
+  const ready = [...groups.values()].map((group) => {
+    const events = [...group.events].sort((left, right) => right.at.localeCompare(left.at));
+    const at = events[0]?.at ?? group.at;
+    const expenseTotal = events.reduce((sum, event) => sum + (event.amount ?? 0), 0);
+    return {
+      ...group,
+      at,
+      day: localYmd(new Date(at)),
+      events,
+      expenseTotal,
+      title: group.bucket === "expenses" ? expenseTitle(events.length) : group.title,
+    };
+  });
+  const byDay = new Map<string, HomeActivityGroup[]>();
+  for (const group of ready) {
+    const list = byDay.get(group.day) ?? [];
+    list.push(group);
+    byDay.set(group.day, list);
+  }
+  const yesterday = shiftYmd(today, -1);
+  return [...byDay.entries()]
+    .sort((left, right) => right[0].localeCompare(left[0]))
+    .map(([id, dayGroups]) => ({
+      id,
+      label: id === today ? "Today" : id === yesterday ? "Yesterday" : dayTitle(id),
+      groups: dayGroups.sort((left, right) => right.at.localeCompare(left.at)),
+    }));
+}
+
+function shiftYmd(ymd: string, days: number) {
+  const date = new Date(`${ymd}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setDate(date.getDate() + days);
+  return localYmd(date);
 }
 
 function sameParty(item: { jobId: string; contactId: string }, jobId?: string, contactId?: string) {
@@ -679,8 +780,7 @@ function stamp(value: string | null | undefined) {
 function inWindow(iso: string, now: Date) {
   const time = new Date(iso).getTime();
   if (!Number.isFinite(time)) return false;
-  const age = now.getTime() - time;
-  return age <= WINDOW_DAYS * 86_400_000 && age > -3_600_000;
+  return now.getTime() - time > -3_600_000;
 }
 
 function relativeWhen(iso: string, now: Date) {
