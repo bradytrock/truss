@@ -1478,6 +1478,7 @@ export function missingCallingMessage() {
 }
 
 export const CASSIO_LINE_SQL = "supabase/migrations/20261117170000_cassio_zerosettle_lines.sql";
+export const CASSIO_BOOK_SQL = "supabase/migrations/20261117180000_cassio_book.sql";
 
 export function isMissingCassioLine(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -1489,7 +1490,11 @@ export function isMissingCassioLine(error: { message?: string; code?: string } |
     message.includes("cassio_line_status") ||
     message.includes("cassio_line_save") ||
     message.includes("cassio_line_disconnect") ||
-    message.includes("cassio_line_secret");
+    message.includes("cassio_line_secret") ||
+    message.includes("cassio_line_set_book") ||
+    message.includes("cassio_estimate_activity") ||
+    message.includes("cassio_recent_updates") ||
+    message.includes("book_ready");
   return (
     (code === "pgrst205" && mentions) ||
     (code === "pgrst202" && mentions) ||
@@ -1502,4 +1507,8 @@ export function isMissingCassioLine(error: { message?: string; code?: string } |
 
 export function missingCassioLineMessage() {
   return `Run ${CASSIO_LINE_SQL} in the SQL editor so each person can connect a ZeroSettle number for Cassio.`;
+}
+
+export function missingCassioBookMessage() {
+  return `Run ${CASSIO_BOOK_SQL} in the SQL editor so Cassio can look up this seat's estimates.`;
 }

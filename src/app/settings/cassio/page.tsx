@@ -26,6 +26,7 @@ type LineStatus = {
   creditsLeft?: number | null;
   crmUpdates?: boolean;
   groupMessages?: boolean;
+  bookReady?: boolean;
   profileWarning?: string;
   sharesSender?: boolean;
   lines?: LineChoice[];
@@ -131,6 +132,12 @@ export default function CassioLineSettingsPage() {
             Paste an API token from your own ZeroSettle account. {ASSISTANT_NAME} on this number is hosted by ZeroSettle.
             It answers you there. It does not send homeowner texts, and it does not use the office line.
           </p>
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+            <li>Subscribe in the ZeroSettle console, then mint an API token there.</li>
+            <li>Paste it here on the live site and press Connect. If it is already connected, leave the token blank and press Update {ASSISTANT_NAME}.</li>
+            <li>Text that number from your own phone. Ask whether a homeowner opened an estimate.</li>
+            <li>Keep the number private. Anyone who texts it can ask about your book.</li>
+          </ol>
         </div>
 
         {linked ? (
@@ -146,8 +153,9 @@ export default function CassioLineSettingsPage() {
               {typeof info.creditsLeft === "number" ? ` · ${info.creditsLeft} assistant credits left` : ""}.
             </p>
             <p className="text-muted-foreground">
-              Updating the book and joining group chats from this number come later. In the app, {ASSISTANT_NAME} still
-              works the way it does today.
+              {info.bookReady
+                ? `This number can look up whether an estimate in your book was opened. Ask it, or wait for a text when a homeowner opens one. It still cannot change records from a text.`
+                : `Press Update ${ASSISTANT_NAME} on the live site so this number can look up your book.`}
             </p>
             {info.sharesSender ? (
               <p className="text-muted-foreground">

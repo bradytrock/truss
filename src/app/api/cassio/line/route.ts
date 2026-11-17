@@ -1,11 +1,13 @@
+import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
+import { appOrigin } from "@/lib/app-origin";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import { ASSISTANT_NAME } from "@/lib/product";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { isMissingCassioLine, missingCassioLineMessage } from "@/lib/supabase/schema-errors";
-import { configureHostedCassio } from "@/lib/zerosettle-server";
-import { CASSIO_MANAGED_BY, looksLikeZerosettleToken, zerosettleTokenHint } from "@/lib/zerosettle";
+import { isMissingCassioLine, missingCassioBookMessage, missingCassioLineMessage } from "@/lib/supabase/schema-errors";
+import { configureHostedCassio, registerCassioBook } from "@/lib/zerosettle-server";
+import { CASSIO_MANAGED_BY, cassioBookUrl, cassioLineQuery, looksLikeZerosettleToken, zerosettleTokenHint } from "@/lib/zerosettle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +28,7 @@ type LineStatus = {
   creditsLeft?: number | null;
   crmUpdates?: boolean;
   groupMessages?: boolean;
+  bookReady?: boolean;
   linkedAt?: string | null;
   error?: string;
 };
@@ -51,6 +54,7 @@ function statusFrom(value: unknown): LineStatus {
     creditsLeft: typeof row.creditsLeft === "number" ? row.creditsLeft : null,
     crmUpdates: row.crmUpdates === true,
     groupMessages: row.groupMessages === true,
+    bookReady: row.bookReady === true,
     linkedAt: typeof row.linkedAt === "string" ? row.linkedAt : null,
     error: typeof row.error === "string" ? row.error : "",
   };
@@ -70,6 +74,7 @@ function publicStatus(status: LineStatus, extra?: { profileWarning?: string; sha
     creditsLeft: status.creditsLeft ?? null,
     crmUpdates: Boolean(status.crmUpdates),
     groupMessages: Boolean(status.groupMessages),
+    bookReady: Boolean(status.bookReady),
     linkedAt: status.linkedAt ?? null,
     profileWarning: extra?.profileWarning ?? "",
     sharesSender: Boolean(extra?.sharesSender),
@@ -179,12 +184,45 @@ export async function POST(request: Request) {
     if (isMissingCassioLine(error)) return NextResponse.json({ ok: false, error: missingCassioLineMessage() }, { status: 400 });
     return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
   }
-  const status = statusFrom(data);
+  let status = statusFrom(data);
   if (status.ok === false) return NextResponse.json({ ok: false, error: status.error || "Could not save the line." }, { status: 400 });
+
+  const book = await connectCassioBook(supabase, token, configured.line.choice);
+  if (book.status) status = book.status;
+  const profileWarning = [configured.line.profileWarning, book.warning].filter(Boolean).join(" ");
   return NextResponse.json(
     publicStatus(status, {
-      profileWarning: configured.line.profileWarning,
+      profileWarning,
       sharesSender: configured.line.sharesSender,
     }),
   );
+}
+
+async function connectCassioBook(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  apiToken: string,
+  choice: LineChoice,
+) {
+  const mcpToken = randomBytes(32).toString("hex");
+  const origin = await appOrigin();
+  const production =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.trim()}`
+      : "");
+  const bookUrl = cassioBookUrl(origin, production);
+  const saved = await supabase.rpc("cassio_line_set_book", { p_mcp_token: mcpToken, p_ready: false });
+  if (saved.error) {
+    const warning = isMissingCassioLine(saved.error) ? missingCassioBookMessage() : saved.error.message;
+    return { warning, status: null as LineStatus | null };
+  }
+  const registered = await registerCassioBook(apiToken, {
+    query: cassioLineQuery({ id: choice.id, number: choice.number, groupId: choice.groupId }),
+    bookUrl,
+    mcpToken,
+  });
+  if (!registered.ok) return { warning: registered.warning, status: statusFrom(saved.data) };
+  const marked = await supabase.rpc("cassio_line_set_book", { p_mcp_token: "", p_ready: true });
+  if (marked.error) return { warning: marked.error.message, status: statusFrom(saved.data) };
+  return { warning: "", status: statusFrom(marked.data) };
 }

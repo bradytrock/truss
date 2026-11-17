@@ -2171,6 +2171,7 @@ export type Database = {
           credits_left: number | null;
           crm_updates: boolean;
           group_messages: boolean;
+          book_ready: boolean;
           linked_at: string | null;
           updated_at: string;
         };
@@ -2188,6 +2189,7 @@ export type Database = {
           credits_left?: number | null;
           crm_updates?: boolean;
           group_messages?: boolean;
+          book_ready?: boolean;
           linked_at?: string | null;
           updated_at?: string;
         };
@@ -2198,10 +2200,12 @@ export type Database = {
         Row: {
           staff_id: string;
           api_token: string;
+          mcp_token: string;
         };
         Insert: {
           staff_id: string;
           api_token?: string;
+          mcp_token?: string;
         };
         Update: Partial<Database["public"]["Tables"]["cassio_line_secrets"]["Insert"]>;
         Relationships: [];
@@ -4054,6 +4058,22 @@ export type Database = {
       };
       cassio_line_status: {
         Args: Record<string, never>;
+        Returns: Json;
+      };
+      cassio_line_set_book: {
+        Args: { p_mcp_token: string; p_ready: boolean };
+        Returns: Json;
+      };
+      cassio_estimate_activity: {
+        Args: { p_token: string; p_query: string };
+        Returns: Json;
+      };
+      cassio_recent_updates: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      cassio_line_send_target: {
+        Args: { p_staff_id: string };
         Returns: Json;
       };
       cassio_line_save: {

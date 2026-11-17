@@ -1,4 +1,5 @@
 import { ASSISTANT_NAME } from "./product.ts";
+import { getSupabaseUrl } from "./supabase/env.ts";
 import {
   ZEROSETTLE_BASE,
   cassioAgentBody,
@@ -119,4 +120,97 @@ export async function configureHostedCassio(
       profileWarning,
     },
   };
+}
+
+function mcpServers(payload: unknown) {
+  const root = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+  const lists = [root.servers, root.data, root.mcp_servers, Array.isArray(payload) ? payload : null];
+  const found: { id: string; url: string }[] = [];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as Record<string, unknown>;
+      const url = typeof row.url === "string" ? row.url : "";
+      const id = typeof row.id === "string" ? row.id : "";
+      if (url) found.push({ id, url });
+    }
+  }
+  return found;
+}
+
+/** Attach the seat's book tools to the hosted assistant. Read-only tools turn on by themselves. */
+export async function registerCassioBook(
+  token: string,
+  input: { query: string; bookUrl: string; mcpToken: string },
+): Promise<{ ok: boolean; warning: string }> {
+  if (!input.bookUrl) {
+    return {
+      ok: false,
+      warning: "Open the live https site and press Update Cassio so this number can look up your book.",
+    };
+  }
+  try {
+    const listed = await zerosettleFetch(token, `/api/imessage/agent/mcp${input.query}`);
+    const current = listed.response.ok
+      ? mcpServers(listed.payload).find((server) => server.url.replace(/\/+$/, "") === input.bookUrl)
+      : undefined;
+    if (current?.id) {
+      const patched = await zerosettleFetch(token, `/api/imessage/agent/mcp/${current.id}${input.query}`, {
+        method: "PATCH",
+        body: JSON.stringify({ token: input.mcpToken, refresh: true }),
+      });
+      if (patched.response.ok) return { ok: true, warning: "" };
+      return { ok: false, warning: zerosettleFailure(patched.response.status, patched.payload).message };
+    }
+    if (current) return { ok: true, warning: "" };
+    const created = await zerosettleFetch(token, `/api/imessage/agent/mcp${input.query}`, {
+      method: "POST",
+      body: JSON.stringify({ url: input.bookUrl, token: input.mcpToken }),
+    });
+    if (created.response.ok) return { ok: true, warning: "" };
+    return { ok: false, warning: zerosettleFailure(created.response.status, created.payload).message };
+  } catch {
+    return { ok: false, warning: "Could not reach ZeroSettle to connect the book lookup." };
+  }
+}
+
+/** Text the seat from their own Cassio number when a homeowner opens an estimate. */
+export async function sendCassioEstimateUpdate(input: { staffId: string; to: string; text: string }) {
+  const staffId = input.staffId.trim();
+  const to = input.to.trim();
+  const text = input.text.trim();
+  if (!staffId || !to || !text) return;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
+  if (!key) return;
+  try {
+    const response = await fetch(`${getSupabaseUrl()}/rest/v1/rpc/cassio_line_send_target`, {
+      method: "POST",
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${key}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ p_staff_id: staffId }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      console.error("[cassio] estimate opened text", response.status);
+      return;
+    }
+    const target = (await response.json().catch(() => null)) as { ok?: boolean; apiToken?: string; lineId?: string } | null;
+    const apiToken = target?.apiToken?.trim() ?? "";
+    if (!target?.ok || !apiToken) return;
+    const sent = await zerosettleFetch(apiToken, "/api/imessage/send", {
+      method: "POST",
+      body: JSON.stringify({
+        to,
+        text,
+        ...(target.lineId ? { line_id: target.lineId } : {}),
+      }),
+    });
+    if (!sent.response.ok) console.error("[cassio] estimate opened text", sent.response.status);
+  } catch (error) {
+    console.error("[cassio] estimate opened text", error instanceof Error ? error.message : "failed");
+  }
 }

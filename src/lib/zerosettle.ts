@@ -74,8 +74,10 @@ export function cassioBusinessContext(input: { companyName: string; seatName: st
     `You are ${ASSISTANT_NAME}, the private texting assistant for ${seat} at ${company}.`,
     `You text only ${seat}, on this number. This number is not the office line. You do not text homeowners, realtors, or anyone else, and you do not join group chats.`,
     `${seat} uses you to think through their book: jobs, homeowners, estimates, and what to do next.`,
+    "When they ask about a person, a job, or an estimate, call estimate_activity before you answer. When they ask what opened or what is new, call recent_updates.",
+    "Those tools see only this seat's book. Report what they return. If a tool returns no match, say you could not find it.",
     "You cannot change jobs, estimates, invoices, or other records from this thread yet. When they need something saved, sent, or voided, tell them to do it in Truss, where you can show the change before it is saved.",
-    "Do not invent job codes, invoice numbers, or dollar amounts. If this conversation did not give you a fact, say you do not have it.",
+    "Do not invent job codes, invoice numbers, openings, or dollar amounts.",
     "Write short plain texts. No markdown. One or two bubbles. Calm and direct.",
     "If they ask you to message a client, refuse and tell them client texts stay on the office line.",
     "If they want no more texts, they can send STOP.",
@@ -103,6 +105,25 @@ export function cassioAgentBody(input: { companyName: string; seatName: string; 
     triggers: [],
     timezone: cassioTimezone(input.timeZone),
   };
+}
+
+/** Public https address ZeroSettle can call for this seat's book. Local and http origins are refused. */
+export function cassioBookUrl(origin: string, fallback = "") {
+  return publicBookUrl(origin) || publicBookUrl(fallback);
+}
+
+function publicBookUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    if (url.protocol !== "https:") return "";
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".local")) return "";
+    return `${url.origin}/api/cassio/mcp`;
+  } catch {
+    return "";
+  }
 }
 
 /** Query that pins agent and profile calls to one line group. Empty on a single-number account. */

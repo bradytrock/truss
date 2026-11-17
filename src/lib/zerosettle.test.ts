@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   cassioAgentBody,
+  cassioBookUrl,
   cassioLineQuery,
   cassioTimezone,
   looksLikeZerosettleToken,
@@ -78,7 +79,17 @@ assert.deepEqual(body.triggers, []);
 assert.match(body.business_context, /Maya Chen/);
 assert.match(body.business_context, /Northline/);
 assert.match(body.business_context, /cannot change jobs/);
+assert.match(body.business_context, /estimate_activity/);
+assert.match(body.business_context, /recent_updates/);
+assert.doesNotMatch(body.business_context, /did not give you a fact/);
 assert.doesNotMatch(body.business_context, /photon/i);
+assert.equal(cassioBookUrl("http://localhost:3847"), "");
+assert.equal(cassioBookUrl("https://localhost:3847"), "");
+assert.equal(cassioBookUrl("https://truss.example"), "https://truss.example/api/cassio/mcp");
+assert.equal(
+  cassioBookUrl("http://127.0.0.1:3847", "https://truss.example"),
+  "https://truss.example/api/cassio/mcp",
+);
 assert.doesNotMatch(body.first_message.join("\n"), /photon/i);
 assert.equal(body.timezone, "America/Chicago");
 
@@ -102,7 +113,19 @@ assert.match(migration, /crm_updates boolean not null default false/);
 assert.match(migration, /group_messages boolean not null default false/);
 assert.doesNotMatch(migration, /photon/i);
 
-for (const file of ["./zerosettle.ts", "./zerosettle-server.ts", "../app/api/cassio/line/route.ts"]) {
+const book = readFileSync(new URL("../../supabase/migrations/20261117180000_cassio_book.sql", import.meta.url), "utf8");
+assert.match(book, /cassio_estimate_activity/);
+assert.match(book, /cassio_recent_updates/);
+assert.match(book, /revoke all on function public\.cassio_line_send_target\(uuid\) from public, anon, authenticated/);
+assert.doesNotMatch(book, /photon/i);
+
+for (const file of [
+  "./zerosettle.ts",
+  "./zerosettle-server.ts",
+  "./cassio-mcp.ts",
+  "../app/api/cassio/line/route.ts",
+  "../app/api/cassio/mcp/route.ts",
+]) {
   const source = readFileSync(new URL(file, import.meta.url), "utf8");
   assert.doesNotMatch(source, /photon/i, file);
 }

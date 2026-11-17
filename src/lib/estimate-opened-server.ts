@@ -20,6 +20,7 @@ import { firstName, looksLikePhone } from "@/lib/phone";
 import { channelOpen } from "@/lib/notification-prefs-api";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { sendOfficeText } from "@/lib/photon-server";
+import { sendCassioEstimateUpdate } from "@/lib/zerosettle-server";
 import { looksLikeEmail } from "@/lib/share-text";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { readSessionUser } from "@/lib/session-user";
@@ -83,6 +84,9 @@ export async function notifyProjectManagerEstimateOpened(token: string) {
       const sent = await sendOfficeText({ to: notify.phone, content: sms });
       if (!sent.ok) {
         console.error("[share] estimate opened text", sent.error);
+      }
+      if (staffId) {
+        await sendCassioEstimateUpdate({ staffId, to: notify.phone, text: sms });
       }
     }
 
