@@ -8,6 +8,7 @@ import { SettingsCard, SettingsPageHeader, SettingsToggle } from "@/components/s
 import { Button } from "@/components/ui/button";
 import { formatPhone } from "@/lib/format";
 import {
+  NOTIFY_CHANNELS,
   NOTIFY_CHANNEL_LABELS,
   NOTIFY_SECTIONS,
   alertsForMember,
@@ -353,33 +354,38 @@ function AlertRow({
   onToggle: (id: AlertId, channel: NotifyChannel, on: boolean) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-sm font-medium">{alert.title}</p>
-          {alert.badge ? (
-            <span className="rounded-full bg-[#f3efe9] px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
-              {alert.badge}
-            </span>
-          ) : null}
+    <div className="@container">
+      <div className="grid items-center gap-x-2 gap-y-2 @[46rem]:grid-cols-[minmax(12rem,1fr)_10.75rem_10.75rem_10.75rem]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium">{alert.title}</p>
+            {alert.badge ? (
+              <span className="rounded-full bg-[#f3efe9] px-2 py-0.5 text-[10px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                {alert.badge}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-0.5 text-sm text-muted-foreground">{alert.description}</p>
         </div>
-        <p className="mt-0.5 max-w-xl text-sm text-muted-foreground">{alert.description}</p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {alert.channels.map((channel) => {
+        {NOTIFY_CHANNELS.map((channel) => {
+          if (!alert.channels.includes(channel)) {
+            return <div key={channel} className="hidden @[46rem]:block" aria-hidden />;
+          }
           const locked = channelLocked(alert, channel);
           const on = allowsNotification(prefs, alert.id, channel);
           return (
             <div
               key={channel}
               className={cn(
-                "inline-flex items-center gap-2 rounded-full border border-[#e7e1da] bg-[#faf8f6] py-1 pr-1.5 pl-3",
+                "flex h-11 w-full items-center gap-2 rounded-full border border-[#e7e1da] bg-[#faf8f6] pr-1.5 pl-3",
                 locked && "bg-[#f6f4f1]",
               )}
             >
-              {locked ? <Lock className="size-3.5 text-muted-foreground" aria-hidden /> : null}
-              <span className="text-sm">{NOTIFY_CHANNEL_LABELS[channel]}</span>
-              {locked ? <span className="pr-1.5 text-xs text-muted-foreground">Always on</span> : null}
+              {locked ? <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden /> : null}
+              <span className="min-w-0 flex-1 leading-tight">
+                <span className="block truncate text-sm">{NOTIFY_CHANNEL_LABELS[channel]}</span>
+                {locked ? <span className="block truncate text-[11px] text-muted-foreground">Always on</span> : null}
+              </span>
               <SettingsToggle
                 checked={on}
                 disabled={disabled || locked}
