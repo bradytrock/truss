@@ -29,6 +29,8 @@ type LineStatus = {
   crmUpdates?: boolean;
   groupMessages?: boolean;
   bookReady?: boolean;
+  seedVerified?: boolean;
+  seedPhrase?: string;
   linkedAt?: string | null;
   error?: string;
 };
@@ -55,6 +57,8 @@ function statusFrom(value: unknown): LineStatus {
     crmUpdates: row.crmUpdates === true,
     groupMessages: row.groupMessages === true,
     bookReady: row.bookReady === true,
+    seedVerified: row.seedVerified === true,
+    seedPhrase: typeof row.seedPhrase === "string" ? row.seedPhrase : "",
     linkedAt: typeof row.linkedAt === "string" ? row.linkedAt : null,
     error: typeof row.error === "string" ? row.error : "",
   };
@@ -75,6 +79,8 @@ function publicStatus(status: LineStatus, extra?: { profileWarning?: string; sha
     crmUpdates: Boolean(status.crmUpdates),
     groupMessages: Boolean(status.groupMessages),
     bookReady: Boolean(status.bookReady),
+    seedVerified: Boolean(status.seedVerified),
+    seedPhrase: status.seedPhrase ?? "",
     linkedAt: status.linkedAt ?? null,
     profileWarning: extra?.profileWarning ?? "",
     sharesSender: Boolean(extra?.sharesSender),

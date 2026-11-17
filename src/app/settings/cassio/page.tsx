@@ -27,6 +27,8 @@ type LineStatus = {
   crmUpdates?: boolean;
   groupMessages?: boolean;
   bookReady?: boolean;
+  seedVerified?: boolean;
+  seedPhrase?: string;
   profileWarning?: string;
   sharesSender?: boolean;
   lines?: LineChoice[];
@@ -95,6 +97,32 @@ export default function CassioLineSettingsPage() {
     }
   }
 
+  async function seed(action: "issue" | "check" | "clear") {
+    setPending(true);
+    try {
+      const response = await fetch("/api/cassio/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = (await response.json()) as LineStatus;
+      if (!response.ok) {
+        toast.error(data.error || "Could not verify the Seeds group.");
+        return;
+      }
+      setInfo((current) => ({
+        ...current,
+        seedVerified: data.seedVerified,
+        seedPhrase: data.seedPhrase ?? "",
+      }));
+      toast.success(
+        action === "clear" ? "Seeds group forgotten." : data.seedVerified ? "Seeds group verified." : "Phrase ready.",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
   if (!crm.hydrated || info === null) return <LoadingScreen />;
   if (!crm.viewer) {
     return (
@@ -136,7 +164,7 @@ export default function CassioLineSettingsPage() {
             <li>Subscribe in the ZeroSettle console, then mint an API token there.</li>
             <li>Paste it here on the live site and press Connect. If it is already connected, leave the token blank and press Update {ASSISTANT_NAME}.</li>
             <li>Text that number from your own phone. Ask whether a homeowner opened an estimate.</li>
-            <li>Keep the number private. Anyone who texts it can ask about your book.</li>
+            <li>Book questions are answered only in that private text. In a group, Cassio stays quiet.</li>
           </ol>
         </div>
 
@@ -154,7 +182,7 @@ export default function CassioLineSettingsPage() {
             </p>
             <p className="text-muted-foreground">
               {info.bookReady
-                ? `This number can look up whether an estimate in your book was opened. Ask it, or wait for a text when a homeowner opens one. It still cannot change records from a text.`
+                ? `In a private text from your phone, this number can look up estimate opens, log a communication, and book an appointment after you reply YES. Dollar amounts stay in that private text.`
                 : `Press Update ${ASSISTANT_NAME} on the live site so this number can look up your book.`}
             </p>
             {info.sharesSender ? (
@@ -204,6 +232,39 @@ export default function CassioLineSettingsPage() {
                 </option>
               ))}
             </select>
+          </div>
+        ) : null}
+
+        {linked ? (
+          <div className="space-y-2 border-t border-[#ebe7e2] pt-4">
+            <h3 className="text-sm font-semibold">Seeds group</h3>
+            <p className="text-sm text-muted-foreground">
+              Add this number to the Seeds group and send the phrase below in that group. Lead updates go only to the
+              group that contains the phrase. They leave out dollar amounts.
+            </p>
+            {info.seedVerified ? (
+              <p className="text-sm">Seeds group verified.</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">No Seeds group is verified for this seat.</p>
+            )}
+            {info.seedPhrase ? (
+              <p className="rounded-md bg-[#f6f4f1] px-3 py-2 font-mono text-sm">{info.seedPhrase}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" disabled={pending} onClick={() => void seed("issue")}>
+                {info.seedPhrase ? "New phrase" : "Create phrase"}
+              </Button>
+              {info.seedPhrase ? (
+                <Button type="button" disabled={pending} onClick={() => void seed("check")}>
+                  I sent it
+                </Button>
+              ) : null}
+              {info.seedVerified ? (
+                <Button type="button" variant="outline" disabled={pending} onClick={() => void seed("clear")}>
+                  Forget this group
+                </Button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 

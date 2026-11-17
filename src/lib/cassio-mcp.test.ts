@@ -30,8 +30,9 @@ assert.match(formatRecentUpdates({ ok: true, seat: "Maya", matches: [] }), /last
 const listed = await handleCassioMcp({ jsonrpc: "2.0", id: 1, method: "tools/list" }, async () => "unused");
 const tools = (listed.body as { result: { tools: { name: string; annotations: { readOnlyHint: boolean } }[] } }).result
   .tools;
-assert.equal(tools.length, 2);
-assert.equal(tools.every((tool) => tool.annotations.readOnlyHint), true);
+assert.equal(tools.length, 5);
+assert.equal(tools.filter((tool) => tool.annotations.readOnlyHint).length, 2);
+assert.equal(tools.some((tool) => tool.name === "share_lead_status" && tool.annotations.readOnlyHint === false), true);
 
 const called = await handleCassioMcp(
   { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "estimate_activity", arguments: { query: "Bryce" } } },

@@ -24,6 +24,50 @@ export function cassioMcpTools() {
       inputSchema: { type: "object", properties: {} },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
+    {
+      name: "log_client_communication",
+      description:
+        "In a private text from the account owner, prepare a note, call, or text on a client. Ask them to reply YES, then call again. Does nothing in a group.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          client: { type: "string", description: "Client or person name." },
+          kind: { type: "string", enum: ["note", "call", "text"] },
+          body: { type: "string", description: "What to record." },
+        },
+        required: ["client", "body"],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    {
+      name: "schedule_job_appointment",
+      description:
+        "In a private text from the account owner, prepare an appointment on a job. Ask them to reply YES, then call again. Does nothing in a group.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          job: { type: "string", description: "Job code or person name." },
+          title: { type: "string" },
+          startsAt: { type: "string", description: "ISO start time." },
+          endsAt: { type: "string", description: "ISO end time." },
+        },
+        required: ["job", "title", "startsAt"],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    {
+      name: "share_lead_status",
+      description:
+        "In a private text from the account owner, prepare a lead status line for the one verified Seeds group. Ask them to reply YES, then call again. Never accepts a group id.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          lead: { type: "string", description: "Lead or person name." },
+        },
+        required: ["lead"],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
   ];
 }
 

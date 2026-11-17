@@ -78,7 +78,10 @@ assert.equal(body.goal_enabled, false);
 assert.deepEqual(body.triggers, []);
 assert.match(body.business_context, /Maya Chen/);
 assert.match(body.business_context, /Northline/);
-assert.match(body.business_context, /cannot change jobs/);
+assert.match(body.business_context, /cannot send estimates, invoices, or payments/);
+assert.match(body.business_context, /Stay silent/);
+assert.match(body.business_context, /private text/);
+assert.doesNotMatch(body.business_context, /\$\d/);
 assert.match(body.business_context, /estimate_activity/);
 assert.match(body.business_context, /recent_updates/);
 assert.doesNotMatch(body.business_context, /did not give you a fact/);
@@ -119,12 +122,23 @@ assert.match(book, /cassio_recent_updates/);
 assert.match(book, /revoke all on function public\.cassio_line_send_target\(uuid\) from public, anon, authenticated/);
 assert.doesNotMatch(book, /photon/i);
 
+const actions = readFileSync(new URL("../../supabase/migrations/20261117190000_cassio_actions.sql", import.meta.url), "utf8");
+assert.match(actions, /seed_chat_id/);
+assert.match(actions, /cassio_seed_save/);
+assert.match(actions, /cassio_action_commit/);
+assert.doesNotMatch(actions, /contract_value/);
+assert.doesNotMatch(actions, /photon/i);
+
 for (const file of [
   "./zerosettle.ts",
   "./zerosettle-server.ts",
   "./cassio-mcp.ts",
+  "./cassio-guard.ts",
+  "./cassio-actions.ts",
   "../app/api/cassio/line/route.ts",
   "../app/api/cassio/mcp/route.ts",
+  "../app/api/cassio/seed/route.ts",
+  "../app/api/cron/cassio-seed/route.ts",
 ]) {
   const source = readFileSync(new URL(file, import.meta.url), "utf8");
   assert.doesNotMatch(source, /photon/i, file);

@@ -31,6 +31,7 @@ jobs:
             echo
           }
           call /api/cron/automations 120
+          call /api/cron/cassio-seed 60
           hour=$(date -u +%H)
           minute=$(date -u +%M)
           if [ "$hour" = "13" ] && [ "$minute" -lt 15 ]; then

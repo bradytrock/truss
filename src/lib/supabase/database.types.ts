@@ -2172,6 +2172,9 @@ export type Database = {
           crm_updates: boolean;
           group_messages: boolean;
           book_ready: boolean;
+          seed_chat_id: string;
+          seed_verify_code: string;
+          seed_verified_at: string | null;
           linked_at: string | null;
           updated_at: string;
         };
@@ -2190,6 +2193,9 @@ export type Database = {
           crm_updates?: boolean;
           group_messages?: boolean;
           book_ready?: boolean;
+          seed_chat_id?: string;
+          seed_verify_code?: string;
+          seed_verified_at?: string | null;
           linked_at?: string | null;
           updated_at?: string;
         };
@@ -4074,6 +4080,46 @@ export type Database = {
       };
       cassio_line_send_target: {
         Args: { p_staff_id: string };
+        Returns: Json;
+      };
+      cassio_mcp_context: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      cassio_seed_issue: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      cassio_seed_pending: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      cassio_seed_save: {
+        Args: { p_chat_id: string };
+        Returns: Json;
+      };
+      cassio_seed_clear: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      cassio_action_remember: {
+        Args: { p_token: string; p_kind: string; p_payload: Json; p_summary: string };
+        Returns: Json;
+      };
+      cassio_visible_client: {
+        Args: { p_token: string; p_query: string };
+        Returns: Json;
+      };
+      cassio_visible_job: {
+        Args: { p_token: string; p_query: string };
+        Returns: Json;
+      };
+      cassio_lead_status: {
+        Args: { p_token: string; p_query: string };
+        Returns: Json;
+      };
+      cassio_action_commit: {
+        Args: { p_token: string; p_kind: string };
         Returns: Json;
       };
       cassio_line_save: {

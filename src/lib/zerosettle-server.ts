@@ -1,5 +1,6 @@
 import { ASSISTANT_NAME } from "./product.ts";
 import { getSupabaseUrl } from "./supabase/env.ts";
+import { publicSeedLine } from "./cassio-guard.ts";
 import {
   ZEROSETTLE_BASE,
   cassioAgentBody,
@@ -10,6 +11,8 @@ import {
   type CassioLineChoice,
   type ParsedCassioLine,
 } from "./zerosettle.ts";
+
+export const CASSIO_WRITE_TOOLS = ["log_client_communication", "schedule_job_appointment", "share_lead_status"];
 
 export type HostedCassioLine = {
   choice: CassioLineChoice;
@@ -158,7 +161,7 @@ export async function registerCassioBook(
     if (current?.id) {
       const patched = await zerosettleFetch(token, `/api/imessage/agent/mcp/${current.id}${input.query}`, {
         method: "PATCH",
-        body: JSON.stringify({ token: input.mcpToken, refresh: true }),
+        body: JSON.stringify({ token: input.mcpToken, refresh: true, enable_tools: CASSIO_WRITE_TOOLS }),
       });
       if (patched.response.ok) return { ok: true, warning: "" };
       return { ok: false, warning: zerosettleFailure(patched.response.status, patched.payload).message };
@@ -168,8 +171,17 @@ export async function registerCassioBook(
       method: "POST",
       body: JSON.stringify({ url: input.bookUrl, token: input.mcpToken }),
     });
-    if (created.response.ok) return { ok: true, warning: "" };
-    return { ok: false, warning: zerosettleFailure(created.response.status, created.payload).message };
+    if (!created.response.ok) {
+      return { ok: false, warning: zerosettleFailure(created.response.status, created.payload).message };
+    }
+    const createdId = mcpServers([created.payload])[0]?.id;
+    if (createdId) {
+      await zerosettleFetch(token, `/api/imessage/agent/mcp/${createdId}${input.query}`, {
+        method: "PATCH",
+        body: JSON.stringify({ refresh: true, enable_tools: CASSIO_WRITE_TOOLS }),
+      });
+    }
+    return { ok: true, warning: "" };
   } catch {
     return { ok: false, warning: "Could not reach ZeroSettle to connect the book lookup." };
   }
@@ -212,5 +224,56 @@ export async function sendCassioEstimateUpdate(input: { staffId: string; to: str
     if (!sent.response.ok) console.error("[cassio] estimate opened text", sent.response.status);
   } catch (error) {
     console.error("[cassio] estimate opened text", error instanceof Error ? error.message : "failed");
+  }
+}
+
+export async function zerosettleMessages(token: string, lineId: string) {
+  const query = lineId ? `?line_id=${encodeURIComponent(lineId)}` : "";
+  const { response, payload } = await zerosettleFetch(token, `/api/imessage/messages${query}`);
+  if (!response.ok) return [];
+  return payload;
+}
+
+export async function zerosettleGroups(token: string, lineId: string) {
+  const query = lineId ? `?line_id=${encodeURIComponent(lineId)}` : "";
+  const { response, payload } = await zerosettleFetch(token, `/api/imessage/groups${query}`);
+  if (!response.ok) return [];
+  const root = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+  const groups = Array.isArray(root.groups) ? root.groups : Array.isArray(payload) ? payload : [];
+  return groups
+    .map((item) => {
+      if (!item || typeof item !== "object") return "";
+      const row = item as Record<string, unknown>;
+      return typeof row.chat_id === "string" ? row.chat_id : "";
+    })
+    .filter(Boolean);
+}
+
+export async function zerosettleGroupMessages(token: string, chatId: string) {
+  const { response, payload } = await zerosettleFetch(
+    token,
+    `/api/imessage/messages?chat_id=${encodeURIComponent(chatId)}`,
+  );
+  if (!response.ok) return null;
+  return payload;
+}
+
+/** Post one non-financial line into the verified Seeds chat. No other chat id is accepted. */
+export async function sendCassioSeedLine(input: { apiToken: string; chatId: string; lineId?: string; text: string }) {
+  const text = publicSeedLine(input.text);
+  const chatId = input.chatId.trim();
+  if (!text || !chatId || !input.apiToken.trim()) return false;
+  try {
+    const sent = await zerosettleFetch(input.apiToken, "/api/imessage/send", {
+      method: "POST",
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        ...(input.lineId ? { line_id: input.lineId } : {}),
+      }),
+    });
+    return sent.response.ok;
+  } catch {
+    return false;
   }
 }
