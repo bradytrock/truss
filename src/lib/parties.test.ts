@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   canAddSecondHomeowner,
   customerContactDetails,
+  homeownersOnJob,
   isCompanyCustomerName,
   isJobHomeowner,
   relatedContactIdsWithHomeowner,
@@ -38,6 +39,7 @@ const adjuster = contact({ id: "c3", name: "Pat Adjuster", title: "Public adjust
 const manager = contact({ id: "c4", name: "Riley Chen", title: "Property manager" });
 
 assert.equal(canAddSecondHomeowner(undefined, [dana]), false);
+assert.deepEqual(homeownersOnJob(undefined, [dana, jordan, adjuster, manager]), []);
 assert.equal(canAddSecondHomeowner(job({ id: "j1", primaryContactId: "" }), [dana]), false);
 assert.equal(
   canAddSecondHomeowner(job({ id: "j1", primaryContactId: dana.id }), [dana]),
