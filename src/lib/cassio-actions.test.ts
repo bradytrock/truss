@@ -93,4 +93,61 @@ const prepared = await runCassioAction({
 assert.match(prepared, /Reply YES/);
 assert.match(prepared, /job BJ081926-A/);
 
+const noted = await runCassioAction({
+  name: "job_notes",
+  args: { job: "Jones" },
+  token: "token",
+  audience: "seeds",
+  latestText: "Estimate Jones",
+  seedChatId: "iMessage;+;chat1",
+  rpc: async (name) => {
+    assert.equal(name, "cassio_job_notes");
+    return {
+      ok: true,
+      code: "BJ081926-A",
+      name: "Jones",
+      notes: [{ type: "note", body: "Two layers, budget $8400" }],
+      squares: null,
+      templates: ["Architectural"],
+      gaps: ["square count", "template name"],
+    };
+  },
+  sendSeed: async () => false,
+  readBook: async () => "unused",
+});
+assert.match(noted, /Two layers/);
+assert.doesNotMatch(noted, /\$/);
+
+const drafted = await runCassioAction({
+  name: "draft_estimate",
+  args: { job: "Jones", template: "Architectural", squares: 28 },
+  token: "token",
+  audience: "owner_dm",
+  latestText: "28 square architectural",
+  seedChatId: "",
+  rpc: async (name, args) => {
+    assert.equal(name, "cassio_draft_estimate");
+    assert.equal(args.p_squares, 28);
+    return { ok: true, number: "EST-1042", code: "BJ081926-A", name: "Jones", lines: [], total: 12400, status: "draft" };
+  },
+  sendSeed: async () => false,
+  readBook: async () => "unused",
+});
+assert.match(drafted, /EST-1042/);
+assert.match(drafted, /\$12,400/);
+
+const draftedGroup = await runCassioAction({
+  name: "draft_estimate",
+  args: { job: "Jones", template: "Architectural", squares: 28 },
+  token: "token",
+  audience: "seeds",
+  latestText: "28 square architectural",
+  seedChatId: "iMessage;+;chat1",
+  rpc: async () => ({ ok: true, number: "EST-1042", code: "BJ081926-A", name: "Jones", lines: [], total: 12400, status: "draft" }),
+  sendSeed: async () => false,
+  readBook: async () => "unused",
+});
+assert.match(draftedGroup, /EST-1042/);
+assert.doesNotMatch(draftedGroup, /\$/);
+
 console.log("cassio-actions.test.ts ok");

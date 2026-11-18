@@ -9,6 +9,7 @@ Each person connects their own ZeroSettle number. ZeroSettle hosts Cassio on tha
    - `supabase/migrations/20261117180000_cassio_book.sql`
    - `supabase/migrations/20261117190000_cassio_actions.sql`
    - `supabase/migrations/20261117200000_cassio_note_on_job.sql`
+   - `supabase/migrations/20261117210000_cassio_draft_estimate.sql`
 2. Deploy this app so `/api/cassio/mcp` is on the public https site.
 3. On the host, set `SUPABASE_SERVICE_ROLE_KEY`. Lookups work without it. The text Cassio sends when a homeowner opens an estimate needs it.
 4. In ZeroSettle, the line is paid and the API token comes from that same account. Open [the ZeroSettle console](https://portal.zerosettle.io/imessage), mint an API token, and copy it. Do not paste it into chat or into source.
@@ -30,6 +31,12 @@ Each person connects their own ZeroSettle number. ZeroSettle hosts Cassio on tha
 - Cassio cannot send estimates, invoices, or payments from a text.
 
 Book questions are answered in a private text from the phone on your profile, or the phone saved on the ZeroSettle line, and in the one Seeds group you verify. In any other group, or if Truss cannot tell who sent the text, Cassio is told to stay silent and the tools return no facts. Dollar amounts stay out of the Seeds group. A note or an appointment is saved from the private text, after a reply that is only YES.
+
+## Draft an estimate
+
+Text Cassio the job, such as `Estimate Jones`. Cassio reads the notes on that job and asks only for what is missing, usually the square count and which estimate template to use. After the answer, it saves a draft on the job for review. It does not send the proposal. The total is in the private text. The Seeds group can hear the estimate number and the lines, without the total.
+
+Company estimate templates have to exist first. A line measured in squares uses the square count. Press **Update Cassio** so the draft tool is turned on, and run the draft SQL file above.
 
 ## Communications and appointments
 

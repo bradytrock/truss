@@ -4114,6 +4114,14 @@ export type Database = {
         Args: { p_token: string; p_query: string };
         Returns: Json;
       };
+      cassio_job_notes: {
+        Args: { p_token: string; p_query: string };
+        Returns: Json;
+      };
+      cassio_draft_estimate: {
+        Args: { p_token: string; p_query: string; p_template: string; p_squares?: number };
+        Returns: Json;
+      };
       cassio_lead_status: {
         Args: { p_token: string; p_query: string };
         Returns: Json;

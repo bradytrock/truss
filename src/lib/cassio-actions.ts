@@ -1,4 +1,5 @@
-import { CASSIO_SILENCE, guardToolText, isCassioYes, publicSeedLine, type CassioAudience } from "./cassio-guard.ts";
+import { CASSIO_SILENCE, guardToolText, isCassioYes, publicSeedLine, redactFinancials, type CassioAudience } from "./cassio-guard.ts";
+import { formatDraftEstimate, formatJobNotes } from "./cassio-mcp.ts";
 
 type Rpc = (name: string, args: Record<string, unknown>) => Promise<unknown>;
 
@@ -72,6 +73,29 @@ export async function runCassioAction(input: {
 
   if (input.name === "estimate_activity" || input.name === "recent_updates") {
     return guardToolText(input.audience, await input.readBook(input.name, input.args));
+  }
+
+  if (input.name === "job_notes") {
+    const job = text(input.args.job) || text(input.args.query);
+    if (!job) return "Name the job.";
+    const found = await input.rpc("cassio_job_notes", { p_token: input.token, p_query: job });
+    return guardToolText(input.audience, redactFinancials(formatJobNotes(found)));
+  }
+
+  if (input.name === "draft_estimate") {
+    const job = text(input.args.job) || text(input.args.query);
+    const template = text(input.args.template);
+    const squares = typeof input.args.squares === "number" ? input.args.squares : 0;
+    if (!job || !template) return "Name the job and the estimate template.";
+    const found = await input.rpc("cassio_draft_estimate", {
+      p_token: input.token,
+      p_query: job,
+      p_template: template,
+      p_squares: squares,
+    });
+    const includeTotal = input.audience === "owner_dm";
+    const summary = formatDraftEstimate(found, includeTotal);
+    return guardToolText(input.audience, includeTotal ? summary : redactFinancials(summary));
   }
 
   if (input.name === "log_client_communication") {

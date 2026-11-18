@@ -82,6 +82,9 @@ assert.match(body.business_context, /cannot send estimates, invoices, or payment
 assert.match(body.business_context, /Stay silent/);
 assert.match(body.business_context, /private text/);
 assert.match(body.business_context, /verified Seeds group/);
+assert.match(body.business_context, /job_notes/);
+assert.match(body.business_context, /draft_estimate/);
+assert.match(body.business_context, /do not send it/);
 assert.doesNotMatch(body.business_context, /\$\d/);
 assert.match(body.business_context, /estimate_activity/);
 assert.match(body.business_context, /recent_updates/);
@@ -138,6 +141,16 @@ assert.match(noteOnJob, /entity_type, entity_id, type, body, author/);
 assert.match(noteOnJob, /'job', v_job/);
 assert.match(noteOnJob, /cassio_open_job/);
 assert.doesNotMatch(noteOnJob, /photon/i);
+
+const draftSql = readFileSync(
+  new URL("../../supabase/migrations/20261117210000_cassio_draft_estimate.sql", import.meta.url),
+  "utf8",
+);
+assert.match(draftSql, /cassio_job_notes/);
+assert.match(draftSql, /cassio_draft_estimate/);
+assert.match(draftSql, /'draft'/);
+assert.doesNotMatch(draftSql, /contract_value/);
+assert.doesNotMatch(draftSql, /photon/i);
 
 for (const file of [
   "./zerosettle.ts",

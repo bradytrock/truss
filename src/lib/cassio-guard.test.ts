@@ -7,6 +7,7 @@ import {
   isCassioYes,
   parseZerosettleMessages,
   publicSeedLine,
+  redactFinancials,
   textHasFinancials,
 } from "./cassio-guard.ts";
 
@@ -70,7 +71,8 @@ assert.equal(cassioMayAnswer("other"), false);
 assert.equal(guardToolText("group", "Bryce Jones estimate 1042"), CASSIO_SILENCE);
 assert.equal(guardToolText("seeds", "Bryce Jones estimate 1042"), "Bryce Jones estimate 1042");
 assert.equal(guardToolText("seeds", "Balance due $1,200"), CASSIO_SILENCE);
-assert.equal(guardToolText("owner_dm", "Balance due $1,200"), CASSIO_SILENCE);
+assert.equal(guardToolText("owner_dm", "Balance due $1,200"), "Balance due $1,200");
+assert.equal(guardToolText("seeds", "Balance due $1,200"), CASSIO_SILENCE);
 assert.equal(guardToolText("owner_dm", "Bryce Jones opened estimate 1042"), "Bryce Jones opened estimate 1042");
 
 assert.equal(isCassioYes("YES"), true);
@@ -78,6 +80,7 @@ assert.equal(isCassioYes("yes send the total"), false);
 assert.equal(textHasFinancials("contract value is high"), true);
 assert.equal(publicSeedLine("Lead update: Bryce Jones · Estimating · 12 Oak"), "Lead update: Bryce Jones · Estimating · 12 Oak");
 assert.equal(publicSeedLine("Lead update: Bryce · $8400"), "");
+assert.equal(redactFinancials("Two layers, budget $8,400, architectural"), "Two layers, budget, architectural");
 
 const parsed = parseZerosettleMessages({
   messages: [{ direction: "in", handle: "+16195550100", text: "hi", ts_ms: 5, chat_id: "iMessage;+;chat9" }],

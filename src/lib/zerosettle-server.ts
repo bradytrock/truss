@@ -12,7 +12,12 @@ import {
   type ParsedCassioLine,
 } from "./zerosettle.ts";
 
-export const CASSIO_WRITE_TOOLS = ["log_client_communication", "schedule_job_appointment", "share_lead_status"];
+export const CASSIO_WRITE_TOOLS = [
+  "log_client_communication",
+  "schedule_job_appointment",
+  "share_lead_status",
+  "draft_estimate",
+];
 
 export type HostedCassioLine = {
   choice: CassioLineChoice;

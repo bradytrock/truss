@@ -36,6 +36,16 @@ export function textHasFinancials(text: string) {
   return MONEY.test(text);
 }
 
+/** Drop prices so a note can be read in a group without repeating an amount. */
+export function redactFinancials(text: string) {
+  return text
+    .replace(/\$\s?\d+(?:,\d{3})*(?:\.\d+)?/g, "")
+    .replace(/\b(?:contract value|balance due|invoice total|amount due|gross margin|net profit|dollar amount)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;])/g, "$1")
+    .trim();
+}
+
 /** A Seeds-group line. Empty when the text mentions money, so the group gets nothing. */
 export function publicSeedLine(text: string) {
   const stripped = text.replace(/\s+/g, " ").trim();
@@ -104,6 +114,6 @@ export function cassioMayAnswer(audience: CassioAudience) {
 
 export function guardToolText(audience: CassioAudience, text: string) {
   if (!cassioMayAnswer(audience)) return CASSIO_SILENCE;
-  if (textHasFinancials(text)) return CASSIO_SILENCE;
+  if (audience !== "owner_dm" && textHasFinancials(text)) return CASSIO_SILENCE;
   return text;
 }

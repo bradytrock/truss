@@ -1480,6 +1480,7 @@ export function missingCallingMessage() {
 export const CASSIO_LINE_SQL = "supabase/migrations/20261117170000_cassio_zerosettle_lines.sql";
 export const CASSIO_BOOK_SQL = "supabase/migrations/20261117180000_cassio_book.sql";
 export const CASSIO_ACTIONS_SQL = "supabase/migrations/20261117190000_cassio_actions.sql";
+export const CASSIO_DRAFT_SQL = "supabase/migrations/20261117210000_cassio_draft_estimate.sql";
 
 export function isMissingCassioLine(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -1499,6 +1500,8 @@ export function isMissingCassioLine(error: { message?: string; code?: string } |
     message.includes("cassio_mcp_context") ||
     message.includes("cassio_seed_issue") ||
     message.includes("cassio_action_commit") ||
+    message.includes("cassio_job_notes") ||
+    message.includes("cassio_draft_estimate") ||
     message.includes("seed_chat_id");
   return (
     (code === "pgrst205" && mentions) ||
@@ -1515,5 +1518,5 @@ export function missingCassioLineMessage() {
 }
 
 export function missingCassioBookMessage() {
-  return `Run ${CASSIO_BOOK_SQL} and ${CASSIO_ACTIONS_SQL} in the SQL editor so Cassio can look up this seat's estimates.`;
+  return `Run ${CASSIO_BOOK_SQL}, ${CASSIO_ACTIONS_SQL}, and ${CASSIO_DRAFT_SQL} in the SQL editor so Cassio can look up this seat's estimates and save a draft.`;
 }

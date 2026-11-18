@@ -1,3 +1,5 @@
+import { redactFinancials } from "./cassio-guard.ts";
+
 const PROTOCOL = "2025-03-26";
 
 export function cassioMcpTools() {
@@ -23,6 +25,19 @@ export function cassioMcpTools() {
       description:
         "List estimates in this seat's book that a homeowner opened in the last 14 days. Works in a private text from the account owner and in the verified Seeds group. Never include a dollar amount.",
       inputSchema: { type: "object", properties: {} },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    {
+      name: "job_notes",
+      description:
+        "Read the notes, calls, and site visits on a job, plus any measured squares and the estimate template names. Call this before drafting an estimate. Ask only for gaps the result lists. Never include a dollar amount.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          job: { type: "string", description: "Job code or person name." },
+        },
+        required: ["job"],
+      },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     {
@@ -53,6 +68,21 @@ export function cassioMcpTools() {
           endsAt: { type: "string", description: "ISO end time." },
         },
         required: ["job", "title", "startsAt"],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    {
+      name: "draft_estimate",
+      description:
+        "Save a draft estimate on a job from a company template. Call job_notes first and ask for a square count and a template when those are missing. Does not send the estimate. Pass squares as 0 to use the measured squares on the job.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          job: { type: "string", description: "Job code or person name." },
+          template: { type: "string", description: "Estimate template name." },
+          squares: { type: "number", description: "Roof squares. 0 uses the measure already on the job." },
+        },
+        required: ["job", "template"],
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
@@ -131,6 +161,91 @@ export function formatEstimateActivity(payload: unknown) {
   if (matches.length === 0) return "No estimate in this seat's book matched that search.";
   const seat = typeof row.seat === "string" && row.seat.trim() ? row.seat.trim() : "This seat";
   return [`${seat}'s book:`, ...matches.map(formatMatch)].join("\n");
+}
+
+function noteRows(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const row = asRecord(item);
+      if (!row) return "";
+      const kind = typeof row.type === "string" ? row.type.trim() : "note";
+      const body = redactFinancials(typeof row.body === "string" ? row.body.trim() : "");
+      return body ? `${kind}: ${body}` : "";
+    })
+    .filter(Boolean);
+}
+
+export function formatJobNotes(payload: unknown) {
+  const row = asRecord(payload);
+  if (!row || row.ok === false) {
+    return typeof row?.error === "string" && row.error.trim()
+      ? row.error.trim()
+      : "This number is not connected to a Truss book.";
+  }
+  const code = typeof row.code === "string" ? row.code.trim() : "";
+  const name = typeof row.name === "string" ? row.name.trim() : "";
+  const contact = typeof row.contact === "string" ? row.contact.trim() : "";
+  const address = typeof row.address === "string" ? row.address.trim() : "";
+  const description = typeof row.description === "string" ? row.description.trim() : "";
+  const squares = typeof row.squares === "number" && row.squares > 0 ? row.squares : null;
+  const templates = Array.isArray(row.templates)
+    ? row.templates.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const gaps = Array.isArray(row.gaps)
+    ? row.gaps.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+  const notes = noteRows(row.notes);
+  return [
+    [code, name].filter(Boolean).join(" · ") || "Job",
+    contact,
+    address,
+    description ? `Job description: ${redactFinancials(description)}` : "",
+    notes.length ? notes.join("\n") : "No notes on this job yet.",
+    squares ? `Measured squares: ${squares}` : "No square count on the job.",
+    templates.length ? `Templates: ${templates.join(", ")}` : "No estimate templates are saved.",
+    gaps.length ? `Ask only for: ${gaps.join(", ")}.` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function formatDraftEstimate(payload: unknown, includeTotal: boolean) {
+  const row = asRecord(payload);
+  if (!row || row.ok === false) {
+    return typeof row?.error === "string" && row.error.trim()
+      ? row.error.trim()
+      : "The draft was not saved.";
+  }
+  const number = typeof row.number === "string" ? row.number.trim() : "the draft";
+  const who = [typeof row.code === "string" ? row.code.trim() : "", typeof row.name === "string" ? row.name.trim() : ""]
+    .filter(Boolean)
+    .join(" ");
+  const lines = Array.isArray(row.lines)
+    ? row.lines
+        .map((item) => {
+          const line = asRecord(item);
+          if (!line) return "";
+          const title = typeof line.title === "string" ? line.title.trim() : "";
+          const quantity = typeof line.quantity === "number" ? String(line.quantity) : "";
+          const unit = typeof line.unit === "string" ? line.unit.trim() : "";
+          return [title, quantity, unit].filter(Boolean).join(" ");
+        })
+        .filter(Boolean)
+    : [];
+  const total = typeof row.total === "number" ? row.total : null;
+  const money =
+    includeTotal && total !== null
+      ? `Total $${Math.round(total).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.`
+      : "";
+  return [
+    `Draft ${number} is on ${who || "the job"} for review.`,
+    lines.length ? lines.join(", ") : "The template had no lines.",
+    money,
+    "It was not sent.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function formatRecentUpdates(payload: unknown) {

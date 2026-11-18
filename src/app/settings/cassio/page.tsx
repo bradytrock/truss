@@ -182,7 +182,7 @@ export default function CassioLineSettingsPage() {
             </p>
             <p className="text-muted-foreground">
               {info.bookReady
-                ? `In a private text from your phone, this number can look up estimate opens, log a communication, and book an appointment after you reply YES. Dollar amounts stay in that private text.`
+                ? `In a private text from your phone, this number can look up estimate opens, draft an estimate for you to review, log a communication, and book an appointment after you reply YES. Dollar amounts stay in that private text.`
                 : `Press Update ${ASSISTANT_NAME} on the live site so this number can look up your book.`}
             </p>
             {info.sharesSender ? (
