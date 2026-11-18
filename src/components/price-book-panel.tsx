@@ -51,6 +51,7 @@ import {
   isCurrentPriceList,
   isLivePriceList,
   priceListSupplierKey,
+  priceListsForSupplier,
   sortPriceLists,
 } from "@/lib/price-lists";
 import {
@@ -86,6 +87,7 @@ export function PriceBookPanel() {
   const [importing, setImporting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<ReturnType<typeof parseCatalogCsv> | null>(null);
+  const [uploadSupplier, setUploadSupplier] = useState<{ forListId: string | null; vendor: string } | null>(null);
 
   useEffect(() => {
     if (selectedId && lists.some((list) => list.id === selectedId)) return;
@@ -94,6 +96,11 @@ export function PriceBookPanel() {
 
   const selected = lists.find((list) => list.id === selectedId) ?? current ?? null;
   const canEdit = !selected || isCurrentPriceList(selected, lists);
+  const uploadVendor =
+    uploadSupplier && uploadSupplier.forListId === (selected?.id ?? null)
+      ? uploadSupplier.vendor
+      : (selected?.vendor ?? "");
+  const uploadTarget = currentPriceList(priceListsForSupplier(lists, uploadVendor));
   const selectedItems = catalogForList(crm.catalog, lists, selected?.id);
 
   const rows = useMemo(() => {
@@ -155,17 +162,37 @@ export function PriceBookPanel() {
     reader.readAsText(file);
   }
 
+  function chooseUploadSupplier(vendor: string) {
+    setUploadSupplier({ forListId: selected?.id ?? null, vendor });
+  }
+
   async function confirmImport() {
     if (!preview || preview.rows.length === 0) return;
     setImporting(true);
     try {
-      const result = await crm.importCatalogItems(preview.rows, selected?.id ?? null);
+      const vendor = uploadVendor.trim().replace(/\s+/g, " ");
+      let listId = currentPriceList(priceListsForSupplier(crm.priceLists ?? [], vendor))?.id ?? null;
+      let listName = uploadTarget?.name ?? "";
+      if (!listId) {
+        const today = localYmd(new Date());
+        const created = await crm.addPriceList({
+          name: vendor ? `${vendor} · ${formatDate(today)}` : `Price list · ${formatDate(today)}`,
+          vendor,
+          effectiveOn: today,
+          copyItems: false,
+        });
+        listId = created.id;
+        listName = created.name;
+      }
+      const result = await crm.importCatalogItems(preview.rows, listId);
       const parts = [
         result.added ? `${result.added} added` : null,
         result.updated ? `${result.updated} updated` : null,
         preview.issues.length ? `${preview.issues.length} skipped` : null,
       ].filter(Boolean);
-      toast.success(parts.length > 0 ? `Price book: ${parts.join(", ")}.` : "Nothing new to import.");
+      const where = vendor ? `${listName} for ${vendor}` : listName;
+      toast.success(parts.length > 0 ? `${where}: ${parts.join(", ")}.` : `Nothing new to import onto ${where}.`);
+      setSelectedId(listId);
       setPreview(null);
     } catch {
       // Store already toasted.
@@ -309,18 +336,43 @@ export function PriceBookPanel() {
         </CardContent>
       </Card>
 
-      {canEdit ? (
-        <Card>
+      <Card>
           <CardHeader className="border-b">
             <CardTitle>Mass upload</CardTitle>
             <CardDescription>
-              CSV with name, kind, unit, unit cost, cost code, and optional margin percent. Rows with a matching cost
-              code (or the same name and kind) update this list; the rest are added. Changing a unit cost or margin
-              here does not rewrite lines already on a proposal. The company minimum margin in Settings is a floor
-              when an item is dropped onto a proposal.
+              Choose the supplier, then upload a CSV with name, kind, unit, unit cost, cost code, and optional margin
+              percent. Rows with a matching cost code update that supplier’s current list. The rest are added. Changing
+              a unit cost or margin here does not rewrite lines already on a proposal.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 pt-4">
+            <div className="grid gap-1.5 sm:max-w-sm">
+              <Label>Supplier for this upload</Label>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <VendorPicker
+                    value={uploadVendor}
+                    onChange={chooseUploadSupplier}
+                    names={vendorNames}
+                    extraNames={extraVendors}
+                    placeholder="Company book"
+                    emptyHint="Type a supplier if they are not in QuickBooks yet."
+                  />
+                </div>
+                {uploadVendor.trim() ? (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => chooseUploadSupplier("")}>
+                    Company book
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {uploadTarget
+                  ? `Updates ${uploadTarget.name}${uploadVendor.trim() ? ` · ${uploadVendor.trim()}` : " · company book"}.`
+                  : uploadVendor.trim()
+                    ? `Starts a new list for ${uploadVendor.trim()}.`
+                    : "Starts the company book."}
+              </p>
+            </div>
             <div
               className={cn(
                 "flex flex-col items-start gap-3 rounded-md border border-dashed px-4 py-5 sm:flex-row sm:items-center",
@@ -385,7 +437,8 @@ export function PriceBookPanel() {
                 <p className="text-sm">
                   {preview.rows.length} ready to import
                   {preview.issues.length ? ` · ${preview.issues.length} row${preview.issues.length === 1 ? "" : "s"} skipped` : ""}.
-                  Matching cost codes update the existing item on this list.
+                  Matching cost codes update {uploadTarget ? uploadTarget.name : "the new list"}
+                  {uploadVendor.trim() ? ` for ${uploadVendor.trim()}` : ""}.
                 </p>
                 {preview.rows.length > 0 ? (
                   <div className="max-h-56 overflow-auto rounded-md border">
@@ -442,17 +495,6 @@ export function PriceBookPanel() {
             ) : null}
           </CardContent>
         </Card>
-      ) : selectedItems.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => downloadCatalogCsv("price-book.csv", catalogToCsv(selectedItems))}
-          >
-            Download this list
-          </Button>
-        </div>
-      ) : null}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <Input
