@@ -126,7 +126,8 @@ export function MaterialOrderTemplateWriter({ template }: { template: MaterialOr
 
       <MaterialOrderItems
         lines={lines}
-        emptyHint="No items yet. Pull from the price book so estimated cost copies onto new orders, or add a custom line."
+        vendor={template.vendor}
+        emptyHint="No items yet. Pull from this supplier’s supply list so estimated cost copies onto new orders, or add a custom line."
         onAddFromCatalog={(catalogItemId) =>
           crm.addMaterialOrderTemplateLineFromCatalog(template.id, catalogItemId)
         }

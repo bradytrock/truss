@@ -13,7 +13,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
 import { moneyAmount } from "@/lib/money-input";
 import {
@@ -30,6 +38,11 @@ export type MaterialTemplateChoice = {
   detail: string;
 };
 
+export type SupplyListChoice = {
+  id: string;
+  label: string;
+};
+
 export function MaterialOrderBoard({
   lines,
   locked,
@@ -37,6 +50,10 @@ export function MaterialOrderBoard({
   total,
   templates,
   catalog,
+  supplyLists,
+  selectedSupplyListId,
+  onSelectSupplyList,
+  usingCompanyBook,
   canManagePriceBook,
   onAddFromCatalog,
   onAddCustom,
@@ -50,6 +67,10 @@ export function MaterialOrderBoard({
   total: number;
   templates: MaterialTemplateChoice[];
   catalog: CatalogItem[];
+  supplyLists: SupplyListChoice[];
+  selectedSupplyListId: string | null;
+  onSelectSupplyList: (id: string) => void;
+  usingCompanyBook: boolean;
   canManagePriceBook: boolean;
   onAddFromCatalog: (catalogItemId: string) => Promise<unknown> | unknown;
   onAddCustom: () => void;
@@ -66,6 +87,7 @@ export function MaterialOrderBoard({
   const [applying, setApplying] = useState<string | null>(null);
   const groups = useMemo(() => groupPresentedLines(lines), [lines]);
   const bookLabel = supplierName === "supplier" ? "the" : supplierName;
+  const needsSupplier = supplierName === "supplier";
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return [];
@@ -108,17 +130,58 @@ export function MaterialOrderBoard({
       </div>
 
       {locked ? null : (
-        <div className="relative px-4 pb-3">
-          <Search className="pointer-events-none absolute top-2.5 left-7 size-4 text-muted-foreground" />
+        <div className="space-y-3 px-4 pb-3">
+          {needsSupplier ? (
+            <p className="text-sm text-muted-foreground">Choose a supplier to see their supply lists.</p>
+          ) : supplyLists.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No supply list for {bookLabel}. Add one for them under Settings → Price book.
+            </p>
+          ) : (
+            <div className="grid gap-1.5">
+              <Label htmlFor="mo-supply-list">Supply list</Label>
+              <Select
+                value={selectedSupplyListId ?? supplyLists[0]?.id ?? ""}
+                onValueChange={(value) => {
+                  if (value) onSelectSupplyList(String(value));
+                }}
+                items={supplyLists.map((list) => ({ value: list.id, label: list.label }))}
+              >
+                <SelectTrigger id="mo-supply-list" className="h-10 w-full rounded-lg bg-card">
+                  <SelectValue placeholder="Choose a supply list" />
+                </SelectTrigger>
+                <SelectContent>
+                  {supplyLists.map((list) => (
+                    <SelectItem key={list.id} value={list.id}>
+                      {list.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {usingCompanyBook ? (
+                <p className="text-xs text-muted-foreground">
+                  {bookLabel} has no list of their own yet, so this is the company book. Add a list for them under
+                  Price book to keep their prices separate.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">Only {bookLabel} lists are shown on this order.</p>
+              )}
+            </div>
+          )}
+          <div className="relative">
+          <Search className="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={
-              supplierName === "supplier"
-                ? 'Add from the price book — try "drip edge" or "HDZ"'
-                : `Add from ${bookLabel} price book — try "drip edge" or "HDZ"`
+              needsSupplier
+                ? "Choose a supplier first"
+                : supplyLists.length === 0
+                  ? "No supply list for this supplier"
+                  : `Add from ${bookLabel} — try "drip edge" or "HDZ"`
             }
             aria-label="Add from the price book"
+            disabled={needsSupplier || supplyLists.length === 0}
             className="h-10 rounded-lg pr-10 pl-9"
             onKeyDown={(event) => {
               const first = matches[0];
@@ -132,7 +195,7 @@ export function MaterialOrderBoard({
           <Popover>
             <PopoverTrigger
               className={cn(
-                "absolute top-1.5 right-6 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
+                "absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground",
                 !materialsOnly && "text-foreground",
               )}
               aria-label="Filter the price book"
@@ -152,14 +215,14 @@ export function MaterialOrderBoard({
                 className={cn("block w-full rounded-md px-2 py-1.5 text-left text-sm", !materialsOnly && "bg-muted")}
                 onClick={() => setMaterialsOnly(false)}
               >
-                Whole price book
+                Whole list
               </button>
             </PopoverContent>
           </Popover>
-          {query.trim() ? (
-            <ul className="absolute top-12 right-4 left-4 z-30 max-h-72 overflow-auto rounded-lg border bg-card shadow-lg">
+          {query.trim() && !needsSupplier && supplyLists.length > 0 ? (
+            <ul className="absolute top-12 right-0 left-0 z-30 max-h-72 overflow-auto rounded-lg border bg-card shadow-lg">
               {matches.length === 0 ? (
-                <li className="px-3 py-3 text-sm text-muted-foreground">No price book matches.</li>
+                <li className="px-3 py-3 text-sm text-muted-foreground">No matches on this supply list.</li>
               ) : (
                 matches.map((item) => (
                   <li key={item.id}>
@@ -186,6 +249,7 @@ export function MaterialOrderBoard({
               )}
             </ul>
           ) : null}
+          </div>
         </div>
       )}
 
@@ -193,16 +257,28 @@ export function MaterialOrderBoard({
         <div className="px-4 pb-4">
           <p className="text-sm font-medium">Start from a template</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pick one and tweak quantities, or search the price book above. Costs fill in from your price book
-            automatically.
+            Pick one and tweak quantities, or search this supplier’s supply list above. Costs fill in from that
+            list.
           </p>
           {templates.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">
-              No company templates yet.{" "}
-              <Link href="/material-orders/templates" className="text-primary hover:underline">
-                Build one
-              </Link>
-              , or save this order from the menu once it has items.
+              {needsSupplier ? (
+                <>
+                  No company templates yet.{" "}
+                  <Link href="/material-orders/templates" className="text-primary hover:underline">
+                    Build one
+                  </Link>
+                  , or save this order from the menu once it has items.
+                </>
+              ) : (
+                <>
+                  No templates for {bookLabel}. A template with no supplier still shows here.{" "}
+                  <Link href="/material-orders/templates" className="text-primary hover:underline">
+                    Build one
+                  </Link>
+                  .
+                </>
+              )}
             </p>
           ) : (
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -256,7 +332,7 @@ export function MaterialOrderBoard({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm">
         <p className="text-muted-foreground">
-          Unit costs pulled from your {supplierName === "supplier" ? "" : `${supplierName} `}price book
+          Unit costs pulled from {needsSupplier ? "the supplier's supply list" : usingCompanyBook ? "the company book" : `${bookLabel}'s supply list`}
           {canManagePriceBook ? (
             <>
               {" "}
@@ -283,11 +359,17 @@ export function MaterialOrderBoard({
           </DialogHeader>
           {templates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No company templates yet.{" "}
-              <Link href="/material-orders/templates" className="text-primary hover:underline" onClick={() => setTemplatesOpen(false)}>
-                Build one
-              </Link>
-              .
+              {needsSupplier ? (
+                <>
+                  No company templates yet.{" "}
+                  <Link href="/material-orders/templates" className="text-primary hover:underline" onClick={() => setTemplatesOpen(false)}>
+                    Build one
+                  </Link>
+                  .
+                </>
+              ) : (
+                <>No templates for {bookLabel}. A template with no supplier still shows here.</>
+              )}
             </p>
           ) : (
             <ul className="max-h-80 space-y-2 overflow-y-auto">

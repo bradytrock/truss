@@ -601,9 +601,11 @@ export interface QbReviewComment {
 export interface PriceList {
   id: string;
   name: string;
-  /** Vendor or office date this book takes effect. YYYY-MM-DD. */
+  /** Supplier this book is ordered from. Blank is the company book. */
+  vendor: string;
+  /** Date this book takes effect. YYYY-MM-DD. */
   effectiveOn: string;
-  /** Set when a newer list replaces this one. Null means the list is still live. */
+  /** Set when a newer list for the same supplier replaces this one. Null means the list is still live. */
   outdatedAt: string | null;
   createdAt: string;
 }

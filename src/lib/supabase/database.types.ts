@@ -770,6 +770,7 @@ export type Database = {
           id: string;
           company_id: string;
           name: string;
+          vendor: string;
           effective_on: string;
           outdated_at: string | null;
           created_at: string;
@@ -778,6 +779,7 @@ export type Database = {
           id?: string;
           company_id: string;
           name: string;
+          vendor?: string;
           effective_on: string;
           outdated_at?: string | null;
           created_at?: string;

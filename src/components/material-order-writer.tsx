@@ -28,7 +28,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { documentOwnerStaff, letterheadCompanyForRecord } from "@/lib/document-owner";
-import { formatMoney, formatPhone } from "@/lib/format";
+import { formatDate, formatMoney, formatPhone } from "@/lib/format";
 import { jobAddress, jobPaperHref } from "@/lib/job-record";
 import { buildMaterialOrderPdf, previewMaterialOrderPdf } from "@/lib/material-order-pdf";
 import { downloadBlob } from "@/lib/share";
@@ -44,7 +44,14 @@ import {
 } from "@/lib/material-order-presentation";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
 import { materialOrderTemplateLinesFor } from "@/lib/material-order-templates";
-import { currentCatalog } from "@/lib/price-lists";
+import {
+  catalogForOrder,
+  currentPriceList,
+  isCurrentPriceList,
+  orderSupplyLists,
+  orderUsesCompanyBook,
+  priceListSupplierKey,
+} from "@/lib/price-lists";
 import { archiveStamp } from "@/lib/paper-archive";
 import type { MaterialOrder, MaterialOrderStatus, MaterialOrderWindow, QbVendor } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
@@ -60,6 +67,7 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
   const [saveOpen, setSaveOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [pending, setPending] = useState(false);
+  const [listPick, setListPick] = useState<{ vendor: string; id: string } | null>(null);
   const job = crm.getJob(order.jobId);
   const lines = materialOrderLinesFor(order.id, crm.materialOrderLines ?? []);
   const catalogById = useMemo(() => new Map(crm.catalog.map((item) => [item.id, item])), [crm.catalog]);
@@ -108,23 +116,48 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
   });
   const deliveryReady = Boolean(order.neededBy);
   const supplierReady = Boolean(order.vendor.trim());
-  const priceBook = useMemo(
-    () => currentCatalog(crm.catalog, crm.priceLists ?? []),
-    [crm.catalog, crm.priceLists],
+  const supplyLists = useMemo(
+    () => orderSupplyLists(crm.priceLists ?? [], order.vendor),
+    [crm.priceLists, order.vendor],
   );
-  const templates = useMemo(
+  const selectedListId =
+    listPick &&
+    priceListSupplierKey(listPick.vendor) === priceListSupplierKey(order.vendor) &&
+    supplyLists.some((list) => list.id === listPick.id)
+      ? listPick.id
+      : (currentPriceList(supplyLists)?.id ?? supplyLists[0]?.id ?? null);
+  const supplyListOptions = useMemo(
     () =>
-      [...(crm.materialOrderTemplates ?? [])]
-        .sort((left, right) => left.name.localeCompare(right.name))
-        .map((template) => {
-          const count = materialOrderTemplateLinesFor(template.id, crm.materialOrderTemplateLines ?? []).length;
-          const detail = [count === 1 ? "1 item" : `${count} items`, template.description.trim() || template.vendor.trim()]
-            .filter(Boolean)
-            .join(" · ");
-          return { id: template.id, name: template.name, detail: detail || "Saved list" };
-        }),
-    [crm.materialOrderTemplateLines, crm.materialOrderTemplates],
+      supplyLists.map((list) => ({
+        id: list.id,
+        label: `${list.name} · ${
+          isCurrentPriceList(list, crm.priceLists ?? []) ? "Current" : list.outdatedAt ? "Outdated" : "Live"
+        } · ${formatDate(list.effectiveOn)}`,
+      })),
+    [crm.priceLists, supplyLists],
   );
+  const usingCompanyBook = orderUsesCompanyBook(crm.priceLists ?? [], order.vendor);
+  const priceBook = useMemo(
+    () => catalogForOrder(crm.catalog, crm.priceLists ?? [], order.vendor, selectedListId),
+    [crm.catalog, crm.priceLists, order.vendor, selectedListId],
+  );
+  const templates = useMemo(() => {
+    const supplierKey = priceListSupplierKey(order.vendor);
+    return [...(crm.materialOrderTemplates ?? [])]
+      .filter((template) => {
+        if (!supplierKey) return true;
+        const templateKey = priceListSupplierKey(template.vendor);
+        return !templateKey || templateKey === supplierKey;
+      })
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((template) => {
+        const count = materialOrderTemplateLinesFor(template.id, crm.materialOrderTemplateLines ?? []).length;
+        const detail = [count === 1 ? "1 item" : `${count} items`, template.description.trim() || template.vendor.trim()]
+          .filter(Boolean)
+          .join(" · ");
+        return { id: template.id, name: template.name, detail: detail || "Saved list" };
+      });
+  }, [crm.materialOrderTemplateLines, crm.materialOrderTemplates, order.vendor]);
   const supplierEmail = emailForVendor(order.vendor, crm.qbVendors ?? []);
   const stepIndex = Math.max(0, STEPS.indexOf(order.status));
 
@@ -435,6 +468,10 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
             total={total}
             templates={templates}
             catalog={priceBook}
+            supplyLists={supplyListOptions}
+            selectedSupplyListId={selectedListId}
+            onSelectSupplyList={(id) => setListPick({ vendor: order.vendor, id })}
+            usingCompanyBook={usingCompanyBook}
             canManagePriceBook={Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer))}
             onAddFromCatalog={(catalogItemId) => crm.addMaterialOrderLineFromCatalog(order.id, catalogItemId)}
             onAddCustom={() => void crm.addCustomMaterialOrderLine(order.id)}

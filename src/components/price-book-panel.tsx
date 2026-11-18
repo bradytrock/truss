@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pencil, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CatalogItemDialog } from "@/components/catalog-item-dialog";
+import { VendorPicker } from "@/components/vendor-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,11 +44,13 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { catalogProposalUnitPrice, effectiveCatalogMargin, formatMarginPercent } from "@/lib/catalog-margin";
 import { formatDate, formatMoney, localYmd } from "@/lib/format";
+import { vendorChoices } from "@/lib/qb-vendors";
 import {
   catalogForList,
   currentPriceList,
   isCurrentPriceList,
   isLivePriceList,
+  priceListSupplierKey,
   sortPriceLists,
 } from "@/lib/price-lists";
 import {
@@ -63,7 +66,8 @@ type KindFilter = CatalogKind | "all";
 
 function listOptionLabel(list: PriceList, lists: PriceList[]) {
   const status = isCurrentPriceList(list, lists) ? "Current" : list.outdatedAt ? "Outdated" : "Live";
-  return `${list.name} · ${status} · ${formatDate(list.effectiveOn)}`;
+  const supplier = list.vendor.trim();
+  return `${supplier ? `${supplier} · ` : ""}${list.name} · ${status} · ${formatDate(list.effectiveOn)}`;
 }
 
 export function PriceBookPanel() {
@@ -172,9 +176,12 @@ export function PriceBookPanel() {
 
   async function outdateSelected() {
     if (!selected) return;
+    const supplier = selected.vendor.trim();
     if (
       !window.confirm(
-        `Outdate ${selected.name}? Estimators will use the current list. This list stays here so you can look up old prices.`,
+        supplier
+          ? `Outdate ${selected.name}? ${supplier} orders will use their current list. This list stays here so you can look up old prices.`
+          : `Outdate ${selected.name}? Estimators will use the current company list. This list stays here so you can look up old prices.`,
       )
     ) {
       return;
@@ -184,7 +191,19 @@ export function PriceBookPanel() {
   }
 
   const filteredEmpty = selectedItems.length > 0 && rows.length === 0;
-  const liveCount = lists.filter(isLivePriceList).length;
+  const supplierLiveCount = selected
+    ? lists.filter(
+        (list) =>
+          isLivePriceList(list) && priceListSupplierKey(list.vendor) === priceListSupplierKey(selected.vendor),
+      ).length
+    : 0;
+  const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
+  const vendorNames = [...vendors.fromQb.map((item) => item.name), ...vendors.extras];
+  const extraVendors = [
+    ...lists.map((list) => list.vendor.trim()),
+    ...(crm.materialOrders ?? []).map((order) => order.vendor.trim()),
+    ...(crm.materialOrderTemplates ?? []).map((template) => template.vendor.trim()),
+  ].filter(Boolean);
 
   return (
     <div className="space-y-5">
@@ -192,16 +211,15 @@ export function PriceBookPanel() {
         <CardHeader className="border-b">
           <CardTitle>Price lists</CardTitle>
           <CardDescription>
-            Add a dated list when a new book comes out. The previous list is outdated — not deleted — so you can
-            still look up what you used to charge. Estimators and material orders always pick from the current
-            list.
+            Each list belongs to a supplier. A new list becomes current for that supplier. Earlier lists for the
+            same supplier stay here as outdated. Other suppliers stay current. Estimators pick from every current
+            list. A material order only shows the lists for the supplier on that order.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 pt-4">
           {lists.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Items below are the working book. Add a dated price list when the vendor or office publishes a new
-              one.
+              Items below are the working book. Add a dated price list and name the supplier it came from.
             </p>
           ) : (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -230,7 +248,7 @@ export function PriceBookPanel() {
               {selected ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={canEdit ? "default" : "secondary"} className="font-normal">
-                    {canEdit ? "Current" : "Outdated"}
+                    {isCurrentPriceList(selected, lists) ? "Current" : selected.outdatedAt ? "Outdated" : "Live"}
                   </Badge>
                   <span className="text-sm text-muted-foreground">
                     Effective {formatDate(selected.effectiveOn)}
@@ -240,17 +258,49 @@ export function PriceBookPanel() {
               ) : null}
             </div>
           )}
+          {selected ? (
+            <div className="grid gap-1.5 sm:max-w-sm">
+              <Label>Supplier</Label>
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <VendorPicker
+                    value={selected.vendor}
+                    onChange={(value) => void crm.updatePriceList(selected.id, { vendor: value })}
+                    names={vendorNames}
+                    extraNames={extraVendors}
+                    placeholder="Company book"
+                    emptyHint="Type a supplier if they are not in QuickBooks yet."
+                  />
+                </div>
+                {selected.vendor.trim() ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void crm.updatePriceList(selected.id, { vendor: "" })}
+                  >
+                    Company book
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {selected.vendor.trim()
+                  ? `Material orders for ${selected.vendor.trim()} use this list.`
+                  : "No supplier yet. Every supplier sees this book until they have their own list."}
+              </p>
+            </div>
+          ) : null}
           {selected && !canEdit ? (
             <p className="text-sm text-muted-foreground">
-              This list is outdated. You can look it up here. To change prices, add a new list or switch to the
-              current one.
+              This list is outdated. You can look it up here. To change prices, add a new list for this supplier
+              or switch to their current one.
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => setListOpen(true)}>
               New price list
             </Button>
-            {selected && isLivePriceList(selected) && liveCount > 1 ? (
+            {selected && isLivePriceList(selected) && supplierLiveCount > 1 ? (
               <Button type="button" variant="outline" onClick={() => void outdateSelected()}>
                 Outdate this list
               </Button>
@@ -588,7 +638,7 @@ export function PriceBookPanel() {
       )}
 
       <p className="text-sm text-muted-foreground">
-        Estimators drop the current list onto a proposal from the estimate writer. Quantity and price stay editable
+        Estimators drop every supplier’s current list onto a proposal from the estimate writer. Quantity and price stay editable
         there. Existing estimate lines keep the prices they already have.
       </p>
 
@@ -626,32 +676,42 @@ function NewPriceListDialog({
 }) {
   const crm = useCrm();
   const [name, setName] = useState("");
+  const [vendor, setVendor] = useState("");
   const [effectiveOn, setEffectiveOn] = useState(localYmd(new Date()));
   const [copyItems, setCopyItems] = useState(true);
   const [pending, setPending] = useState(false);
   const hasSource = copyCount > 0;
   const firstList = (crm.priceLists ?? []).length === 0;
+  const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
+  const vendorNames = [...vendors.fromQb.map((item) => item.name), ...vendors.extras];
+  const extraVendors = [
+    ...(crm.priceLists ?? []).map((list) => list.vendor.trim()),
+    ...(crm.materialOrders ?? []).map((order) => order.vendor.trim()),
+    ...(crm.materialOrderTemplates ?? []).map((template) => template.vendor.trim()),
+  ].filter(Boolean);
 
   useEffect(() => {
     if (!open) return;
     setName("");
+    setVendor(copyFrom?.vendor ?? "");
     setEffectiveOn(localYmd(new Date()));
     setCopyItems(hasSource);
-  }, [hasSource, open]);
+  }, [copyFrom?.vendor, hasSource, open]);
 
   async function save() {
     setPending(true);
     try {
       const list = await crm.addPriceList({
         name,
+        vendor,
         effectiveOn,
         copyItems: copyItems && hasSource && !firstList,
         copyFromId: copyFrom?.id ?? null,
       });
       toast.success(
-        firstList
-          ? `${list.name} is the current price list.`
-          : `${list.name} is current. The previous list is outdated and still in the book.`,
+        list.vendor.trim()
+          ? `${list.name} is the current list for ${list.vendor.trim()}.`
+          : `${list.name} is the current company list.`,
       );
       onCreated(list.id);
       onOpenChange(false);
@@ -668,11 +728,25 @@ function NewPriceListDialog({
         <DialogHeader>
           <DialogTitle>New price list</DialogTitle>
           <DialogDescription>
-            Name it by the date the book takes effect. This list becomes current. The previous list stays in the
-            book as outdated so you can look up old prices — it is not deleted.
+            Name the supplier and the date the book takes effect. This list becomes current for that supplier.
+            Earlier lists for the same supplier stay in the book as outdated. Other suppliers are left alone.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Supplier</Label>
+            <VendorPicker
+              value={vendor}
+              onChange={setVendor}
+              names={vendorNames}
+              extraNames={extraVendors}
+              placeholder="Company book"
+              emptyHint="Type a supplier if they are not in QuickBooks yet."
+            />
+            <p className="text-xs text-muted-foreground">
+              Material orders for this supplier use this list. Leave it blank for a company book.
+            </p>
+          </div>
           <div className="grid gap-1.5">
             <Label htmlFor="price-list-name">Name</Label>
             <Input

@@ -46,6 +46,7 @@ export const seedState: CrmState = {
     {
       id: NORTHLINE_PRICE_LIST_ID,
       name: "Price list",
+      vendor: "",
       effectiveOn: "2024-01-15",
       outdatedAt: null,
       createdAt: "2024-01-15T12:00:00.000Z",

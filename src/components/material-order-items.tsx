@@ -23,9 +23,23 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCrm } from "@/lib/crm-store";
-import { formatMoney } from "@/lib/format";
-import { currentCatalog } from "@/lib/price-lists";
+import { formatDate, formatMoney } from "@/lib/format";
+import {
+  catalogForOrder,
+  currentCatalog,
+  currentPriceList,
+  isCurrentPriceList,
+  orderSupplyLists,
+  orderUsesCompanyBook,
+} from "@/lib/price-lists";
 import { CATALOG_KIND_LABELS, type CatalogKind } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 import { lineAmount } from "@/lib/money";
@@ -41,6 +55,7 @@ export type MaterialListLine = {
 export function MaterialOrderItems({
   lines,
   emptyHint,
+  vendor = "",
   onAddFromCatalog,
   onAddCustom,
   onUpdate,
@@ -48,6 +63,8 @@ export function MaterialOrderItems({
 }: {
   lines: MaterialListLine[];
   emptyHint: string;
+  /** When set, the price book is limited to this supplier's supply lists. */
+  vendor?: string;
   onAddFromCatalog: (catalogItemId: string) => Promise<unknown> | unknown;
   onAddCustom: () => void;
   onUpdate: (id: string, patch: Partial<Pick<MaterialListLine, "name" | "quantity" | "unit" | "unitCost">>) => void;
@@ -173,6 +190,7 @@ export function MaterialOrderItems({
       <MaterialPriceBookSheet
         open={bookOpen}
         onOpenChange={setBookOpen}
+        vendor={vendor}
         onPick={async (catalogItemId) => {
           const item = crm.catalog.find((entry) => entry.id === catalogItemId);
           await onAddFromCatalog(catalogItemId);
@@ -186,14 +204,28 @@ export function MaterialOrderItems({
 function MaterialPriceBookSheet({
   open,
   onOpenChange,
+  vendor,
   onPick,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  vendor: string;
   onPick: (catalogItemId: string) => void | Promise<void>;
 }) {
   const { catalog, viewer, priceLists } = useCrm();
-  const items = useMemo(() => currentCatalog(catalog, priceLists ?? []), [catalog, priceLists]);
+  const lists = useMemo(() => priceLists ?? [], [priceLists]);
+  const supplier = vendor.trim();
+  const supplyLists = useMemo(() => (supplier ? orderSupplyLists(lists, supplier) : []), [lists, supplier]);
+  const [listId, setListId] = useState<string | null>(null);
+  const selectedListId =
+    listId && supplyLists.some((list) => list.id === listId)
+      ? listId
+      : (currentPriceList(supplyLists)?.id ?? supplyLists[0]?.id ?? null);
+  const items = useMemo(
+    () => (supplier ? catalogForOrder(catalog, lists, supplier, selectedListId) : currentCatalog(catalog, lists)),
+    [catalog, lists, selectedListId, supplier],
+  );
+  const usingCompanyBook = orderUsesCompanyBook(lists, supplier);
   const [kindFilter, setKindFilter] = useState<"material" | "all">("material");
   const groups = useMemo(() => {
     const source =
@@ -211,12 +243,46 @@ function MaterialPriceBookSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="flex w-full flex-col sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Price book</SheetTitle>
+          <SheetTitle>{supplier ? `${supplier} supply lists` : "Price book"}</SheetTitle>
           <SheetDescription>
-            Costs copy onto this list from the catalog. Add as many items as you need, then close the
-            book and set quantities.
+            {supplier
+              ? supplyLists.length === 0
+                ? `No supply list for ${supplier}. A company admin can add one under Settings → Price book.`
+                : usingCompanyBook
+                  ? `${supplier} has no list yet, so this is the company book. Add a list for them under Settings → Price book to keep their prices separate.`
+                  : `Only ${supplier} lists are shown. Costs copy onto this template.`
+              : "Choose a supplier on the template to limit this to one supplier. Costs copy onto this template."}
           </SheetDescription>
         </SheetHeader>
+        {supplier && supplyLists.length > 0 ? (
+          <div className="grid gap-1.5 px-4 pb-2">
+            <label htmlFor="template-supply-list" className="text-sm font-medium">
+              Supply list
+            </label>
+            <Select
+              value={selectedListId ?? ""}
+              onValueChange={(value) => {
+                if (value) setListId(String(value));
+              }}
+              items={supplyLists.map((list) => ({
+                value: list.id,
+                label: `${list.name} · ${isCurrentPriceList(list, lists) ? "Current" : list.outdatedAt ? "Outdated" : "Live"} · ${formatDate(list.effectiveOn)}`,
+              }))}
+            >
+              <SelectTrigger id="template-supply-list" className="w-full">
+                <SelectValue placeholder="Choose a supply list" />
+              </SelectTrigger>
+              <SelectContent>
+                {supplyLists.map((list) => (
+                  <SelectItem key={list.id} value={list.id}>
+                    {list.name} · {isCurrentPriceList(list, lists) ? "Current" : list.outdatedAt ? "Outdated" : "Live"} ·{" "}
+                    {formatDate(list.effectiveOn)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <div className="flex gap-2 px-4 pb-2">
           <Button
             type="button"
@@ -232,7 +298,7 @@ function MaterialPriceBookSheet({
             variant={kindFilter === "all" ? "secondary" : "ghost"}
             onClick={() => setKindFilter("all")}
           >
-            Whole book
+            Whole list
           </Button>
         </div>
         <Command className="min-h-0 flex-1 border-0 bg-transparent p-0">
@@ -242,9 +308,11 @@ function MaterialPriceBookSheet({
           <CommandList className="max-h-none flex-1 px-2">
             <CommandEmpty>
               {emptyBook
-                ? "Price book is empty. A company admin can upload a pricing sheet under Settings → Price book."
+                ? supplier
+                  ? `No items on this ${supplier} list. A company admin can add them under Settings → Price book.`
+                  : "Price book is empty. A company admin can upload a pricing sheet under Settings → Price book."
                 : noMaterials
-                  ? "No material items in the book. Switch to Whole book, or upload materials as kind material."
+                  ? "No material items on this list. Switch to Whole book, or upload materials as kind material."
                   : "No items match that search."}
             </CommandEmpty>
             {groups.map((group) => (

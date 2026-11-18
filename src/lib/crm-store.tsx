@@ -41,7 +41,9 @@ import {
   postExternalCalendarInvite,
 } from "@/lib/calendar-invite";
 import {
+  isMissingPriceListSupplier,
   isMissingScheduleGuestInvites,
+  missingPriceListSupplierMessage,
   missingScheduleGuestInvitesMessage,
 } from "@/lib/supabase/schema-errors";
 import { distinctMessageHandle, isDuplicateMessageHandle, outboundMessageHandle } from "@/lib/message-handle";
@@ -106,6 +108,9 @@ import {
   copyCatalogItemToList,
   currentPriceList,
   isLivePriceList,
+  listsReplacedByNewBook,
+  priceListSupplierName,
+  priceListsForSupplier,
 } from "@/lib/price-lists";
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
 import { nextMaterialOrderNumber } from "@/lib/material-order-number";
@@ -1339,11 +1344,15 @@ type CrmContextValue = CrmState & {
   ) => Promise<HubSpotContactsImportResult>;
   addPriceList: (input: {
     name: string;
+    vendor?: string;
     effectiveOn: string;
     copyItems?: boolean;
     copyFromId?: string | null;
   }) => Promise<PriceList>;
-  updatePriceList: (id: string, patch: Partial<Pick<PriceList, "name" | "effectiveOn">>) => Promise<void>;
+  updatePriceList: (
+    id: string,
+    patch: Partial<Pick<PriceList, "name" | "vendor" | "effectiveOn">>,
+  ) => Promise<void>;
   outdatePriceList: (id: string) => Promise<void>;
   addTemplateLineFromCatalog: (
     templateId: string,
@@ -8211,6 +8220,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const addPriceList = useCallback(
     async (input: {
       name: string;
+      vendor?: string;
       effectiveOn: string;
       copyItems?: boolean;
       copyFromId?: string | null;
@@ -8226,15 +8236,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         throw new Error("Date is required.");
       }
       const now = new Date().toISOString();
+      const vendor = priceListSupplierName(input.vendor);
       const list: PriceList = {
         id: crypto.randomUUID(),
         name,
+        vendor,
         effectiveOn,
         outdatedAt: null,
         createdAt: now,
       };
       const firstList = state.priceLists.length === 0;
-      const sourceId = input.copyFromId ?? currentPriceList(state.priceLists)?.id ?? null;
+      const sameSupplier = priceListsForSupplier(state.priceLists, vendor);
+      const sourceId = input.copyFromId ?? currentPriceList(sameSupplier)?.id ?? null;
       const sourceItems = catalogForList(state.catalog, state.priceLists, sourceId);
       const copies =
         input.copyItems && !firstList
@@ -8243,13 +8256,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const attachIds = new Set(
         firstList ? state.catalog.map((item) => item.id) : [],
       );
+      const replacedIds = new Set(listsReplacedByNewBook(state.priceLists, vendor).map((entry) => entry.id));
 
       const applyLocal = (mappedList: PriceList, mappedCopies: CatalogItem[]) => {
         setState((prev) => ({
           ...prev,
           priceLists: [
             ...prev.priceLists.map((entry) =>
-              isLivePriceList(entry) ? { ...entry, outdatedAt: now } : entry,
+              replacedIds.has(entry.id) ? { ...entry, outdatedAt: now } : entry,
             ),
             mappedList,
           ],
@@ -8268,18 +8282,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return list;
       }
 
-      const { data, error } = await supabase
-        .from("price_lists")
-        .insert({
-          id: list.id,
-          company_id: user.companyId,
-          name: list.name,
-          effective_on: list.effectiveOn,
-          outdated_at: null,
-          created_at: list.createdAt,
-        })
-        .select("*")
-        .single();
+      const insertRow = {
+        id: list.id,
+        company_id: user.companyId,
+        name: list.name,
+        vendor: list.vendor,
+        effective_on: list.effectiveOn,
+        outdated_at: null,
+        created_at: list.createdAt,
+      };
+      let { data, error } = await supabase.from("price_lists").insert(insertRow).select("*").single();
+      if (error && isMissingPriceListSupplier(error)) {
+        toast.message(missingPriceListSupplierMessage());
+        const { vendor: _vendor, ...withoutSupplier } = insertRow;
+        const retry = await supabase.from("price_lists").insert(withoutSupplier).select("*").single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) {
         if (isMissingPriceLists(error)) {
           toast.message(missingPriceListsMessage());
@@ -8289,17 +8308,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error.message);
         throw error;
       }
-      const mapped = data ? mapPriceList(data) : list;
+      const mappedRow = data ? mapPriceList(data) : list;
+      const mapped = { ...mappedRow, vendor: mappedRow.vendor || list.vendor };
 
-      const others = state.priceLists.filter((entry) => isLivePriceList(entry) && entry.id !== mapped.id);
-      if (others.length > 0) {
-        const outdated = await supabase
-          .from("price_lists")
-          .update({ outdated_at: now })
-          .in(
-            "id",
-            others.map((entry) => entry.id),
-          );
+      const replaced = [...replacedIds];
+      if (replaced.length > 0) {
+        const outdated = await supabase.from("price_lists").update({ outdated_at: now }).in("id", replaced);
         if (outdated.error && !isMissingPriceLists(outdated.error)) {
           toast.error(outdated.error.message);
           throw outdated.error;
@@ -8350,13 +8364,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updatePriceList = useCallback(
-    async (id: string, patch: Partial<Pick<PriceList, "name" | "effectiveOn">>) => {
+    async (id: string, patch: Partial<Pick<PriceList, "name" | "vendor" | "effectiveOn">>) => {
       const next: Partial<PriceList> = { ...patch };
       if (next.name !== undefined) next.name = next.name.trim();
       if (next.name === "") {
         toast.error("Name the price list so you can find it later.");
         return;
       }
+      if (next.vendor !== undefined) next.vendor = priceListSupplierName(next.vendor);
       const apply = () =>
         setState((prev) => ({
           ...prev,
@@ -8367,7 +8382,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         return;
       }
-      const { error } = await supabase.from("price_lists").update(priceListPatch(next)).eq("id", id);
+      let { error } = await supabase.from("price_lists").update(priceListPatch(next)).eq("id", id);
+      if (error && isMissingPriceListSupplier(error)) {
+        toast.message(missingPriceListSupplierMessage());
+        const { vendor: _vendor, ...rest } = next;
+        const restPatch = priceListPatch(rest);
+        if (Object.keys(restPatch).length === 0) {
+          apply();
+          return;
+        }
+        const retry = await supabase.from("price_lists").update(restPatch).eq("id", id);
+        error = retry.error;
+      }
       if (error && isMissingPriceLists(error)) {
         toast.message(missingPriceListsMessage());
         apply();
@@ -8387,9 +8413,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const list = state.priceLists.find((entry) => entry.id === id);
       if (!list) return;
       if (!isLivePriceList(list)) return;
-      const liveCount = state.priceLists.filter(isLivePriceList).length;
+      const liveCount = priceListsForSupplier(state.priceLists, list.vendor).filter(isLivePriceList).length;
       if (liveCount <= 1) {
-        toast.error("Add a new price list first so estimators still have a current book.");
+        toast.error(
+          list.vendor.trim()
+            ? `Add a new ${list.vendor.trim()} price list first so that supplier still has a current book.`
+            : "Add a new price list first so estimators still have a current book.",
+        );
         return;
       }
       const now = new Date().toISOString();

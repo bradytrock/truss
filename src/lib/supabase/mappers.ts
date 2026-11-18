@@ -614,9 +614,11 @@ export function jobPatch(patch: Partial<Job>) {
 }
 
 export function mapPriceList(row: PriceListRow): PriceList {
+  const vendor = "vendor" in row ? row.vendor : "";
   return {
     id: row.id,
     name: row.name,
+    vendor: typeof vendor === "string" ? vendor : "",
     effectiveOn: row.effective_on,
     outdatedAt: row.outdated_at,
     createdAt: row.created_at,
@@ -626,6 +628,7 @@ export function mapPriceList(row: PriceListRow): PriceList {
 export function priceListPatch(patch: Partial<PriceList>) {
   const row: Database["public"]["Tables"]["price_lists"]["Update"] = {};
   if (patch.name !== undefined) row.name = patch.name;
+  if (patch.vendor !== undefined) row.vendor = patch.vendor;
   if (patch.effectiveOn !== undefined) row.effective_on = patch.effectiveOn;
   if (patch.outdatedAt !== undefined) row.outdated_at = patch.outdatedAt;
   return row;

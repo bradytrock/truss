@@ -1190,6 +1190,19 @@ export function missingPriceListsMessage() {
   return `Saved in this browser. Run ${PRICE_LISTS_SQL} in the SQL editor (or a fresh bootstrap) so dated price lists persist. Old lists stay in the book when you outdate them.`;
 }
 
+export const PRICE_LIST_SUPPLIER_SQL = "supabase/migrations/20261118180000_price_list_supplier.sql";
+
+export function isMissingPriceListSupplier(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  if (!message.includes("vendor")) return false;
+  return message.includes("price_lists") || message.includes("price_list");
+}
+
+export function missingPriceListSupplierMessage() {
+  return `Saved in this browser. Run ${PRICE_LIST_SUPPLIER_SQL} in the SQL editor (or a fresh bootstrap) so each price list keeps its supplier. Material orders still filter by supplier here.`;
+}
+
 export const ESTIMATE_OPENED_NOTIFY_SQL =
   "supabase/migrations/20260929200000_estimate_opened_notify.sql";
 

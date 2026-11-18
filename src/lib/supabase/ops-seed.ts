@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn, isMissingMessages, isMissingPriceLists, isMissingCatalogMargin, isMissingCatalogDescription } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn, isMissingMessages, isMissingPriceLists, isMissingPriceListSupplier, isMissingCatalogMargin, isMissingCatalogDescription } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -97,6 +97,7 @@ export async function insertOperations(
         {
           id: crypto.randomUUID(),
           name: "Price list",
+          vendor: "",
           effectiveOn: now.slice(0, 10),
           outdatedAt: null as string | null,
           createdAt: now,
@@ -107,11 +108,17 @@ export async function insertOperations(
     id: remap(list.id, ids),
     company_id: companyId,
     name: list.name,
+    vendor: list.vendor ?? "",
     effective_on: list.effectiveOn,
     outdated_at: list.outdatedAt,
     created_at: list.createdAt,
   }));
-  const { error: priceListError } = await supabase.from("price_lists").insert(priceListRows);
+  let priceListError = (await supabase.from("price_lists").insert(priceListRows)).error;
+  if (priceListError && isMissingPriceListSupplier(priceListError)) {
+    priceListError = (
+      await supabase.from("price_lists").insert(priceListRows.map(({ vendor: _vendor, ...row }) => row))
+    ).error;
+  }
   if (priceListError && !isMissingPriceLists(priceListError)) throw priceListError;
   const listsPersist = !priceListError;
 
