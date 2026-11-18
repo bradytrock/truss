@@ -1381,6 +1381,7 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     id: row.id,
     jobId: row.job_id,
     caption: row.caption,
+    notes: row.notes ?? "",
     category: row.category,
     takenAt: row.taken_at,
     imageUrl: resolveStoredFileUrl({
@@ -1390,6 +1391,7 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     }),
     storagePath: row.storage_path,
     createdBy: "created_by" in row ? String(row.created_by ?? "") : "",
+    companycamPhotoId: "companycam_photo_id" in row ? String(row.companycam_photo_id ?? "") : "",
     deletedAt: "deleted_at" in row ? ((row.deleted_at as string | null) ?? null) : null,
     deletedBy: "deleted_by" in row ? String(row.deleted_by ?? "") : "",
   };

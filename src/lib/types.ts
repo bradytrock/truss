@@ -1121,11 +1121,15 @@ export interface JobPhoto {
   id: string;
   jobId: string;
   caption: string;
+  /** Crew note shown beside the photo. Separate from the caption. */
+  notes?: string;
   category: PhotoCategory;
   takenAt: string;
   imageUrl: string;
   storagePath: string | null;
   createdBy?: string;
+  /** Set when the shot was ingested from CompanyCam. */
+  companycamPhotoId?: string;
   /** Soft-delete timestamp. Null means the photo is live on the job. */
   deletedAt?: string | null;
   deletedBy?: string;

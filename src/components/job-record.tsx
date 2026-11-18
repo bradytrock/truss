@@ -77,6 +77,7 @@ import { TradesMenu } from "@/components/trades-field";
 import { EstimateStatusBadge, InvoiceStatusBadge, QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatInboxTime, formatPhone } from "@/lib/format";
+import { sortPhotos } from "@/lib/photos-feed";
 import { mailHref } from "@/lib/job-emails";
 import { assignedCrewPatch, isDeletedJob, jobAddress, jobRecordHref, mapsUrl, primaryHomeownerPatch, uniqueIds, uniqueNames } from "@/lib/job-record";
 import {
@@ -440,6 +441,7 @@ export function JobRecord({
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoViewOpen, setPhotoViewOpen] = useState(false);
+  const [headerPhotoId, setHeaderPhotoId] = useState<string | null>(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [materialTemplateOpen, setMaterialTemplateOpen] = useState(false);
@@ -524,10 +526,12 @@ export function JobRecord({
   const client = crm.getClient(job.clientId);
   const primary = crm.getContact(job.primaryContactId);
   const photos = livePhotos(crm.photos, job.id);
+  const gallery = sortPhotos(photos, "newest");
   const reports = crm.photoReports.filter((report) => report.jobId === job.id);
   const openReport = reportId ? reports.find((report) => report.id === reportId) : undefined;
   const hero = primaryJobPhoto(crm.photos, job);
   const shownPhoto = hero ?? photos[0] ?? null;
+  const headerPhoto = gallery.find((item) => item.id === headerPhotoId) ?? shownPhoto;
   const address = jobAddress(job);
   const cityLine = [job.city, [job.state, job.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   const jobFiles = (crm.jobFiles ?? []).filter((file) => file.jobId === job.id);
@@ -1203,7 +1207,14 @@ export function JobRecord({
 
               <div className="relative overflow-hidden rounded-[12px] border bg-muted">
                 {shownPhoto ? (
-                  <button type="button" onClick={() => setPhotoViewOpen(true)} className="block w-full">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHeaderPhotoId(shownPhoto.id);
+                      setPhotoViewOpen(true);
+                    }}
+                    className="block w-full"
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={shownPhoto.imageUrl}
@@ -2247,17 +2258,16 @@ export function JobRecord({
       />
       <AddPhotoDialog open={photoOpen} onOpenChange={setPhotoOpen} jobId={job.id} />
       <PhotoViewer
-        photo={shownPhoto}
-        open={photoViewOpen && Boolean(shownPhoto)}
-        onOpenChange={setPhotoViewOpen}
-        title={shownPhoto?.caption || job.name}
-        description={
-          shownPhoto
-            ? shownPhoto.createdBy?.trim()
-              ? `Taken by ${shownPhoto.createdBy.trim()} · ${formatDate(shownPhoto.takenAt)}`
-              : formatDate(shownPhoto.takenAt)
-            : undefined
-        }
+        photo={headerPhoto}
+        photos={gallery}
+        open={photoViewOpen && Boolean(headerPhoto)}
+        onOpenChange={(open) => {
+          setPhotoViewOpen(open);
+          if (!open) setHeaderPhotoId(null);
+        }}
+        onSelect={setHeaderPhotoId}
+        canManage={managePhotos && !deleted}
+        photographer={headerPhoto?.createdBy}
       />
       <CreatePageDialog
         open={pageCreateOpen}

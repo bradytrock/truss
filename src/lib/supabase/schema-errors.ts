@@ -663,6 +663,23 @@ export function missingPhotoCreatedByMessage() {
   return `Saved in this browser. Run ${JOB_PHOTO_CREATED_BY_SQL} in the SQL editor so the Photos feed can show who took each shot.`;
 }
 
+export const JOB_PHOTO_NOTES_SQL = "supabase/migrations/20261118170000_job_photo_notes.sql";
+
+export function isMissingPhotoNotes(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("could not find the 'notes' column") ||
+    (message.includes("notes") &&
+      (message.includes("schema cache") || message.includes("job_photos")) &&
+      (message.includes("column") || message.includes("schema cache")))
+  );
+}
+
+export function missingPhotoNotesMessage() {
+  return `Saved in this browser. Run ${JOB_PHOTO_NOTES_SQL} in the SQL editor so photo notes persist.`;
+}
+
 export const PHOTO_TRASHCAN_SQL = "supabase/migrations/20260904190000_photo_trashcan.sql";
 
 export function isMissingPhotoTrashcan(error: { message?: string; code?: string } | null | undefined) {

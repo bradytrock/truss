@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -14,14 +12,14 @@ import {
 import { PhotoCategoryBadge } from "@/components/status-badge";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { useCrm } from "@/lib/crm-store";
-import { formatDate, initials } from "@/lib/format";
+import { initials } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
+import { canManageJobPhotos } from "@/lib/visibility";
 import {
   groupPhotoFeed,
   PHOTO_DATE_RANGE_LABELS,
   PHOTO_SORT_LABELS,
   PHOTO_TAG_FILTERS,
-  photoFeedTakenBy,
   photoFeedTitle,
   photoInDateRange,
   photoJobLabel,
@@ -35,7 +33,6 @@ import type { PhotoCategory } from "@/lib/types";
 
 export default function PhotosPage() {
   const crm = useCrm();
-  const router = useRouter();
   const [range, setRange] = useState<PhotoDateRange>("all");
   const [jobId, setJobId] = useState("all");
   const [userName, setUserName] = useState("all");
@@ -111,6 +108,10 @@ export default function PhotosPage() {
   }, [items, jobId, range, tag, userName]);
 
   const groups = useMemo(() => groupPhotoFeed(filtered, sort), [filtered, sort]);
+  const orderedPhotos = useMemo(
+    () => groups.flatMap((group) => group.items.map((item) => item.photo)),
+    [groups],
+  );
   const openItem = filtered.find((item) => item.photo.id === openId) ?? items.find((item) => item.photo.id === openId);
   const canOpenJob = Boolean(
     openItem && crm.getJob(openItem.photo.jobId) && !isDeletedJob(openItem.job ?? { deletedAt: null }),
@@ -275,46 +276,22 @@ export default function PhotosPage() {
 
       <PhotoViewer
         photo={openItem?.photo ?? null}
+        photos={
+          openItem && orderedPhotos.some((item) => item.id === openItem.photo.id)
+            ? orderedPhotos
+            : openItem
+              ? [openItem.photo]
+              : []
+        }
         open={Boolean(openItem)}
         onOpenChange={(open) => {
           if (!open) setOpenId(null);
         }}
-        title={openItem ? photoFeedTitle(openItem) : undefined}
-        description={
-          openItem
-            ? [
-                photoFeedTakenBy(openItem.photographer),
-                openItem.label,
-                openItem.job?.code,
-                [formatDate(openItem.photo.takenAt), photoTimeLabel(openItem.photo.takenAt)]
-                  .filter(Boolean)
-                  .join(" "),
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : undefined
+        onSelect={setOpenId}
+        canManage={
+          canOpenJob && canManageJobPhotos(crm.effectiveStaff?.role ?? crm.viewer?.role)
         }
-        actions={
-          openItem ? (
-            canOpenJob ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setOpenId(null);
-                  router.push(`/jobs?job=${openItem.photo.jobId}`);
-                }}
-              >
-                Open job
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                This job is not in your book. The photo is still here for the company.
-              </p>
-            )
-          ) : null
-        }
+        photographer={openItem?.photographer}
       />
     </div>
   );

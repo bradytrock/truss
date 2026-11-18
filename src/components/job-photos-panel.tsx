@@ -14,9 +14,9 @@ import {
 import { PhotoViewer } from "@/components/photo-viewer";
 import { PhotoCategoryBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
-import { formatDate, formatDateTimeUtc } from "@/lib/format";
+import { formatDateTimeUtc } from "@/lib/format";
 import { livePhotos, primaryJobPhoto, trashedPhotos } from "@/lib/photo-trash";
-import { groupJobPhotos, PHOTO_SORT_LABELS, PHOTO_TAG_FILTERS, type PhotoSort } from "@/lib/photos-feed";
+import { groupJobPhotos, PHOTO_SORT_LABELS, PHOTO_TAG_FILTERS, sortPhotos, type PhotoSort } from "@/lib/photos-feed";
 import type { JobPhoto, PhotoAuditEvent, PhotoCategory } from "@/lib/types";
 import { canManageJobPhotos } from "@/lib/visibility";
 
@@ -46,6 +46,7 @@ export function JobPhotosPanel({
     [photos, tag],
   );
   const groups = useMemo(() => groupJobPhotos(filtered, sort), [filtered, sort]);
+  const ordered = useMemo(() => sortPhotos(filtered, sort), [filtered, sort]);
   const visibleGroups = useMemo(() => {
     if (showAll || filtered.length <= 3) return groups;
     let remaining = 3;
@@ -329,18 +330,14 @@ export function JobPhotosPanel({
 
       <PhotoViewer
         photo={openPhoto}
+        photos={openPhoto && ordered.some((item) => item.id === openPhoto.id) ? ordered : photos}
         open={Boolean(openPhoto)}
         onOpenChange={(open) => {
           if (!open) setOpenId(null);
         }}
-        title={openPhoto?.caption || "Job photo"}
-        description={
-          openPhoto
-            ? openPhoto.createdBy?.trim()
-              ? `Taken by ${openPhoto.createdBy.trim()} · ${formatDate(openPhoto.takenAt)}`
-              : formatDate(openPhoto.takenAt)
-            : undefined
-        }
+        onSelect={setOpenId}
+        canManage={!manageDisabled}
+        photographer={openPhoto?.createdBy}
       />
     </div>
   );

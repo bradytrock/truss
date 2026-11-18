@@ -6,6 +6,7 @@ import {
   groupPhotosByDay,
   photoTagRank,
   sortPhotos,
+  stepPhotoId,
   type PhotoFeedItem,
 } from "./photos-feed.ts";
 import type { JobPhoto, PhotoCategory } from "./types.ts";
@@ -90,5 +91,11 @@ assert.deepEqual(
     ["issue", ["p1"]],
   ],
 );
+
+assert.equal(stepPhotoId([{ id: "a" }, { id: "b" }, { id: "c" }], "b", -1), "a");
+assert.equal(stepPhotoId([{ id: "a" }, { id: "b" }, { id: "c" }], "b", 1), "c");
+assert.equal(stepPhotoId([{ id: "a" }, { id: "b" }], "a", -1), null);
+assert.equal(stepPhotoId([{ id: "a" }, { id: "b" }], "b", 1), null);
+assert.equal(stepPhotoId([{ id: "a" }], "missing", 1), null);
 
 console.log("photos-feed.test.ts ok");

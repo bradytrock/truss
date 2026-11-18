@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingAssigneeSignature, missingAssigneeSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingTaskAssigneesColumn, missingTaskAssigneesMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingAssigneeSignature, missingAssigneeSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoNotes, missingPhotoNotesMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingTaskAssigneesColumn, missingTaskAssigneesMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -1594,6 +1594,11 @@ type CrmContextValue = CrmState & {
   }) => Promise<void>;
   /** Replace the visible image after markup. Keeps the original Backblaze object. */
   updateJobPhoto: (id: string, input: { file: File }) => Promise<boolean>;
+  /** Save caption, tag, or crew notes without replacing the file. */
+  patchJobPhoto: (
+    id: string,
+    input: { caption?: string; category?: PhotoCategory; notes?: string },
+  ) => Promise<boolean>;
   /** Soft-delete a job photo from the UI. Never removes the Backblaze object. */
   deleteJobPhoto: (id: string) => Promise<boolean>;
   /** Restore a soft-deleted job photo from the Project Trashcan. */
@@ -13608,6 +13613,70 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [recordCompanyAudit, state.photos],
   );
 
+  const patchJobPhoto = useCallback(
+    async (id: string, input: { caption?: string; category?: PhotoCategory; notes?: string }) => {
+      const current = state.photos.find((photo) => photo.id === id);
+      if (!current) {
+        toast.error("That photo is no longer in the book.");
+        return false;
+      }
+      const caption = input.caption !== undefined ? input.caption : current.caption;
+      const category = input.category !== undefined ? input.category : current.category;
+      const notes = input.notes !== undefined ? input.notes : (current.notes ?? "");
+      if (caption === current.caption && category === current.category && notes === (current.notes ?? "")) {
+        return true;
+      }
+      const next = { ...current, caption, category, notes };
+      const supabase = maybeClient();
+      if (supabase) {
+        const payload: Database["public"]["Tables"]["job_photos"]["Update"] = {};
+        if (input.caption !== undefined) payload.caption = caption;
+        if (input.category !== undefined) payload.category = category;
+        if (input.notes !== undefined) payload.notes = notes;
+        let { error } = await supabase.from("job_photos").update(payload).eq("id", id);
+        if (error && input.notes !== undefined && isMissingPhotoNotes(error)) {
+          const withoutNotes: Database["public"]["Tables"]["job_photos"]["Update"] = { ...payload };
+          delete withoutNotes.notes;
+          if (Object.keys(withoutNotes).length === 0) {
+            toast.message(missingPhotoNotesMessage());
+            error = null;
+          } else {
+            const retry = await supabase.from("job_photos").update(withoutNotes).eq("id", id);
+            error = retry.error;
+            if (!error) toast.message(missingPhotoNotesMessage());
+          }
+        }
+        if (error) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        photos: prev.photos.map((photo) => (photo.id === id ? next : photo)),
+      }));
+      const detail = [
+        input.caption !== undefined && caption !== current.caption ? "Caption updated." : "",
+        input.category !== undefined && category !== current.category ? "Tag updated." : "",
+        input.notes !== undefined && notes !== (current.notes ?? "") ? "Notes updated." : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      void recordCompanyAudit({
+        entityType: "photo",
+        entityId: current.id,
+        action: "updated",
+        before: current,
+        after: next,
+        label: caption.trim() || "Photo",
+        detail,
+        relatedJobId: current.jobId,
+      });
+      return true;
+    },
+    [recordCompanyAudit, state.photos],
+  );
+
   const recordPhotoAudit = useCallback(
     async (input: {
       jobId: string;
@@ -16719,6 +16788,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addTrainingBulletin,
       addJobPhoto,
       updateJobPhoto,
+      patchJobPhoto,
       deleteJobPhoto,
       restoreJobPhoto,
       revertCompanyAudit,
@@ -16942,6 +17012,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addTrainingBulletin,
       addJobPhoto,
       updateJobPhoto,
+      patchJobPhoto,
       deleteJobPhoto,
       restoreJobPhoto,
       revertCompanyAudit,

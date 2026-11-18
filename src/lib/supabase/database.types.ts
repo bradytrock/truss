@@ -1802,6 +1802,7 @@ export type Database = {
           company_id: string;
           job_id: string;
           caption: string;
+          notes?: string;
           category: Database["public"]["Enums"]["photo_category"];
           taken_at: string;
           image_url: string;
@@ -1817,6 +1818,7 @@ export type Database = {
           company_id: string;
           job_id: string;
           caption?: string;
+          notes?: string;
           category?: Database["public"]["Enums"]["photo_category"];
           taken_at?: string;
           image_url: string;

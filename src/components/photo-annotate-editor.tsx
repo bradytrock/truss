@@ -80,6 +80,8 @@ export function PhotoAnnotateEditor({
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
         if (textDraft) {
           commitText();
           return;
@@ -93,8 +95,8 @@ export function PhotoAnnotateEditor({
         else undo();
       }
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   });
 
   const dirty = hasAnnotations(marks, crop) || Boolean(draft) || Boolean(textDraft);
@@ -258,7 +260,7 @@ export function PhotoAnnotateEditor({
   const cropDraft = draft?.kind === "crop" ? cropFromPoints(draft.a, draft.b) : null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex bg-neutral-950 text-white">
+    <div data-slot="dialog-content" className="fixed inset-0 z-[80] flex bg-neutral-950 text-white">
       <div className="flex w-14 shrink-0 flex-col items-center gap-2 py-4">
         {TOOLS.map((item) => {
           const Icon = item.icon;

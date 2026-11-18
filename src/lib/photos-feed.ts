@@ -118,6 +118,15 @@ export function sortPhotos<T extends Pick<JobPhoto, "category" | "takenAt">>(pho
   return [...photos].sort((a, b) => comparePhotosBySort(a, b, sort));
 }
 
+/** The photo `delta` steps from `currentId`, or null at either end of the list. */
+export function stepPhotoId(photos: { id: string }[], currentId: string, delta: number) {
+  const index = photos.findIndex((photo) => photo.id === currentId);
+  if (index < 0) return null;
+  const next = index + delta;
+  if (next < 0 || next >= photos.length) return null;
+  return photos[next]?.id ?? null;
+}
+
 export type PhotoViewerGroup<T> = {
   key: string;
   label: string;
