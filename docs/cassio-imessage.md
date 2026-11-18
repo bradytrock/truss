@@ -29,7 +29,7 @@ Each person connects their own ZeroSettle number. ZeroSettle hosts Cassio on tha
 - Opens from the last 14 days when you ask what is new.
 - Cassio cannot send estimates, invoices, or payments from a text.
 
-Book questions are answered only in a private text from the phone on your profile, or the phone saved on the ZeroSettle line. In a group, or if Truss cannot tell who sent the text, Cassio is told to stay silent and the tools return no facts. Dollar amounts are never included in a tool result, a group, or a text to anyone other than that private thread.
+Book questions are answered in a private text from the phone on your profile, or the phone saved on the ZeroSettle line, and in the one Seeds group you verify. In any other group, or if Truss cannot tell who sent the text, Cassio is told to stay silent and the tools return no facts. Dollar amounts stay out of the Seeds group. A note or an appointment is saved from the private text, after a reply that is only YES.
 
 ## Communications and appointments
 
@@ -41,6 +41,7 @@ In that private text, ask Cassio to log a note, call, or text. It saves that on 
 2. Add the Cassio number to the Seeds group and send that phrase in the group.
 3. Press **I sent it**. Truss saves the group id from the message that contains the phrase.
 4. Lead status changes on leads you own are posted to that group within about 15 minutes, without dollar amounts. You can also ask Cassio in the private text to share a lead status, then reply YES.
+5. Ask a book question in that same group, with Cassio named in the message. Cassio answers there. Press **Update Cassio** after this change so the assistant is told it may reply in that group.
 
 A phrase found in more than one group is refused. Forgetting the group stops the posts. Cassio does not choose a group, and it does not type the update into a chat itself.
 

@@ -3,7 +3,7 @@ import { toE164 } from "./phone.ts";
 export const CASSIO_SILENCE =
   "Stay silent. Do not mention the book, any person, a job, an estimate, or any amount.";
 
-export type CassioAudience = "owner_dm" | "group" | "other" | "unknown";
+export type CassioAudience = "owner_dm" | "seeds" | "group" | "other" | "unknown";
 
 export type CassioMessage = {
   chatId: string;
@@ -65,22 +65,25 @@ export function parseZerosettleMessages(payload: unknown): CassioMessage[] {
   return found;
 }
 
-function audienceOf(message: CassioMessage, ownerPhones: string[]): CassioAudience {
-  if (message.chatId) return "group";
+function audienceOf(message: CassioMessage, ownerPhones: string[], seedChatId: string): CassioAudience {
+  const chatId = message.chatId.trim();
+  if (chatId) return seedChatId && chatId === seedChatId ? "seeds" : "group";
   if (!message.handle) return "unknown";
   return isOwnerHandle(message.handle, ownerPhones) ? "owner_dm" : "other";
 }
 
 /**
- * Book answers require a private text from the account owner.
- * Mixed or missing context stays unknown, which means no reply.
+ * Book answers are allowed in a private text from the account owner and in the
+ * one verified Seeds chat. Any other group, or mixed context, means no reply.
  */
 export function cassioAudience(input: {
   messages: CassioMessage[];
   ownerPhones: string[];
+  seedChatId?: string;
   now?: number;
 }): CassioAudience {
   const now = input.now ?? Date.now();
+  const seedChatId = (input.seedChatId ?? "").trim();
   const inbound = input.messages
     .filter((message) => message.direction === "in")
     .sort((a, b) => b.ts - a.ts);
@@ -90,13 +93,13 @@ export function cassioAudience(input: {
   if (!fresh(newest)) return "unknown";
   const recent = inbound.filter((message) => message.ts <= 0 || now - message.ts <= 20_000);
   const sample = recent.length > 0 ? recent : [newest];
-  const kinds = new Set(sample.map((message) => audienceOf(message, input.ownerPhones)));
+  const kinds = new Set(sample.map((message) => audienceOf(message, input.ownerPhones, seedChatId)));
   if (kinds.size !== 1) return "unknown";
   return kinds.values().next().value ?? "unknown";
 }
 
 export function cassioMayAnswer(audience: CassioAudience) {
-  return audience === "owner_dm";
+  return audience === "owner_dm" || audience === "seeds";
 }
 
 export function guardToolText(audience: CassioAudience, text: string) {

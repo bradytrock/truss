@@ -164,7 +164,7 @@ export default function CassioLineSettingsPage() {
             <li>Subscribe in the ZeroSettle console, then mint an API token there.</li>
             <li>Paste it here on the live site and press Connect. If it is already connected, leave the token blank and press Update {ASSISTANT_NAME}.</li>
             <li>Text that number from your own phone. Ask whether a homeowner opened an estimate.</li>
-            <li>Book questions are answered only in that private text. In a group, Cassio stays quiet.</li>
+            <li>Book questions are answered in that private text and in the verified Seeds group. Any other group stays quiet. Dollar amounts stay in the private text.</li>
           </ol>
         </div>
 
@@ -239,8 +239,8 @@ export default function CassioLineSettingsPage() {
           <div className="space-y-2 border-t border-[#ebe7e2] pt-4">
             <h3 className="text-sm font-semibold">Seeds group</h3>
             <p className="text-sm text-muted-foreground">
-              Add this number to the Seeds group and send the phrase below in that group. Lead updates go only to the
-              group that contains the phrase. They leave out dollar amounts.
+              Add this number to the Seeds group and send the phrase below in that group. Cassio answers book questions
+              in that verified group, and lead updates go only there. Dollar amounts stay out of the group.
             </p>
             {info.seedVerified ? (
               <p className="text-sm">Seeds group verified.</p>

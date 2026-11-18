@@ -37,7 +37,7 @@ export async function runCassioAction(input: {
   sendSeed: (line: string) => Promise<boolean>;
   readBook: (name: string, args: Record<string, unknown>) => Promise<string>;
 }) {
-  if (input.audience !== "owner_dm") return CASSIO_SILENCE;
+  if (input.audience !== "owner_dm" && input.audience !== "seeds") return CASSIO_SILENCE;
 
   const yes = isCassioYes(input.latestText);
   const kind =
@@ -48,6 +48,9 @@ export async function runCassioAction(input: {
         : input.name === "share_lead_status"
           ? "seed"
           : "";
+  if (input.audience !== "owner_dm" && (yes || kind)) {
+    return "Saving a note or booking a time happens in a private text to this number.";
+  }
   if (yes && kind) {
     {
       const committed = asRecord(await input.rpc("cassio_action_commit", { p_token: input.token, p_kind: kind }));

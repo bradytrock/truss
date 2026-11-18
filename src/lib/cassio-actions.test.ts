@@ -26,6 +26,53 @@ const text = await runCassioAction({
 assert.equal(text, CASSIO_SILENCE);
 assert.equal(calls, 0);
 
+const seeds = await runCassioAction({
+  name: "estimate_activity",
+  args: { query: "Bryce" },
+  token: "token",
+  audience: "seeds",
+  latestText: "Has Bryce opened it?",
+  seedChatId: "iMessage;+;chat1",
+  rpc: async () => {
+    calls += 1;
+    return { ok: true };
+  },
+  sendSeed: async () => true,
+  readBook: async () => "Bryce Jones estimate 1042 opened once",
+});
+assert.equal(seeds, "Bryce Jones estimate 1042 opened once");
+assert.equal(calls, 0);
+
+const seedsMoney = await runCassioAction({
+  name: "estimate_activity",
+  args: { query: "Bryce" },
+  token: "token",
+  audience: "seeds",
+  latestText: "What's the balance?",
+  seedChatId: "iMessage;+;chat1",
+  rpc: async () => ({ ok: true }),
+  sendSeed: async () => true,
+  readBook: async () => "Balance due $10",
+});
+assert.equal(seedsMoney, CASSIO_SILENCE);
+
+const seedsWrite = await runCassioAction({
+  name: "log_client_communication",
+  args: { client: "Bryce Jones", kind: "note", body: "Called" },
+  token: "token",
+  audience: "seeds",
+  latestText: "Leave a note on Bryce",
+  seedChatId: "iMessage;+;chat1",
+  rpc: async () => {
+    calls += 1;
+    return { ok: true };
+  },
+  sendSeed: async () => true,
+  readBook: async () => "unused",
+});
+assert.match(seedsWrite, /private text/);
+assert.equal(calls, 0);
+
 const prepared = await runCassioAction({
   name: "log_client_communication",
   args: { client: "Bryce Jones", kind: "call", body: "Left a voicemail" },

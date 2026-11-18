@@ -81,6 +81,7 @@ assert.match(body.business_context, /Northline/);
 assert.match(body.business_context, /cannot send estimates, invoices, or payments/);
 assert.match(body.business_context, /Stay silent/);
 assert.match(body.business_context, /private text/);
+assert.match(body.business_context, /verified Seeds group/);
 assert.doesNotMatch(body.business_context, /\$\d/);
 assert.match(body.business_context, /estimate_activity/);
 assert.match(body.business_context, /recent_updates/);

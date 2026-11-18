@@ -3,7 +3,7 @@ import { runCassioAction } from "@/lib/cassio-actions";
 import { formatEstimateActivity, formatRecentUpdates, handleCassioMcp } from "@/lib/cassio-mcp";
 import { cassioAudience, parseZerosettleMessages, type CassioAudience } from "@/lib/cassio-guard";
 import { createAnonClient } from "@/lib/supabase/anon";
-import { sendCassioSeedLine, zerosettleMessages } from "@/lib/zerosettle-server";
+import { sendCassioSeedLine, zerosettleGroupMessages, zerosettleMessages } from "@/lib/zerosettle-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,7 +44,11 @@ export async function POST(request: Request) {
     try {
       const payload = await zerosettleMessages(apiToken, lineId);
       const messages = parseZerosettleMessages(payload);
-      audience = cassioAudience({ messages, ownerPhones });
+      if (seedChatId) {
+        const groupPayload = await zerosettleGroupMessages(apiToken, seedChatId);
+        if (groupPayload) messages.push(...parseZerosettleMessages(groupPayload));
+      }
+      audience = cassioAudience({ messages, ownerPhones, seedChatId });
       latestText = messages
         .filter((message) => message.direction === "in")
         .sort((a, b) => b.ts - a.ts)[0]?.text ?? "";

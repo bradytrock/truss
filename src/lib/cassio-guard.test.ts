@@ -32,6 +32,17 @@ assert.equal(
   cassioAudience({
     messages: [inbound({ chatId: "iMessage;+;chat1", handle: "+16195550100", text: "Has Bryce opened it?" })],
     ownerPhones: owner,
+    seedChatId: "iMessage;+;chat1",
+    now,
+  }),
+  "seeds",
+);
+assert.equal(cassioMayAnswer("seeds"), true);
+assert.equal(
+  cassioAudience({
+    messages: [inbound({ chatId: "iMessage;+;other", handle: "+16195550100", text: "Has Bryce opened it?" })],
+    ownerPhones: owner,
+    seedChatId: "iMessage;+;chat1",
     now,
   }),
   "group",
@@ -57,6 +68,8 @@ assert.equal(cassioMayAnswer("unknown"), false);
 assert.equal(cassioMayAnswer("other"), false);
 
 assert.equal(guardToolText("group", "Bryce Jones estimate 1042"), CASSIO_SILENCE);
+assert.equal(guardToolText("seeds", "Bryce Jones estimate 1042"), "Bryce Jones estimate 1042");
+assert.equal(guardToolText("seeds", "Balance due $1,200"), CASSIO_SILENCE);
 assert.equal(guardToolText("owner_dm", "Balance due $1,200"), CASSIO_SILENCE);
 assert.equal(guardToolText("owner_dm", "Bryce Jones opened estimate 1042"), "Bryce Jones opened estimate 1042");
 

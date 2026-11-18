@@ -5,7 +5,7 @@ export function cassioMcpTools() {
     {
       name: "estimate_activity",
       description:
-        "Look up a person, job, or estimate in this seat's book. Returns status, when it was sent, and whether a homeowner opened it.",
+        "Look up a person, job, or estimate in this seat's book. Works in a private text from the account owner and in the verified Seeds group. Returns status, when it was sent, and whether a homeowner opened it. Never include a dollar amount.",
       inputSchema: {
         type: "object",
         properties: {
@@ -20,7 +20,8 @@ export function cassioMcpTools() {
     },
     {
       name: "recent_updates",
-      description: "List estimates in this seat's book that a homeowner opened in the last 14 days.",
+      description:
+        "List estimates in this seat's book that a homeowner opened in the last 14 days. Works in a private text from the account owner and in the verified Seeds group. Never include a dollar amount.",
       inputSchema: { type: "object", properties: {} },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
