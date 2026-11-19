@@ -10,13 +10,13 @@ import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { formatMoney } from "@/lib/format";
 import { FormattedLineText } from "@/components/formatted-line-text";
 import { invoiceBalance, invoiceTotal, lineAmount, paidOnInvoice } from "@/lib/money";
-import { paperInvoiceMeta, paperQtyLabel, paperSiteTitle } from "@/lib/document-paper";
+import { paperInvoiceMeta, paperQtyLabel, paperSiteTitle, type PaperPartyCard } from "@/lib/document-paper";
 import {
   PaperCoverHeader,
   PaperFooter,
   PaperMetaRow,
+  PaperPageTitle,
   PaperPartyCards,
-  PaperSectionLabel,
   PaperSheet,
   PaperSiteTitle,
   PaperTableHead,
@@ -87,6 +87,10 @@ export function InvoiceDocument({
     name: invoice.name,
     kindTitle: "Invoice",
   });
+  const billTo: PaperPartyCard = {
+    label: "Bill to",
+    people: [{ name: customer || "—", detail: site.locality ? [site.locality] : [], rows: [] }],
+  };
 
   return (
     <PaperSheet className="space-y-6 p-5 sm:p-7">
@@ -95,6 +99,7 @@ export function InvoiceDocument({
         kind="invoice"
         number={invoice.number}
         phone={manager?.phone}
+        email={manager?.email}
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PaperSiteTitle title={site.title} locality={site.locality} />
@@ -108,10 +113,7 @@ export function InvoiceDocument({
           jobCode: job?.code,
         })}
       />
-      <PaperPartyCards
-        left={{ label: "Bill to", name: customer, lines: [site.locality].filter(Boolean) }}
-        right={paperManagerCard(manager)}
-      />
+      <PaperPartyCards left={billTo} right={paperManagerCard(manager)} />
       {sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this invoice.</p>
       ) : (
@@ -145,7 +147,7 @@ export function InvoiceDocument({
       />
       <DocumentNotesBlock notes={invoice.notes} />
       <div className="break-inside-auto space-y-2">
-        <PaperSectionLabel>Payment terms</PaperSectionLabel>
+        <PaperPageTitle>PAYMENT TERMS</PaperPageTitle>
         <PaperTermsColumns>
           <DocumentTermsFields
             value={terms}

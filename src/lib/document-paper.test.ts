@@ -9,10 +9,13 @@ import {
   paperKindLabel,
   paperMetaBlank,
   paperOptionChoiceCopy,
+  paperManagerCard,
   paperManagerLines,
+  paperManagerSignatureDetail,
   paperPreparedForCard,
   paperPreparedForLines,
   paperPreparedForName,
+  paperSignatureCaption,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -63,9 +66,43 @@ const preparedFor = paperPreparedForCard({
   email: "shawn@example.com",
 });
 assert.equal(preparedFor.label, "Prepared for");
-assert.equal(preparedFor.name, "Shawn Gregory");
-assert.equal(preparedFor.lines[0], "(469) 555-0100");
-assert.equal(preparedFor.lines[1], "shawn@example.com");
+assert.equal(preparedFor.people[0]?.name, "Shawn Gregory");
+assert.deepEqual(preparedFor.people[0]?.rows, [
+  { label: "Phone", value: "(469) 555-0100" },
+  { label: "Email", value: "shawn@example.com" },
+]);
+const bothHomeowners = paperPreparedForCard({
+  customer: "Quigley — 122 Country Bend",
+  primary: "Kenneth Quigley",
+  second: "Anita Quigley",
+  phone: "2064839844",
+  email: "kennyq777@yahoo.com",
+  secondPhone: "4254443754",
+  secondEmail: "miabubble@live.com",
+});
+assert.equal(bothHomeowners.people.length, 2);
+assert.equal(bothHomeowners.people[0]?.name, "Kenneth Quigley");
+assert.equal(bothHomeowners.people[1]?.name, "Anita Quigley");
+assert.equal(bothHomeowners.people[1]?.rows[0]?.value, "(425) 444-3754");
+assert.equal(bothHomeowners.people[1]?.rows[1]?.value, "miabubble@live.com");
+assert.equal(
+  paperManagerCard({
+    name: "Brady Jones",
+    title: "Project Manager",
+    phone: "4697947701",
+    email: "baj@trockgc.com",
+  }).people[0]?.detail[0],
+  "Project Manager",
+);
+assert.equal(paperSignatureCaption("Project Manager"), "Project Manager signature");
+assert.equal(paperSignatureCaption("Project Manager signature"), "Project Manager signature");
+assert.equal(
+  paperManagerSignatureDetail(
+    { title: "Project Manager", phone: "4697947701", email: "baj@trockgc.com" },
+    "T Rock Roofing & Contracting",
+  ),
+  "Project Manager, T Rock Roofing & Contracting · (469) 794-7701 · baj@trockgc.com",
+);
 assert.equal(
   paperPreparedForName({
     customer: "Rajh — 4608 Darlington Drive, Flower Mound, TX 75022",
