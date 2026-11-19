@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import type { ProjectManagerContact } from "@/lib/document-owner";
 import {
   PAPER_CARD_HEX,
   PAPER_INK_HEX,
@@ -8,13 +7,15 @@ import {
   paperCompanyLines,
   paperFooterLeft,
   paperKindLabel,
-  paperManagerLines,
   type PaperKind,
   type PaperMetaItem,
+  type PaperPartyCard,
 } from "@/lib/document-paper";
 import { customerUnitLabel } from "@/lib/line-format";
 import { cn } from "@/lib/utils";
 import type { CompanySettings } from "@/lib/types";
+
+export { paperManagerCard } from "@/lib/document-paper";
 
 export function PaperSheet({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -33,16 +34,19 @@ export function PaperCoverHeader({
   kind,
   number,
   phone,
+  email,
 }: {
   company: CompanySettings;
   kind: PaperKind;
   number: string;
   /** Direct line for the header. Estimates and invoices use the project manager. */
   phone?: string | null;
+  email?: string | null;
 }) {
   const lines = paperCompanyLines({
     ...company,
     phone: phone?.trim() || company.phone,
+    email: email?.trim() || company.email,
   });
   const logoUrl = company.logoUrl?.trim();
   return (
@@ -113,36 +117,50 @@ export function PaperPartyCards({
   left,
   right,
 }: {
-  left: { label: string; name: string; lines?: string[] };
-  right?: { label: string; name: string; lines?: string[] } | null;
+  left: PaperPartyCard;
+  right?: PaperPartyCard | null;
 }) {
   const cards = right ? [left, right] : [left];
   return (
-    <div className={cn("grid gap-3", cards.length > 1 && "sm:grid-cols-2")}>
+    <div className={cn("grid items-stretch gap-3", cards.length > 1 && "sm:grid-cols-2")}>
       {cards.map((card) => (
-        <div key={card.label} className="rounded-md px-3.5 py-3" style={{ background: PAPER_CARD_HEX }}>
-          <p className="text-[10px] font-semibold tracking-[0.14em] uppercase" style={{ color: PAPER_MUTED_HEX }}>
-            {card.label}
-          </p>
-          <p className="mt-1 text-[15px] font-semibold">{card.name || "—"}</p>
-          {card.lines?.filter(Boolean).map((line) => (
-            <p key={line} className="text-xs" style={{ color: PAPER_MUTED_HEX }}>
-              {line}
+        <div key={card.label} className="overflow-hidden rounded-md border border-[#d6d6d6] bg-white">
+          <div className="h-[3px]" style={{ background: PAPER_RED_HEX }} />
+          <div className="px-3.5 py-3">
+            <p className="text-[10px] font-semibold tracking-[0.14em] uppercase" style={{ color: PAPER_MUTED_HEX }}>
+              {card.label}
             </p>
-          ))}
+            <div className="mt-2">
+              {card.people.map((person, index) => (
+                <div
+                  key={`${person.name}-${index}`}
+                  className={cn(index > 0 && "mt-3 border-t border-[#e4e4e4] pt-3")}
+                >
+                  <p className="text-[15px] leading-5 font-semibold">{person.name || "—"}</p>
+                  {person.detail.map((line) => (
+                    <p key={line} className="text-xs leading-5">
+                      {line}
+                    </p>
+                  ))}
+                  {person.rows.map((row) => (
+                    <p key={`${row.label}-${row.value}`} className="text-xs leading-5">
+                      <span
+                        className="mr-2 text-[10px] font-semibold tracking-[0.12em] uppercase"
+                        style={{ color: PAPER_MUTED_HEX }}
+                      >
+                        {row.label}
+                      </span>
+                      <span>{row.value}</span>
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ))}
     </div>
   );
-}
-
-export function paperManagerCard(manager: ProjectManagerContact | null | undefined) {
-  const name = manager?.name.trim() || "";
-  return {
-    label: "Project manager",
-    name: name || "—",
-    lines: name ? paperManagerLines(manager) : [],
-  };
 }
 
 // Qty, unit, rate, and amount are fixed tracks. On a phone they consume the row,
@@ -159,10 +177,10 @@ export function PaperTableHead({ hidePrices }: { hidePrices?: boolean }) {
     <div className="@container">
       <div
         className={cn(
-          "hidden gap-2 border-b pb-2 text-[10px] font-semibold tracking-[0.14em] uppercase @lg:grid",
+          "hidden gap-2 rounded-sm py-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase @lg:grid",
           paperTableColumns(hidePrices),
         )}
-        style={{ color: PAPER_MUTED_HEX }}
+        style={{ color: PAPER_MUTED_HEX, background: PAPER_CARD_HEX }}
       >
         <span>Description</span>
         <span className="text-right">Qty</span>
@@ -303,6 +321,10 @@ export function PaperSectionLabel({ children }: { children: ReactNode }) {
       {children}
     </h3>
   );
+}
+
+export function PaperPageTitle({ children }: { children: ReactNode }) {
+  return <h3 className="text-[15px] font-bold tracking-wide">{children}</h3>;
 }
 
 export function PaperFooter({ company }: { company: CompanySettings }) {

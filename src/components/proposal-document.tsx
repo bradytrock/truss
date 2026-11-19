@@ -52,20 +52,20 @@ import {
   paperAuthorizationCopy,
   paperEstimateMeta,
   paperIssuedAt,
+  paperManagerSignatureDetail,
   paperOptionChoiceCopy,
-  paperManagerLines,
   paperPreparedForCard,
-  paperPreparedForName,
   paperQtyLabel,
   paperRescissionCopy,
+  paperSignatureCaption,
   paperSiteTitle,
 } from "@/lib/document-paper";
 import {
   PaperCoverHeader,
   PaperFooter,
   PaperMetaRow,
+  PaperPageTitle,
   PaperPartyCards,
-  PaperSectionLabel,
   PaperSheet,
   PaperSignCue,
   PaperSiteTitle,
@@ -296,11 +296,9 @@ export function ProposalDocument({
       })
     : null;
   const preparedFor = paperPreparedForCard({
-    name: paperPreparedForName({
-      customer,
-      primary: primaryCustomer,
-      second: secondCustomer,
-    }),
+    customer,
+    primary: primaryCustomer,
+    second: secondCustomer,
     phone: customerPhone || fromBook?.phone,
     email: customerEmail || fromBook?.email,
     secondPhone: secondCustomerPhone || fromBook?.secondPhone,
@@ -333,6 +331,7 @@ export function ProposalDocument({
         kind="estimate"
         number={estimate.number}
         phone={manager?.phone}
+        email={manager?.email}
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PaperSiteTitle title={site.title} locality={site.locality} />
@@ -348,7 +347,7 @@ export function ProposalDocument({
       />
       <PaperPartyCards left={preparedFor} right={paperManagerCard(manager)} />
       {estimate.intro && gbbOptions.length === 0 ? (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
+        <FormattedLineText text={estimate.intro} className="text-sm leading-relaxed" />
       ) : null}
       {gbbOptions.length > 0 ? (
         <PackagePicker
@@ -417,7 +416,7 @@ export function ProposalDocument({
       <DocumentNotesBlock notes={estimate.notes} />
       <ProposalAttachments files={attachments} />
       <div className="break-inside-auto space-y-2">
-        <PaperSectionLabel>Terms</PaperSectionLabel>
+        <PaperPageTitle>TERMS</PaperPageTitle>
         <PaperTermsColumns>
           <DocumentTermsFields
             value={terms}
@@ -483,14 +482,18 @@ export function ProposalSignature({
   });
   const homeowners = lines.filter((line) => line.party === "homeowner");
   const contractor = lines.find((line) => line.party === "contractor");
-  const prepared = contractor && isSignaturePng(contractor.image) ? contractor : null;
+  const pmName = manager?.name.trim() || contractor?.name || contractorName || companyName || "";
+  const pmCaption = paperSignatureCaption(
+    manager?.title || (contractor?.caption === "Prepared by" ? "" : contractor?.caption),
+  );
+  const pmDetail = paperManagerSignatureDetail(manager, companyName || "");
   return (
     <div className="space-y-4">
-      <PaperSectionLabel>Authorization</PaperSectionLabel>
+      <PaperPageTitle>AUTHORIZATION</PaperPageTitle>
       {total ? (
-        <div className="rounded-md bg-[#f5f5f5] px-3.5 py-3">
+        <div className="flex items-center justify-between gap-4 rounded-md bg-[#f5f5f5] px-3.5 py-3">
           <p className="text-[10px] font-semibold tracking-[0.14em] text-[#6e6e6e] uppercase">Contract total</p>
-          <p className="mt-1 text-lg font-semibold tabular-nums">{total}</p>
+          <p className="text-lg font-semibold tabular-nums">{total}</p>
         </div>
       ) : null}
       <p className="text-sm leading-relaxed">{paperAuthorizationCopy(companyName || "the contractor")}</p>
@@ -499,18 +502,21 @@ export function ProposalSignature({
         {homeowners.map((line) => (
           <SignatureLineCell key={line.role} line={line} />
         ))}
-        {prepared ? <SignatureLineCell line={prepared} /> : null}
-      </div>
-      <div>
-        <p className="text-[10px] font-semibold tracking-[0.14em] text-[#6e6e6e] uppercase">Project manager</p>
-        <p className="mt-1 text-sm font-semibold">{manager?.name || contractor?.name || contractorName}</p>
-        {manager?.name.trim()
-          ? paperManagerLines(manager).map((line) => (
-              <p key={line} className="text-xs text-muted-foreground">
-                {line}
-              </p>
-            ))
-          : null}
+        <SignatureLineCell
+          line={{
+            ...(contractor ?? {
+              role: "contractor",
+              party: "contractor",
+              name: pmName,
+              caption: pmCaption,
+              signedAt: null,
+              image: "",
+            }),
+            name: pmName,
+            caption: pmCaption,
+          }}
+          detail={pmDetail}
+        />
       </div>
     </div>
   );
@@ -518,8 +524,10 @@ export function ProposalSignature({
 
 function SignatureLineCell({
   line,
+  detail,
 }: {
   line: ReturnType<typeof estimateSignatureLines>[number];
+  detail?: string;
 }) {
   const signed = Boolean(line.signedAt);
   const drawn = isSignaturePng(line.image);
@@ -530,22 +538,24 @@ function SignatureLineCell({
         <img
           src={line.image}
           alt={`Signature of ${line.name}`}
-          className="h-16 w-full max-w-xs object-contain object-left"
+          className="mb-1 h-14 w-full max-w-xs object-contain object-left"
         />
       ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-4">
-          <div className="h-16 border-b" />
-          <div className="h-16 border-b" />
-        </div>
+        <div className="h-7" />
       )}
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_6rem] gap-4 text-xs text-muted-foreground">
-        <p>
-          {line.caption}
-          {signed ? ` · ${formatDate(line.signedAt)}` : ""}
-        </p>
-        <p>Date</p>
+      <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] items-start gap-4">
+        <div className="border-t border-[#d0d0d0] pt-1">
+          <p className="text-[11px] text-[#6e6e6e]">
+            {line.caption}
+            {signed ? ` · ${formatDate(line.signedAt)}` : ""}
+          </p>
+          <p className="mt-1 text-sm font-semibold">{line.name}</p>
+          {detail ? <p className="text-[11px] text-[#6e6e6e]">{detail}</p> : null}
+        </div>
+        <div className="border-t border-[#d0d0d0] pt-1">
+          <p className="text-[11px] text-[#6e6e6e]">Date</p>
+        </div>
       </div>
-      <p className="mt-3 border-t pt-2 text-sm">{line.name}</p>
     </div>
   );
 }

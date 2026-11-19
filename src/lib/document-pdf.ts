@@ -50,16 +50,19 @@ import {
   paperInvoiceMeta,
   paperIssuedAt,
   paperKindLabel,
-  paperManagerLines,
+  paperManagerCard,
+  paperManagerSignatureDetail,
   paperOptionChoiceCopy,
   paperPreparedForCard,
   paperPreparedForLines,
-  paperPreparedForName,
   paperQtyLabel,
   paperRescissionCopy,
+  paperSignatureCaption,
   paperSiteTitle,
   type PaperKind,
   type PaperMetaItem,
+  type PaperPartyCard,
+  type PaperPartyPerson,
 } from "@/lib/document-paper";
 
 type Doc = {
@@ -92,7 +95,6 @@ type Doc = {
 
 type EnsureFn = (y: number, needed: number) => number;
 type PdfInk = Awaited<ReturnType<typeof loadLogoForPdf>>;
-type AuthLine = ReturnType<typeof estimateSignatureLines>[number];
 
 const TERMS_BODY_SIZE = 8.5;
 const TERMS_LINE = 11;
@@ -463,13 +465,14 @@ async function writeCoverHeader(
   company: CompanySettings,
   kind: PaperKind,
   number: string,
-  contactPhone?: string | null,
+  contact?: { phone?: string | null; email?: string | null } | null,
 ) {
   writeRedRule(doc);
   const right = contentRight(doc);
   const lines = paperCompanyLines({
     ...company,
-    phone: contactPhone?.trim() || company.phone,
+    phone: contact?.phone?.trim() || company.phone,
+    email: contact?.email?.trim() || company.email,
   });
   const logo = company.logoUrl?.trim() ? await loadLogoForPdf(company.logoUrl) : null;
   let textX = PAPER_INSET;
@@ -557,43 +560,101 @@ function writeMetaRow(doc: Doc, items: PaperMetaItem[], y: number) {
   return y + 22;
 }
 
-function writePartyCards(
+function wrappedLines(doc: Doc, text: string, width: number) {
+  const wrapped = doc.splitTextToSize(text, width);
+  return (Array.isArray(wrapped) ? wrapped : [wrapped]).flatMap((piece) => String(piece).split("\n"));
+}
+
+function paintPartyPerson(
   doc: Doc,
-  left: { label: string; name: string; lines: string[] },
-  right: { label: string; name: string; lines: string[] } | null,
+  person: PaperPartyPerson,
+  x: number,
   y: number,
+  width: number,
+  paint: boolean,
 ) {
-  const rightEdge = contentRight(doc);
-  const gap = 16;
-  const colW = right
-    ? (rightEdge - PAPER_INSET - gap) / 2
-    : rightEdge - PAPER_INSET;
-  const cards = right ? [left, right] : [left];
-  const inner = colW - 4;
-  let bottom = y;
-  cards.forEach((card, index) => {
-    const x = PAPER_INSET + index * (colW + gap);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  const nameLines = wrappedLines(doc, person.name || "—", width);
+  if (paint) {
+    ink(doc, PAPER_INK);
+    doc.text(nameLines, x, y);
+  }
+  y += nameLines.length * 12;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  for (const line of person.detail) {
+    const parts = wrappedLines(doc, line, width);
+    if (paint) {
+      ink(doc, PAPER_INK);
+      doc.text(parts, x, y);
+    }
+    y += parts.length * 11;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  const labelW = Math.max(doc.getTextWidth("PHONE"), doc.getTextWidth("EMAIL")) + 10;
+  for (const row of person.rows) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const valueLines = wrappedLines(doc, row.value, Math.max(36, width - labelW));
+    if (paint) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.5);
+      ink(doc, PAPER_MUTED);
+      doc.text(row.label.toUpperCase(), x, y);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      ink(doc, PAPER_INK);
+      doc.text(valueLines, x + labelW, y);
+    }
+    y += Math.max(valueLines.length, 1) * 11;
+  }
+  return y;
+}
+
+function layoutPartyCard(doc: Doc, card: PaperPartyCard, x: number, top: number, innerW: number, paint: boolean) {
+  if (paint) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.5);
     ink(doc, PAPER_MUTED);
-    doc.text(card.label.toUpperCase(), x, y);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    ink(doc, PAPER_INK);
-    const name = doc.splitTextToSize(card.name || "—", inner);
-    doc.text(name, x, y + 13);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    ink(doc, PAPER_MUTED);
-    let cy = y + 13 + (Array.isArray(name) ? name.length : 1) * 11;
-    for (const line of card.lines.filter(Boolean).slice(0, 4)) {
-      const wrapped = doc.splitTextToSize(line, inner);
-      doc.text(wrapped, x, cy);
-      cy += (Array.isArray(wrapped) ? wrapped.length : 1) * 10;
+    doc.text(card.label.toUpperCase(), x, top + 16);
+  }
+  let y = top + 28;
+  card.people.forEach((person, index) => {
+    y = paintPartyPerson(doc, person, x, y, innerW, paint);
+    if (index < card.people.length - 1) {
+      y += 6;
+      if (paint) {
+        draw(doc, { r: 220, g: 220, b: 220 });
+        doc.setLineWidth(0.4);
+        doc.line(x, y, x + innerW, y);
+      }
+      y += 12;
     }
-    bottom = Math.max(bottom, cy);
   });
-  return bottom + 16;
+  return y + 10;
+}
+
+function writePartyCards(doc: Doc, left: PaperPartyCard, right: PaperPartyCard | null, y: number) {
+  const rightEdge = contentRight(doc);
+  const gap = 12;
+  const colW = right ? (rightEdge - PAPER_INSET - gap) / 2 : rightEdge - PAPER_INSET;
+  const innerW = colW - 20;
+  const cards = right ? [left, right] : [left];
+  const height = Math.max(...cards.map((card) => layoutPartyCard(doc, card, 0, 0, innerW, false)), 72);
+  cards.forEach((card, index) => {
+    const x = PAPER_INSET + index * (colW + gap);
+    doc.setLineWidth(0.75);
+    draw(doc, { r: 214, g: 214, b: 214 });
+    doc.roundedRect(x, y, colW, height, 4, 4, "S");
+    draw(doc, PAPER_RED);
+    doc.setLineWidth(2.25);
+    doc.line(x + 10, y + 1, x + colW - 10, y + 1);
+    layoutPartyCard(doc, card, x + 10, y, innerW, true);
+  });
+  doc.setLineWidth(0.6);
+  return y + height + 16;
 }
 
 type TableCols = {
@@ -826,59 +887,62 @@ function writeTermsSections(
   return Math.max(leftBottom, rightBottom);
 }
 
-function writeInitials(doc: Doc, y: number) {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  ink(doc, PAPER_MUTED);
-  doc.text("INITIALS", PAPER_INSET, y);
-  draw(doc, PAPER_LINE);
-  doc.setLineWidth(0.7);
-  doc.line(PAPER_INSET + 56, y + 1, PAPER_INSET + 140, y + 1);
-  doc.line(PAPER_INSET + 156, y + 1, PAPER_INSET + 240, y + 1);
-  return y + 20;
-}
-
 function signatureInkHeight(inkImage: PdfInk, colWidth: number) {
   if (!inkImage) return 48;
   return Math.min(44, (inkImage.height / Math.max(inkImage.width, 1)) * Math.min(200, colWidth));
 }
 
-function drawHomeownerLine(
+function drawSignatureBlock(
   doc: Doc,
-  line: AuthLine,
-  image: PdfInk,
-  x: number,
-  y: number,
-  width: number,
-  caption: string,
+  input: {
+    image: PdfInk;
+    x: number;
+    y: number;
+    width: number;
+    caption: string;
+    name: string;
+    detail?: string;
+    signedAt?: string | null;
+  },
 ) {
-  const dateW = 90;
-  const sigW = width - dateW - 16;
-  if (image) {
-    const h = signatureInkHeight(image, sigW);
-    doc.addImage(image.data, image.format, x, y, Math.min(200, sigW), h);
-    y += h + 6;
+  const dateW = 108;
+  const gap = 18;
+  const sigW = input.width - dateW - gap;
+  let y = input.y;
+  if (input.image) {
+    const h = signatureInkHeight(input.image, sigW);
+    doc.addImage(input.image.data, input.image.format, input.x, y, Math.min(180, sigW), h);
+    y += h + 4;
   } else {
-    y += 28;
+    y += 26;
   }
-  draw(doc, { r: 200, g: 200, b: 200 });
-  doc.line(x, y, x + sigW, y);
-  doc.line(x + sigW + 16, y, x + width, y);
-  y += 12;
+  draw(doc, { r: 190, g: 190, b: 190 });
+  doc.setLineWidth(0.6);
+  doc.line(input.x, y, input.x + sigW, y);
+  doc.line(input.x + sigW + gap, y, input.x + input.width, y);
+  y += 11;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   ink(doc, PAPER_MUTED);
-  doc.text(line.signedAt ? `${caption} · ${formatDate(line.signedAt)}` : caption, x, y);
-  doc.text("Date", x + sigW + 16, y);
-  y += 18;
-  draw(doc, { r: 200, g: 200, b: 200 });
-  doc.line(x, y, x + sigW, y);
-  y += 12;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  ink(doc, PAPER_MUTED);
-  doc.text(line.name || "Printed name", x, y);
-  return y + 18;
+  const caption = input.signedAt ? `${input.caption} · ${formatDate(input.signedAt)}` : input.caption;
+  doc.text(caption, input.x, y);
+  doc.text("Date", input.x + sigW + gap, y);
+  y += 13;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  ink(doc, PAPER_INK);
+  const nameLines = wrappedLines(doc, input.name || "—", sigW);
+  doc.text(nameLines, input.x, y);
+  y += nameLines.length * 12;
+  if (input.detail?.trim()) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    ink(doc, PAPER_MUTED);
+    const detailLines = wrappedLines(doc, input.detail, input.width);
+    doc.text(detailLines, input.x, y);
+    y += detailLines.length * 10;
+  }
+  return y + 14;
 }
 
 async function writePaperAuthorization(
@@ -903,17 +967,18 @@ async function writePaperAuthorization(
   ink(doc, PAPER_INK);
   doc.text("AUTHORIZATION", PAPER_INSET, y);
   y += 18;
+  const barH = 32;
   fill(doc, PAPER_CARD);
-  doc.roundedRect(PAPER_INSET, y, right - PAPER_INSET, 36, 4, 4, "F");
+  doc.roundedRect(PAPER_INSET, y, right - PAPER_INSET, barH, 4, 4, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   ink(doc, PAPER_MUTED);
-  doc.text("CONTRACT TOTAL", PAPER_INSET + 12, y + 14);
+  doc.text("CONTRACT TOTAL", PAPER_INSET + 12, y + 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   ink(doc, PAPER_INK);
-  doc.text(totalLabel, right - 12, y + 24, { align: "right" });
-  y += 50;
+  doc.text(totalLabel, right - 12, y + 21, { align: "right" });
+  y += barH + 16;
   y = writeParagraph(doc, paperAuthorizationCopy(companyName), y, right - PAPER_INSET, 9, ensure);
   y = writeParagraph(doc, paperRescissionCopy(), y, right - PAPER_INSET, 8, ensure);
   const secondName = names.second?.trim() || estimate.secondSignatureName.trim() || null;
@@ -924,61 +989,35 @@ async function writePaperAuthorization(
   });
   const homeowners = lines.filter((line) => line.party === "homeowner");
   const contractor = lines.find((line) => line.party === "contractor");
+  const width = right - PAPER_INSET;
   for (const line of homeowners) {
     const image = isSignaturePng(line.image) ? await loadLogoForPdf(line.image) : null;
-    y = ensure(y, 90);
-    y = drawHomeownerLine(doc, line, image, PAPER_INSET, y, right - PAPER_INSET, "Homeowner signature");
-  }
-  if (contractor && isSignaturePng(contractor.image)) {
-    const image = await loadLogoForPdf(contractor.image);
-    y = ensure(y, 90);
-    y = drawHomeownerLine(
-      doc,
-      contractor,
+    y = ensure(y, 78);
+    y = drawSignatureBlock(doc, {
       image,
-      PAPER_INSET,
+      x: PAPER_INSET,
       y,
-      right - PAPER_INSET,
-      contractor.caption,
-    );
+      width,
+      caption: "Homeowner signature",
+      name: line.name,
+      signedAt: line.signedAt,
+    });
   }
-  const pmLines = manager?.name.trim() ? paperManagerLines(manager) : [];
-  y = ensure(y, 36 + pmLines.length * 11);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  ink(doc, PAPER_MUTED);
-  doc.text("PROJECT MANAGER", PAPER_INSET, y);
-  y += 12;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  ink(doc, PAPER_INK);
   const pmName = manager?.name.trim() || contractor?.name || names.contractor || companyName;
-  doc.text(pmName, PAPER_INSET, y);
-  y += 12;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  ink(doc, PAPER_MUTED);
-  for (const line of pmLines) {
-    doc.text(line, PAPER_INSET, y);
-    y += 11;
-  }
+  const pmImage =
+    contractor && isSignaturePng(contractor.image) ? await loadLogoForPdf(contractor.image) : null;
+  y = ensure(y, 92);
+  y = drawSignatureBlock(doc, {
+    image: pmImage,
+    x: PAPER_INSET,
+    y,
+    width,
+    caption: paperSignatureCaption(manager?.title || (contractor?.caption === "Prepared by" ? "" : contractor?.caption)),
+    name: pmName,
+    detail: paperManagerSignatureDetail(manager, companyName),
+    signedAt: contractor?.signedAt,
+  });
   return { y: y + 8, page };
-}
-
-function managerCard(manager: ProjectManagerContact | null | undefined, companyPhone?: string) {
-  const name = manager?.name.trim() || "";
-  if (!name) {
-    return {
-      label: "Project manager",
-      name: "—",
-      lines: [] as string[],
-    };
-  }
-  return {
-    label: "Project manager",
-    name,
-    lines: paperManagerLines(manager, companyPhone),
-  };
 }
 
 export async function buildEstimatePdf(raw: {
@@ -1018,13 +1057,7 @@ export async function buildEstimatePdf(raw: {
   const hidePrices = Boolean(input.estimate.hideLinePrices);
   const cols = tableCols(doc, hidePrices);
 
-  let y = await writeCoverHeader(
-    doc,
-    input.company,
-    "estimate",
-    input.estimate.number,
-    input.projectManager?.phone,
-  );
+  let y = await writeCoverHeader(doc, input.company, "estimate", input.estimate.number, input.projectManager);
   y = writeSiteBlock(doc, site, y);
   y = writeMetaRow(
     doc,
@@ -1039,22 +1072,33 @@ export async function buildEstimatePdf(raw: {
   y = writePartyCards(
     doc,
     paperPreparedForCard({
-      name: paperPreparedForName({
-        customer: input.customer,
-        primary: input.primaryCustomer,
-        second: input.secondCustomer,
-      }),
+      customer: input.customer,
+      primary: input.primaryCustomer,
+      second: input.secondCustomer,
       phone: input.customerPhone,
       email: input.customerEmail,
       secondPhone: input.secondCustomerPhone,
       secondEmail: input.secondCustomerEmail,
     }),
-    managerCard(input.projectManager, input.company.phone),
+    paperManagerCard(input.projectManager, input.company.phone),
     y,
   );
 
-  if (input.estimate.intro) {
-    y = writeParagraph(doc, input.estimate.intro, y, contentRight(doc) - PAPER_INSET, 9, pager.ensure);
+  if (input.estimate.intro?.trim()) {
+    const chunks = input.estimate.intro
+      .replace(/\r\n/g, "\n")
+      .split(/\n{2,}/)
+      .map((chunk) => chunk.trim())
+      .filter(Boolean);
+    for (const chunk of chunks) {
+      y = writeFormattedText(doc, chunk, PAPER_INSET, y, contentRight(doc) - PAPER_INSET, {
+        fontSize: 9,
+        lineHeight: 12,
+        color: PAPER_INK,
+        ensure: pager.ensure,
+      });
+      y += 6;
+    }
   }
   if (gbb && estimateOptions.length > 0) {
     y = writeParagraph(
@@ -1276,13 +1320,10 @@ export async function buildEstimatePdf(raw: {
     ink(doc, PAPER_INK);
     doc.text("TERMS", PAPER_INSET, y);
     y += 18;
-    y = writeTermsSections(doc, filledTerms, y, pager);
-    if (y + 28 < contentBottom(doc)) {
-      y = writeInitials(doc, y + 8);
-    }
+    writeTermsSections(doc, filledTerms, y, pager);
   }
 
-  y = pager.ensure(y + 16, 220);
+  y = pager.addPage();
   const authorization = await writePaperAuthorization(
     doc,
     input.estimate,
@@ -1391,13 +1432,7 @@ export async function buildInvoicePdf(input: {
   const balance = invoiceBalance(input.invoice.id, input.lines, input.payments);
   const cols = tableCols(doc, false);
 
-  let y = await writeCoverHeader(
-    doc,
-    input.company,
-    "invoice",
-    input.invoice.number,
-    input.projectManager?.phone,
-  );
+  let y = await writeCoverHeader(doc, input.company, "invoice", input.invoice.number, input.projectManager);
   y = writeSiteBlock(doc, site, y);
   y = writeMetaRow(
     doc,
@@ -1411,8 +1446,11 @@ export async function buildInvoicePdf(input: {
   );
   y = writePartyCards(
     doc,
-    { label: "Bill to", name: input.customer, lines: [site.locality].filter(Boolean) },
-    managerCard(input.projectManager, input.company.phone),
+    {
+      label: "Bill to",
+      people: [{ name: input.customer || "—", detail: site.locality ? [site.locality] : [], rows: [] }],
+    },
+    paperManagerCard(input.projectManager, input.company.phone),
     y,
   );
 

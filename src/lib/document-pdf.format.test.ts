@@ -430,8 +430,11 @@ async function main() {
     company,
     customer: "Rajh — 4608 Darlington Drive, Flower Mound, TX 75022",
     primaryCustomer: "Avanna Rajh",
+    secondCustomer: "Anita Quigley",
     customerPhone: "7133969172",
     customerEmail: "avanna.rajh@hotmail.com",
+    secondCustomerPhone: "4254443754",
+    secondCustomerEmail: "miabubble@live.com",
     projectManager: {
       name: "Brady Jones",
       title: "Project Manager",
@@ -441,9 +444,18 @@ async function main() {
   });
   const clauseText = await textFromPdf(clausePdf);
   assert.match(clauseText, /Avanna Rajh/);
+  assert.match(clauseText, /Anita Quigley/);
+  assert.match(clauseText, /miabubble@live.com/);
+  assert.doesNotMatch(clauseText, /Avanna Rajh and Anita/);
   assert.doesNotMatch(clauseText, /Darlington/);
   assert.match(clauseText, /\(469\) 794-7701/);
-  assert.doesNotMatch(clauseText, /794-7701 · bjones@trockcontracting.com/);
+  assert.match(clauseText, /794-7701 · bjones@trockcontracting.com/);
+  assert.match(clauseText, /PHONE/);
+  assert.match(clauseText, /EMAIL/);
+  assert.match(clauseText, /Homeowner signature/);
+  assert.match(clauseText, /Project Manager signature/);
+  assert.doesNotMatch(clauseText, /Prepared by/);
+  assert.doesNotMatch(clauseText, /INITIALS/);
   const clauseDoc = await getDocument({
     data: new Uint8Array(await clausePdf.arrayBuffer()),
     disableWorker: true,
