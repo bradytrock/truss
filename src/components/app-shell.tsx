@@ -256,7 +256,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const measureLayout = /^\/jobs\/[^/]+\/measure$/.test(pathname);
   // The contact book pages and scrolls its own list, so the page itself must not scroll.
   const contactsLayout = pathname === "/contacts";
-  const fillLayout = inboxLayout || mapLayout || measureLayout || contactsLayout;
+  // The jobs board scrolls inside the page so stage headers can stick without
+  // a top inset. That inset was landing on the first card in each column.
+  const jobsBoardLayout = pathname === "/jobs";
+  const fillLayout = inboxLayout || mapLayout || measureLayout || contactsLayout || jobsBoardLayout;
   const marketingSuite = pathname === "/marketing" || pathname.startsWith("/marketing/");
 
   if (marketingSuite) {
@@ -367,16 +370,16 @@ export function AppShell({ children }: { children: ReactNode }) {
               ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0 lg:p-5 xl:p-7"
               : measureLayout
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
-              : inboxLayout
-                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                : contactsLayout
-                  ? "flex min-h-0 flex-1 flex-col overflow-hidden p-5 sm:p-7"
-                  : cn(
-                "flex-1 p-5 sm:p-7",
-                pathname.startsWith("/settings") &&
-                  !isAutomationBuilderPath(pathname) &&
-                  "bg-[#f6f5f3] p-0 sm:p-0",
-              ),
+                : inboxLayout
+                  ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                  : contactsLayout || jobsBoardLayout
+                    ? "flex min-h-0 flex-1 flex-col overflow-hidden p-5 sm:p-7"
+                    : cn(
+                        "flex-1 p-5 sm:p-7",
+                        pathname.startsWith("/settings") &&
+                          !isAutomationBuilderPath(pathname) &&
+                          "bg-[#f6f5f3] p-0 sm:p-0",
+                      ),
           )}
         >
           {children}

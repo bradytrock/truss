@@ -220,7 +220,8 @@ export function JobsBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <KanbanScroller clipVertical>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <KanbanScroller fill>
           <div className="flex items-start gap-3 pb-6">
             {visibleColumns.map((column) => {
               const cards = filtered.filter((job) => columnOf(job) === column);
@@ -259,6 +260,7 @@ export function JobsBoard({
             })}
           </div>
         </KanbanScroller>
+      </div>
       <DragOverlay>
         {active ? (
           <JobCard
@@ -309,7 +311,7 @@ function JobColumn({
         isOver && "border-primary/40 bg-primary/5",
       )}
     >
-      <div className="sticky top-14 z-10 bg-[#f6f6f6] px-0.5 pb-2">
+      <div className="sticky top-0 z-10 shrink-0 bg-[#f6f6f6] px-0.5 pb-2">
         <div className="flex items-start justify-between gap-2">
           <h2 className="pt-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
             {WORK_COLUMN_LABELS[column]}
