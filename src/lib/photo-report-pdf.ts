@@ -14,7 +14,14 @@ import { loadLogoForPdf, writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { PHOTO_CATEGORY_LABELS } from "@/lib/types";
 import { jobAddress } from "@/lib/job-record";
 import { COVER_RED, photoReportCoverModel } from "@/lib/photo-report-cover";
-import { layoutCapacity, photoById, photoPageColumns, photoPageRows, photoSheetMeta } from "@/lib/photo-report";
+import {
+  captionTagLine,
+  layoutCapacity,
+  photoById,
+  photoFrameColumns,
+  photoFrameRows,
+  photoSheetMeta,
+} from "@/lib/photo-report";
 import { downloadBlob } from "@/lib/share";
 import { workOrderFieldValue } from "@/lib/work-order";
 
@@ -131,12 +138,18 @@ function fitImage(
   }
 }
 
-function captionLines(page: PhotoReportPhotosPage, photo: JobPhoto | undefined, caption: string) {
+function captionLines(
+  page: PhotoReportPhotosPage,
+  photo: JobPhoto | undefined,
+  item: { caption: string; tags?: PhotoReportPhotosPage["items"][number]["tags"] },
+) {
   const lines: string[] = [];
-  if (page.showCaptions && caption.trim()) lines.push(caption.trim());
+  if (page.showCaptions && item.caption.trim()) lines.push(item.caption.trim());
   const meta: string[] = [];
   if (page.showCategory && photo) meta.push(PHOTO_CATEGORY_LABELS[photo.category]);
   if (page.showTakenAt && photo?.takenAt) meta.push(formatDate(photo.takenAt));
+  const tags = captionTagLine(item.tags);
+  if (tags) meta.push(tags);
   if (meta.length) lines.push(meta.join("  ·  "));
   return lines;
 }
@@ -164,15 +177,22 @@ async function drawPhotosPage(
     doc.text(page.heading.trim(), left, y);
     y += 22;
   }
+  const notes = page.notes.trim();
+  if (notes) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(60, 60, 60);
+    const shown = doc.splitTextToSize(notes, right - left).slice(0, 4);
+    doc.text(shown, left, y);
+    y += shown.length * 14 + 8;
+  }
   const cap = layoutCapacity(page.layout);
   const items = page.items.slice(0, cap);
   const gap = 12;
-  const captionH = page.showCaptions || page.showTakenAt || page.showCategory ? 46 : 8;
-  const notes = page.notes.trim();
-  const notesReserve = notes ? 128 : 0;
-  const availableH = height - y - 56 - notesReserve;
-  const cols = photoPageColumns(page.layout);
-  const rows = photoPageRows(page.layout);
+  const captionH = page.showCaptions || page.showTakenAt || page.showCategory || items.some((item) => captionTagLine(item.tags)) ? 46 : 8;
+  const availableH = height - y - 56;
+  const cols = photoFrameColumns(page);
+  const rows = photoFrameRows(page);
   const cellW = cols === 1 ? right - left : (right - left - gap) / 2;
   const cellH = (availableH - gap * (rows - 1)) / rows;
 
@@ -194,7 +214,7 @@ async function drawPhotosPage(
       }
       if (data) fitImage(doc, data, x + 4, top + 4, cellW - 8, boxH - 8);
     }
-    const lines = captionLines(page, photo, item.caption);
+    const lines = captionLines(page, photo, item);
     if (lines.length) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(12);
@@ -205,14 +225,6 @@ async function drawPhotosPage(
         doc.text(doc.splitTextToSize(lines[1], cellW), x, top + boxH + 32);
       }
     }
-  }
-  if (notes) {
-    const notesY = y + rows * cellH + gap * Math.max(0, rows - 1) + 18;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(14);
-    doc.setTextColor(40, 40, 40);
-    const wrapped = doc.splitTextToSize(notes, right - left);
-    doc.text(wrapped.slice(0, 6), left, notesY);
   }
 }
 
@@ -255,14 +267,22 @@ async function drawQuadPhotosPage(
   }
 
   const notes = page.notes.trim();
-  const notesH = notes ? 32 : 0;
-  const bottom = height - 48 - notesH;
+  if (notes) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(60, 60, 60);
+    const shown = doc.splitTextToSize(notes, right - left).slice(0, 2);
+    doc.text(shown, left, y);
+    y += shown.length * 11 + 6;
+  }
+  const bottom = height - 48;
   const gapX = 14;
   const gapY = 12;
   const cellW = (right - left - gapX) / 2;
   const cellH = (bottom - y - gapY) / 2;
   const labelH = 30;
-  const metaH = page.showTakenAt || page.showCategory ? 14 : 0;
+  const metaH =
+    page.showTakenAt || page.showCategory || page.items.some((item) => captionTagLine(item.tags)) ? 14 : 0;
   const imageH = Math.max(48, cellH - labelH - metaH);
   const items = page.items.slice(0, 4);
 
@@ -321,7 +341,7 @@ async function drawQuadPhotosPage(
     doc.setLineWidth(0.6);
     doc.rect(x, imageTop, cellW, imageH);
 
-    const meta = photoSheetMeta(page, photo);
+    const meta = [photoSheetMeta(page, photo), item ? captionTagLine(item.tags) : ""].filter(Boolean).join("  ·  ");
     if (meta) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
@@ -330,12 +350,6 @@ async function drawQuadPhotosPage(
     }
   }
 
-  if (notes) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(40, 40, 40);
-    doc.text(doc.splitTextToSize(notes, right - left).slice(0, 2), left, y + cellH * 2 + gapY + 14);
-  }
 }
 
 async function drawCover(
