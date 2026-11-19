@@ -1,24 +1,38 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   closestCenter,
+  pointerWithin,
+  useDraggable,
+  useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Circle,
   Download,
   FileText,
   GripVertical,
   Link2,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
+  Upload,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,35 +62,59 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PhotoReportPagePreview } from "@/components/photo-report-preview";
+import { PhotoReportPaper } from "@/components/photo-report-paper";
 import { WorkOrderEditor } from "@/components/work-order-editor";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { useCrm } from "@/lib/crm-store";
 import { escapeDismissesOverlay } from "@/lib/draft-escape";
 import { downloadPhotoReportPdf } from "@/lib/photo-report-pdf";
+import { formatDate, formatTime } from "@/lib/format";
 import {
+  CAPTION_LIMIT,
+  LETTERHEAD_TEMPLATES,
+  draftCaptionFromTags,
   emptyCoverPage,
   emptyPhotosPage,
   emptyTextPage,
   layoutCapacity,
-  LETTERHEAD_TEMPLATES,
+  missingCaptionCount,
+  pageFrame,
   pageLabel,
+  parseCaptionTags,
   photoById,
+  photoFileLabel,
+  photoSection,
 } from "@/lib/photo-report";
 import { shareUrl } from "@/lib/share";
 import { resolveShareContacts } from "@/lib/parties";
 import { shareEmailOwnerFromBook } from "@/lib/document-owner";
 import { cardHeaderLogo } from "@/lib/card";
 import { formatJobSite } from "@/lib/leads";
+import { canManageJobPhotos } from "@/lib/visibility";
 import {
+  PHOTO_CAPTION_TAGS,
+  PHOTO_CAPTION_TAG_LABELS,
   type Job,
   type JobPhoto,
   type LetterheadKind,
+  type PhotoCaptionTag,
+  type PhotoPageFrame,
   type PhotoPageLayout,
   type PhotoReport,
   type PhotoReportPage,
+  type PhotoReportPhotosPage,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { fillWorkOrderFromJob } from "@/lib/work-order";
+
+type ViewMode = "edit" | "split" | "preview";
+type TrayTab = "pages" | "photos";
+type TrayFilter = "unused" | "all";
+
+const collide: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length > 0 ? hits : closestCenter(args);
+};
 
 export function PhotoReportBuilder({
   job,
@@ -113,30 +151,54 @@ export function PhotoReportBuilder({
     job.location.trim() ||
     "";
   const [draft, setDraft] = useState(() => withJobBoundWorkOrder(report, job, opportunity));
-  const [selectedId, setSelectedId] = useState(report.pages[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(
+    () => report.pages.find((page) => page.type === "photos")?.id ?? report.pages[0]?.id ?? "",
+  );
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [mode, setMode] = useState<ViewMode>("split");
+  const [tray, setTray] = useState<TrayTab>("photos");
+  const [trayFilter, setTrayFilter] = useState<TrayFilter>("unused");
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "error">("saved");
+  const [dragPhotoId, setDragPhotoId] = useState<string | null>(null);
   const historyRef = useRef<PhotoReport[]>([]);
   const [canUndo, setCanUndo] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const skipObserve = useRef(false);
-  const pendingJump = useRef<string | null>(null);
-  const [jumpNonce, setJumpNonce] = useState(0);
-  const [pickerPageId, setPickerPageId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pendingScroll = useRef<string | null>(null);
+  const originalKey = useRef(
+    JSON.stringify({ title: report.title, pages: report.pages, createdBy: report.createdBy }),
+  );
+  const saveGen = useRef(0);
 
   const selected = draft.pages.find((page) => page.id === selectedId) ?? draft.pages[0];
-  const hasCover = draft.pages.some((page) => page.type === "cover");
   const selectedIndex = selected ? draft.pages.findIndex((page) => page.id === selected.id) : -1;
-  const pickerPage = draft.pages.find(
-    (page): page is Extract<PhotoReportPage, { type: "photos" }> =>
-      page.id === pickerPageId && page.type === "photos",
-  );
+  const section = selected ? photoSection(draft.pages, selected.id) : { index: -1, total: 0 };
   const pendingDelete = pendingDeleteId ? draft.pages.find((page) => page.id === pendingDeleteId) : undefined;
   const pendingDeleteIndex = pendingDelete ? draft.pages.findIndex((page) => page.id === pendingDelete.id) : -1;
+  const missingCaptions = missingCaptionCount(draft.pages);
+  const canUpload = !readOnly && canManageJobPhotos(crm.effectiveStaff?.role ?? crm.viewer?.role);
 
+  const usedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const page of draft.pages) {
+      if (page.type !== "photos") continue;
+      for (const item of page.items) ids.add(item.photoId);
+    }
+    return ids;
+  }, [draft.pages]);
+  const orderedPhotos = useMemo(
+    () => [...photos].sort((a, b) => (b.takenAt || "").localeCompare(a.takenAt || "")),
+    [photos],
+  );
+  const unusedPhotos = orderedPhotos.filter((photo) => !usedIds.has(photo.id));
+  const trayPhotos = trayFilter === "unused" ? unusedPhotos : orderedPhotos;
+  const dragging = dragPhotoId ? photos.find((photo) => photo.id === dragPhotoId) : undefined;
+
+  const updatePhotoReport = crm.updatePhotoReport;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   useEffect(() => {
@@ -151,54 +213,49 @@ export function PhotoReportBuilder({
   }, [onClose]);
 
   useEffect(() => {
+    if (readOnly) return;
+    const snapshot = JSON.stringify({
+      title: draft.title,
+      pages: draft.pages,
+      createdBy: draft.createdBy,
+    });
+    if (snapshot === originalKey.current) {
+      setSaveState((current) => (current === "saved" ? current : "saved"));
+      return;
+    }
+    setSaveState("saving");
+    const gen = ++saveGen.current;
     const timer = window.setTimeout(() => {
-      void crm.updatePhotoReport(draft.id, {
+      void updatePhotoReport(draft.id, {
         title: draft.title,
         pages: draft.pages,
         updatedAt: draft.updatedAt,
         createdBy: draft.createdBy,
-      });
+      }).then((ok) => {
+          if (saveGen.current !== gen) return;
+          if (ok) originalKey.current = snapshot;
+          setSaveState(ok ? "saved" : "error");
+        });
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [crm.updatePhotoReport, draft]);
+  }, [draft, readOnly, updatePhotoReport]);
 
   useEffect(() => {
-    const root = scrollerRef.current;
-    if (!root) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (skipObserve.current) return;
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-        const id = (visible?.target as HTMLElement | undefined)?.dataset.reportPage;
-        if (id) setSelectedId(id);
-      },
-      { root, threshold: [0.25, 0.45, 0.7], rootMargin: "-12% 0px -45% 0px" },
-    );
-    const nodes = root.querySelectorAll("[data-report-page]");
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [draft.pages]);
+    const id = pendingScroll.current;
+    if (!id || mode === "preview") return;
+    pendingScroll.current = null;
+    document.getElementById(id)?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, mode, selectedId]);
 
-  useEffect(() => {
-    const id = pendingJump.current;
-    if (!id) return;
-    pendingJump.current = null;
-    skipObserve.current = true;
-    const node = scrollerRef.current?.querySelector(`[data-report-page="${id}"]`);
-    node?.scrollIntoView({ behavior: "smooth", block: "start" });
-    const timer = window.setTimeout(() => {
-      skipObserve.current = false;
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [draft.pages, jumpNonce]);
-
-  function jumpToPage(pageId: string) {
-    skipObserve.current = true;
-    pendingJump.current = pageId;
+  function selectPage(pageId: string) {
     setSelectedId(pageId);
-    setJumpNonce((value) => value + 1);
+    setActiveIndex(0);
+  }
+
+  function stepPage(delta: number) {
+    if (!selected) return;
+    const next = draft.pages[selectedIndex + delta];
+    if (next) selectPage(next.id);
   }
 
   function pushHistory(current: PhotoReport) {
@@ -213,6 +270,7 @@ export function PhotoReportBuilder({
     setDraft(previous);
     if (!previous.pages.some((page) => page.id === selectedId)) {
       setSelectedId(previous.pages[0]?.id ?? "");
+      setActiveIndex(0);
     }
   }
 
@@ -231,29 +289,36 @@ export function PhotoReportBuilder({
     setDraft(next);
     if (!pages.some((page) => page.id === selectedId)) {
       setSelectedId(pages[0]?.id ?? "");
+      setActiveIndex(0);
     }
   }
 
   function patchPage(pageId: string, patch: Partial<PhotoReportPage> | PhotoReportPage) {
     commit(
-      draft.pages.map((page) =>
-        page.id === pageId ? ({ ...page, ...patch } as PhotoReportPage) : page,
-      ),
+      draft.pages.map((page) => (page.id === pageId ? ({ ...page, ...patch } as PhotoReportPage) : page)),
     );
   }
 
   function addPage(type: "photos" | "cover") {
-    const layout =
-      [...draft.pages].reverse().find((page) => page.type === "photos")?.layout ?? "four";
-    const page = type === "cover" ? emptyCoverPage({ title: job.name }) : emptyPhotosPage(layout);
+    const previous = [...draft.pages].reverse().find((page) => page.type === "photos");
+    const layout = previous?.layout ?? "four";
+    const page =
+      type === "cover"
+        ? emptyCoverPage({ title: job.name })
+        : {
+            ...emptyPhotosPage(layout),
+            frame: previous && pageFrame(previous) === "before_after" ? ("before_after" as const) : ("grid" as const),
+          };
     commit([...draft.pages, page]);
-    jumpToPage(page.id);
+    selectPage(page.id);
+    setTray("pages");
   }
 
   function addLetterhead(kind: LetterheadKind) {
     const page = emptyTextPage({ kind });
     commit([...draft.pages, page]);
-    jumpToPage(page.id);
+    selectPage(page.id);
+    setTray("pages");
   }
 
   function removePage(pageId: string) {
@@ -292,14 +357,84 @@ export function PhotoReportBuilder({
     commit(arrayMove(draft.pages, from, to));
   }
 
-  function removePhotoFromPage(page: Extract<PhotoReportPage, { type: "photos" }>, index: number) {
-    patchPage(page.id, { items: page.items.filter((_, entryIndex) => entryIndex !== index) });
+  function onDragStart(event: DragStartEvent) {
+    setDragPhotoId(photoIdFromTray(String(event.active.id)));
   }
 
-  function addPhotos(page: Extract<PhotoReportPage, { type: "photos" }>, photoIds: string[]) {
+  function onDragEnd(event: DragEndEvent) {
+    setDragPhotoId(null);
+    const photoId = photoIdFromTray(String(event.active.id));
+    if (photoId) {
+      const overId = event.over ? String(event.over.id) : "";
+      if (overId !== "photo-page" && overId !== "photo-preview") return;
+      if (!selected || selected.type !== "photos") {
+        toast.message("Open a photo page, then drop the shot there.");
+        return;
+      }
+      addPhotos(selected, [photoId]);
+      return;
+    }
+    reorderPages(event);
+  }
+
+  function updateItems(page: PhotoReportPhotosPage, items: PhotoReportPhotosPage["items"]) {
+    patchPage(page.id, { items });
+  }
+
+  function removePhotoFromPage(page: PhotoReportPhotosPage, index: number) {
+    updateItems(
+      page,
+      page.items.filter((_, entryIndex) => entryIndex !== index),
+    );
+    setActiveIndex((current) => Math.max(0, Math.min(current, page.items.length - 2)));
+  }
+
+  function movePhoto(page: PhotoReportPhotosPage, index: number, delta: number) {
+    const next = index + delta;
+    if (next < 0 || next >= page.items.length) return;
+    updateItems(page, arrayMove(page.items, index, next));
+    setActiveIndex(next);
+  }
+
+  function setCaption(page: PhotoReportPhotosPage, index: number, caption: string) {
+    updateItems(
+      page,
+      page.items.map((item, entryIndex) =>
+        entryIndex === index ? { ...item, caption: caption.slice(0, CAPTION_LIMIT) } : item,
+      ),
+    );
+  }
+
+  function toggleTag(page: PhotoReportPhotosPage, index: number, tag: PhotoCaptionTag) {
+    updateItems(
+      page,
+      page.items.map((item, entryIndex) => {
+        if (entryIndex !== index) return item;
+        const current = item.tags ?? [];
+        const next = current.includes(tag) ? current.filter((entry) => entry !== tag) : [...current, tag];
+        return { ...item, tags: parseCaptionTags(next) };
+      }),
+    );
+  }
+
+  function draftTags(page: PhotoReportPhotosPage, index: number) {
+    const item = page.items[index];
+    if (!item) return;
+    const caption = draftCaptionFromTags(item.tags ?? [], page.heading);
+    if (!caption) {
+      toast.message("Choose a tag first.");
+      return;
+    }
+    setCaption(page, index, caption);
+  }
+
+  function addPhotos(page: PhotoReportPhotosPage, photoIds: string[]) {
     const existing = new Set(page.items.map((item) => item.photoId));
     const incoming = photoIds.filter((id) => !existing.has(id));
-    if (incoming.length === 0) return;
+    if (incoming.length === 0) {
+      if (photoIds.length > 0) toast.message("Already on this page.");
+      return;
+    }
     const cap = layoutCapacity(page.layout);
     const room = Math.max(0, cap - page.items.length);
     const fit = incoming.slice(0, room);
@@ -313,6 +448,7 @@ export function PhotoReportBuilder({
               ...fit.map((photoId) => ({
                 photoId,
                 caption: photoById(photos, photoId)?.caption ?? "",
+                tags: [],
               })),
             ],
           }
@@ -322,13 +458,62 @@ export function PhotoReportBuilder({
       const extras = chunkAsPages(
         overflow.map((photoId) => photoById(photos, photoId)).filter((photo): photo is JobPhoto => Boolean(photo)),
         page.layout,
+        page.frame,
       );
       const index = pages.findIndex((item) => item.id === page.id);
       pages = [...pages.slice(0, index + 1), ...extras, ...pages.slice(index + 1)];
     }
     commit(pages);
-    setPickerOpen(false);
-    setPickerPageId(null);
+    if (fit.length > 0) setActiveIndex(page.items.length);
+  }
+
+  function applyFrame(page: PhotoReportPhotosPage, frame: PhotoPageFrame) {
+    const layout: PhotoPageLayout = frame === "before_after" ? "two" : "four";
+    if (pageFrame(page) === frame && page.layout === layout) return;
+    const cap = layoutCapacity(layout);
+    const fit = page.items.slice(0, cap);
+    const overflow = page.items.slice(cap);
+    const updated: PhotoReportPage = { ...page, layout, frame, items: fit };
+    let pages = draft.pages.map((item) => (item.id === page.id ? updated : item));
+    if (overflow.length > 0) {
+      const extras: PhotoReportPage[] = [];
+      for (let index = 0; index < overflow.length; index += cap) {
+        extras.push({
+          ...emptyPhotosPage(layout),
+          frame,
+          heading: page.heading,
+          items: overflow.slice(index, index + cap),
+        });
+      }
+      const at = pages.findIndex((item) => item.id === page.id);
+      pages = [...pages.slice(0, at + 1), ...extras, ...pages.slice(at + 1)];
+    }
+    commit(pages);
+    setActiveIndex((current) => Math.min(current, Math.max(0, fit.length - 1)));
+  }
+
+  async function uploadFiles(list: FileList | null) {
+    if (!list || !canUpload) return;
+    const files = Array.from(list).filter((file) => file.type.startsWith("image/"));
+    if (files.length === 0) {
+      toast.error("Choose an image file.");
+      return;
+    }
+    setUploading(true);
+    try {
+      for (const file of files) {
+        await crm.addJobPhoto({
+          jobId: job.id,
+          caption: "",
+          category: "progress",
+          takenAt: new Date().toISOString(),
+          file,
+        });
+      }
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }
 
   async function downloadPdf() {
@@ -371,60 +556,59 @@ export function PhotoReportBuilder({
     onClose();
   }
 
+  function focusFromPreview(index: number) {
+    setActiveIndex(index);
+    if (mode === "preview") setMode("split");
+    if (selected) pendingScroll.current = `caption-card-${selected.id}-${index}`;
+  }
+
+  const sectionTitle =
+    selected?.type === "photos" ? selected.heading.trim() || "this page" : pageLabel(selected ?? draft.pages[0], selectedIndex);
+
   return (
-    <div className="fixed inset-x-0 top-12 bottom-0 z-50 flex flex-col bg-background md:left-52">
-      <header className="flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            Page{readOnly ? " · view only" : ""}
-          </p>
-          {readOnly ? (
-            <p className="mt-1 truncate text-base font-medium">{draft.title.trim() || "Untitled page"}</p>
-          ) : (
-            <Input
-              value={draft.title}
-              onChange={(event) => commit(draft.pages, { title: event.target.value })}
-              className="mt-1 h-8 border-0 bg-transparent px-0 text-base font-medium shadow-none"
-              aria-label="Page title"
-            />
-          )}
+    <div className="fixed inset-x-0 top-12 bottom-0 z-50 flex flex-col bg-[#f3f3f3] md:left-52">
+      <header className="flex shrink-0 flex-col gap-2 border-b bg-background px-3 py-2 lg:flex-row lg:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Back to job">
+            <ChevronLeft />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Photo report · {readOnly ? "View only" : "Editing"}
+            </p>
+            {readOnly ? (
+              <p className="truncate text-sm font-medium">{draft.title.trim() || "Untitled page"}</p>
+            ) : (
+              <input
+                value={draft.title}
+                onChange={(event) => commit(draft.pages, { title: event.target.value })}
+                aria-label="Page title"
+                className="w-full truncate border-0 bg-transparent text-sm font-medium outline-none"
+              />
+            )}
+          </div>
+          <SaveStatus state={saveState} />
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           {readOnly ? null : (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!canUndo}
-                onClick={undoChange}
-                aria-label="Undo last change"
-              >
-                <RotateCcw data-icon="inline-start" />
-                Undo
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => addPage("photos")}>
-                <Plus data-icon="inline-start" />
-                Photos
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
-                  <FileText data-icon="inline-start" />
-                  Letterhead
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-48">
-                  {LETTERHEAD_TEMPLATES.map((template) => (
-                    <DropdownMenuItem key={template.id} onClick={() => addLetterhead(template.id)}>
-                      {template.title}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button type="button" variant="outline" size="sm" onClick={() => addPage("cover")}>
-                Cover
-              </Button>
-            </>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={!canUndo}
+              onClick={undoChange}
+              aria-label="Undo last change"
+            >
+              <RotateCcw />
+            </Button>
           )}
+          <ModeSwitch mode={mode} onChange={setMode} />
+          {missingCaptions > 0 ? (
+            <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Circle className="size-3.5" aria-hidden />
+              {missingCaptions} caption{missingCaptions === 1 ? "" : "s"} missing
+            </p>
+          ) : null}
           <Button type="button" variant="outline" size="sm" disabled={shareBusy} onClick={() => void sharePage()}>
             <Link2 data-icon="inline-start" />
             {shareBusy ? "Preparing…" : "Share"}
@@ -433,172 +617,373 @@ export function PhotoReportBuilder({
             <Download data-icon="inline-start" />
             {pdfBusy ? "Building PDF…" : "Download PDF"}
           </Button>
-          <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close page">
-            <XIcon />
-          </Button>
         </div>
       </header>
 
-      <div
-        className={cn(
-          "grid min-h-0 flex-1",
-          hasCover && !readOnly
-            ? "lg:grid-cols-[16rem_minmax(0,1fr)_18rem]"
-            : "lg:grid-cols-[16rem_minmax(0,1fr)]",
-        )}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collide}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setDragPhotoId(null)}
       >
-        <aside className="min-h-0 overflow-y-auto border-b p-2 lg:border-r lg:border-b-0">
-          {readOnly ? (
-            <ul className="space-y-1">
-              {draft.pages.map((page, index) => (
-                <li key={page.id}>
+        <div
+          className={cn(
+            "grid min-h-0 flex-1",
+            mode === "preview"
+              ? "grid-cols-1"
+              : mode === "edit"
+                ? "lg:grid-cols-[18rem_minmax(0,1fr)]"
+                : "lg:grid-cols-[18rem_minmax(0,1fr)_23rem]",
+          )}
+        >
+          {mode === "preview" ? null : (
+            <aside className="flex max-h-80 min-h-0 flex-col border-b bg-[#f3f3f3] lg:max-h-none lg:border-r lg:border-b-0">
+              <div className="flex shrink-0 border-b bg-background">
+                <TrayTabButton active={tray === "pages"} onClick={() => setTray("pages")}>
+                  Pages · {draft.pages.length}
+                </TrayTabButton>
+                <TrayTabButton active={tray === "photos"} onClick={() => setTray("photos")}>
+                  Job photos · {photos.length}
+                </TrayTabButton>
+              </div>
+              {tray === "pages" ? (
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                  {readOnly ? (
+                    <ul className="space-y-1">
+                      {draft.pages.map((page, index) => (
+                        <li key={page.id}>
+                          <button
+                            type="button"
+                            onClick={() => selectPage(page.id)}
+                            className={cn(
+                              "w-full rounded-md px-2 py-1.5 text-left text-sm",
+                              page.id === selected?.id ? "bg-background font-medium shadow-sm" : "hover:bg-background/70",
+                            )}
+                          >
+                            <span className="block text-[10px] tracking-wide text-muted-foreground uppercase">
+                              Page {index + 1}
+                            </span>
+                            {pageLabel(page, index)}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <SortableContext items={draft.pages.map((page) => page.id)} strategy={verticalListSortingStrategy}>
+                      <ul className="space-y-1">
+                        {draft.pages.map((page, index) => (
+                          <SortablePageCard
+                            key={page.id}
+                            page={page}
+                            index={index}
+                            selected={page.id === selected?.id}
+                            canDelete={page.type !== "work_order" && draft.pages.length > 1}
+                            onSelect={() => selectPage(page.id)}
+                            onDelete={() => requestRemove(page.id)}
+                          />
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  )}
+                </div>
+              ) : (
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                  <div className="mb-2 flex gap-1.5">
+                    <FilterPill active={trayFilter === "unused"} onClick={() => setTrayFilter("unused")}>
+                      Not in report · {unusedPhotos.length}
+                    </FilterPill>
+                    <FilterPill active={trayFilter === "all"} onClick={() => setTrayFilter("all")}>
+                      All
+                    </FilterPill>
+                  </div>
+                  <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+                    {selected?.type === "photos"
+                      ? `Drag a photo onto the page, or tap + Add, to put it in “${sectionTitle}”.`
+                      : "Open a photo page, then drag a shot onto it or tap + Add."}
+                  </p>
+                  {trayPhotos.length === 0 ? (
+                    <p className="px-1 text-xs text-muted-foreground">
+                      {photos.length === 0
+                        ? "No photos on this job yet."
+                        : "Every job photo is already in the report."}
+                    </p>
+                  ) : (
+                    <ul className="grid grid-cols-2 gap-2">
+                      {trayPhotos.map((photo) => (
+                        <TrayPhoto
+                          key={photo.id}
+                          photo={photo}
+                          onThisPage={selected?.type === "photos" && selected.items.some((item) => item.photoId === photo.id)}
+                          disabled={readOnly}
+                          onAdd={() => {
+                            if (selected?.type !== "photos") {
+                              toast.message("Open a photo page, then add the shot there.");
+                              return;
+                            }
+                            addPhotos(selected, [photo.id]);
+                          }}
+                        />
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {tray === "photos" && canUpload ? (
+                <div className="shrink-0 border-t bg-background">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="sr-only"
+                    onChange={(event) => void uploadFiles(event.target.files)}
+                  />
                   <button
                     type="button"
-                    onClick={() => jumpToPage(page.id)}
-                    className={cn(
-                      "w-full rounded-md px-2 py-1.5 text-left text-sm",
-                      page.id === selected?.id ? "bg-muted font-medium" : "hover:bg-muted/60",
-                    )}
+                    className="flex w-full items-center justify-center gap-1.5 px-3 py-2.5 text-sm hover:bg-muted disabled:opacity-50"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
                   >
-                    {pageLabel(page, index)}
+                    <Upload className="size-3.5" />
+                    {uploading ? "Uploading…" : "Upload photos"}
                   </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderPages}>
-                <SortableContext items={draft.pages.map((page) => page.id)} strategy={verticalListSortingStrategy}>
-                  <ul className="space-y-1">
-                    {draft.pages.map((page, index) => (
-                      <SortablePageCard
-                        key={page.id}
-                        page={page}
-                        index={index}
-                        selected={page.id === selected?.id}
-                        canDelete={page.type !== "work_order" && draft.pages.length > 1}
-                        onSelect={() => jumpToPage(page.id)}
-                        onDelete={() => requestRemove(page.id)}
-                      />
-                    ))}
-                  </ul>
-                </SortableContext>
-              </DndContext>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mt-3 w-full justify-start text-destructive"
-                onClick={() => void removeReport()}
-              >
-                <Trash2 data-icon="inline-start" />
-                Delete document
-              </Button>
-            </>
-          )}
-        </aside>
-
-        <div ref={scrollerRef} className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-6">
-          {draft.pages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Add a page to start this document.</p>
-          ) : (
-            <div className="mx-auto flex w-full max-w-[28rem] flex-col gap-8 pb-16">
-              {draft.pages.length > 1 ? (
-                <div className="pointer-events-none sticky top-0 z-10 -mx-1 flex justify-center pt-0.5">
-                  <p className="rounded-full border bg-background/95 px-3 py-1 text-center text-xs text-muted-foreground shadow-sm">
-                    Page {Math.max(1, selectedIndex + 1)} of {draft.pages.length}
-                    {selected ? ` · ${pageLabel(selected, selectedIndex)}` : ""}
-                    {" — "}
-                    scroll for the rest
-                  </p>
                 </div>
               ) : null}
-              {draft.pages.map((page, index) => {
-                const photosPage = page.type === "photos" ? page : null;
-                return (
-                  <section
-                    key={page.id}
-                    data-report-page={page.id}
-                    className="scroll-mt-12"
-                    onClick={() => setSelectedId(page.id)}
+              {tray === "pages" && !readOnly ? (
+                <div className="shrink-0 space-y-1 border-t bg-background p-2">
+                  <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => addPage("photos")}>
+                    <Plus data-icon="inline-start" />
+                    Photo page
+                  </Button>
+                  <div className="grid grid-cols-2 gap-1">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" className="w-full" />}>
+                        <FileText data-icon="inline-start" />
+                        Letterhead
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-48">
+                        {LETTERHEAD_TEMPLATES.map((template) => (
+                          <DropdownMenuItem key={template.id} onClick={() => addLetterhead(template.id)}>
+                            {template.title}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addPage("cover")}>
+                      Cover
+                    </Button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-destructive"
+                    onClick={() => void removeReport()}
                   >
-                    <p className="mb-2 text-center text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-                      Page {index + 1} of {draft.pages.length}
-                      <span className="font-medium tracking-normal text-foreground/70">
-                        {" · "}
-                        {pageLabel(page, index)}
-                      </span>
-                    </p>
-                    <div
-                      className={cn(
-                        "rounded-sm",
-                        page.id === selected?.id && "ring-2 ring-primary/50 ring-offset-2 ring-offset-muted/40",
-                      )}
-                    >
-                      {page.type === "work_order" && !readOnly ? (
-                        <WorkOrderEditor
-                          page={page}
-                          job={job}
-                          opportunity={opportunity}
-                          title={draft.title}
-                          onTitleChange={(title) => commit(draft.pages, { title })}
-                          onChange={(next) => patchPage(page.id, next)}
+                    <Trash2 data-icon="inline-start" />
+                    Delete document
+                  </Button>
+                </div>
+              ) : null}
+            </aside>
+          )}
+
+          {mode === "preview" ? null : (
+            <DropSurface
+              id="photo-page"
+              disabled={readOnly || selected?.type !== "photos"}
+              className="min-h-0 overflow-y-auto bg-[#f3f3f3]"
+            >
+              {selected ? (
+                <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-4 sm:px-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                          {pageKicker(selectedIndex + 1, selected, section)}
+                        </p>
+                        {mode === "edit" ? (
+                          <PagePager
+                            index={selectedIndex}
+                            count={draft.pages.length}
+                            onPrev={() => stepPage(-1)}
+                            onNext={() => stepPage(1)}
+                          />
+                        ) : null}
+                      </div>
+                      {selected.type === "photos" ? (
+                        <input
+                          value={selected.heading}
+                          onChange={(event) => patchPage(selected.id, { heading: event.target.value })}
+                          readOnly={readOnly}
+                          placeholder="Section name"
+                          aria-label="Section name"
+                          className="mt-1 w-full border-0 bg-transparent font-heading text-3xl leading-tight outline-none placeholder:text-muted-foreground/40"
                         />
-                      ) : (
-                        <PhotoReportPagePreview
-                          page={page}
-                          job={job}
-                          photos={photos}
-                          report={draft}
-                          company={crm.company}
-                          contacts={crm.contacts}
-                          staff={crm.staff}
-                          customerName={crm.customerName(job)}
-                          edit={
-                            readOnly
-                              ? undefined
-                              : {
-                                  onChange: (patch) => patchPage(page.id, patch),
-                                  onAddPhotos: photosPage
-                                    ? () => {
-                                        jumpToPage(page.id);
-                                        setPickerPageId(page.id);
-                                        setPickerOpen(true);
-                                      }
-                                    : undefined,
-                                  onRemovePhoto: photosPage
-                                    ? (photoIndex) => removePhotoFromPage(photosPage, photoIndex)
-                                    : undefined,
-                                }
-                          }
-                        />
+                      ) : selected.type === "text" ? null : (
+                        <h2 className="mt-1 font-heading text-3xl leading-tight">{pageLabel(selected, selectedIndex)}</h2>
                       )}
                     </div>
-                  </section>
-                );
-              })}
-            </div>
+                    {selected.type === "photos" && !readOnly ? (
+                      <div className="shrink-0">
+                        <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                          Page layout
+                        </p>
+                        <div className="mt-1 flex rounded-md border bg-muted/70 p-0.5">
+                          <LayoutChoice
+                            active={pageFrame(selected) !== "before_after"}
+                            onClick={() => applyFrame(selected, "grid")}
+                          >
+                            Photo grid
+                          </LayoutChoice>
+                          <LayoutChoice
+                            active={pageFrame(selected) === "before_after"}
+                            onClick={() => applyFrame(selected, "before_after")}
+                          >
+                            Before & after
+                          </LayoutChoice>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {selected.type === "photos" ? (
+                    <PhotoSectionEditor
+                      page={selected}
+                      photos={photos}
+                      readOnly={readOnly}
+                      activeIndex={activeIndex}
+                      onFocus={setActiveIndex}
+                      onNotes={(notes) => patchPage(selected.id, { notes })}
+                      onCaption={(index, caption) => setCaption(selected, index, caption)}
+                      onToggleTag={(index, tag) => toggleTag(selected, index, tag)}
+                      onDraft={(index) => draftTags(selected, index)}
+                      onMove={(index, delta) => movePhoto(selected, index, delta)}
+                      onRemove={(index) => removePhotoFromPage(selected, index)}
+                    />
+                  ) : null}
+                  {selected.type === "cover" && !readOnly ? (
+                    <div className="rounded-lg border bg-background p-4">
+                      <PageInspector
+                        page={selected}
+                        photos={photos}
+                        onChange={(patch) => patchPage(selected.id, patch)}
+                        onRemove={() => requestRemove(selected.id)}
+                      />
+                    </div>
+                  ) : null}
+                  {selected.type === "cover" && readOnly ? (
+                    <PhotoReportPagePreview
+                      page={selected}
+                      job={job}
+                      photos={photos}
+                      report={draft}
+                      company={crm.company}
+                      contacts={crm.contacts}
+                      staff={crm.staff}
+                      customerName={crm.customerName(job)}
+                    />
+                  ) : null}
+                  {selected.type === "text" ? (
+                    <TextPageFields
+                      page={selected}
+                      readOnly={readOnly}
+                      onChange={(patch) => patchPage(selected.id, patch)}
+                    />
+                  ) : null}
+                  {selected.type === "work_order" && !readOnly ? (
+                    <WorkOrderEditor
+                      page={selected}
+                      job={job}
+                      opportunity={opportunity}
+                      title={draft.title}
+                      onTitleChange={(title) => commit(draft.pages, { title })}
+                      onChange={(next) => patchPage(selected.id, next)}
+                    />
+                  ) : null}
+                  {selected.type === "work_order" && readOnly ? (
+                    <PhotoReportPagePreview
+                      page={selected}
+                      job={job}
+                      photos={photos}
+                      report={draft}
+                      company={crm.company}
+                      contacts={crm.contacts}
+                      staff={crm.staff}
+                      customerName={crm.customerName(job)}
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <p className="p-6 text-sm text-muted-foreground">Add a page to start this document.</p>
+              )}
+            </DropSurface>
+          )}
+
+          {mode === "edit" ? null : (
+            <DropSurface
+              id="photo-preview"
+              disabled={readOnly || selected?.type !== "photos"}
+              className="flex min-h-0 flex-col border-t bg-[#f3f3f3] lg:border-t-0 lg:border-l"
+            >
+              <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2">
+                <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] text-[#1f7a45] uppercase">
+                  <span className="size-1.5 rounded-full bg-[#1f7a45]" />
+                  Live preview · matches PDF
+                </p>
+                <PagePager
+                  index={Math.max(0, selectedIndex)}
+                  count={draft.pages.length}
+                  onPrev={() => stepPage(-1)}
+                  onNext={() => stepPage(1)}
+                />
+              </div>
+              <div className={cn("min-h-0 flex-1 overflow-y-auto px-3 pb-4", mode === "preview" && "mx-auto w-full max-w-xl")}>
+                {selected?.type === "photos" ? (
+                  <PhotoReportPaper
+                    page={selected}
+                    pageNumber={selectedIndex + 1}
+                    pageCount={draft.pages.length}
+                    sectionNumber={section.index >= 0 ? section.index + 1 : null}
+                    sectionCount={section.total}
+                    jobName={job.name}
+                    photos={photos}
+                    report={draft}
+                    company={crm.company}
+                    activeIndex={activeIndex}
+                    onSelectIndex={focusFromPreview}
+                  />
+                ) : selected ? (
+                  <PhotoReportPagePreview
+                    page={selected}
+                    job={job}
+                    photos={photos}
+                    report={draft}
+                    company={crm.company}
+                    contacts={crm.contacts}
+                    staff={crm.staff}
+                    customerName={crm.customerName(job)}
+                  />
+                ) : null}
+              </div>
+            </DropSurface>
           )}
         </div>
+        <DragOverlay>
+          {dragging ? (
+            <div className="w-20 overflow-hidden border bg-background shadow-lg">
+              {dragging.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={dragging.imageUrl} alt="" className="aspect-square w-full object-cover" />
+              ) : (
+                <div className="flex aspect-square items-center justify-center text-[10px]">{photoFileLabel(dragging)}</div>
+              )}
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
-        {hasCover && !readOnly ? (
-          <aside className="min-h-0 overflow-y-auto border-t p-3 lg:border-t-0 lg:border-l">
-            {selected?.type === "cover" ? (
-              <PageInspector
-                page={selected}
-                photos={photos}
-                onChange={(patch) => patchPage(selected.id, patch)}
-                onRemove={() => requestRemove(selected.id)}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Cover fields stay here. Scroll to the cover, or click it in the list, to edit the title,
-                who it is prepared for, and the hero photo.
-              </p>
-            )}
-          </aside>
-        ) : null}
-      </div>
       <ShareLinkDialog
         unsavedGuard={false}
         open={shareOpen}
@@ -613,10 +998,7 @@ export function PhotoReportBuilder({
         companyLogoUrl={cardHeaderLogo(crm.company)}
         emailTemplates={crm.company.emailTemplates}
         sender={emailOwner}
-        recipients={resolveShareContacts(
-          { jobId: job.id, primaryContactId: job.primaryContactId },
-          crm,
-        )}
+        recipients={resolveShareContacts({ jobId: job.id, primaryContactId: job.primaryContactId }, crm)}
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>
           crm.logOutboundText({
@@ -635,7 +1017,13 @@ export function PhotoReportBuilder({
           })
         }
       />
-      <Dialog unsavedGuard={false} open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+      <Dialog
+        unsavedGuard={false}
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+      >
         <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>Remove this page?</DialogTitle>
@@ -656,32 +1044,477 @@ export function PhotoReportBuilder({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog
-        unsavedGuard={false}
-        open={pickerOpen}
-        onOpenChange={(open) => {
-          setPickerOpen(open);
-          if (!open) setPickerPageId(null);
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add photos</DialogTitle>
-            <DialogDescription>Choose shots from this job. Extra photos open a new page.</DialogDescription>
-          </DialogHeader>
-          {pickerPage ? (
-            <PhotoPicker
-              photos={photos.filter((photo) => !pickerPage.items.some((item) => item.photoId === photo.id))}
-              remaining={Math.max(0, layoutCapacity(pickerPage.layout) - pickerPage.items.length)}
-              onAdd={(ids) => addPhotos(pickerPage, ids)}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">Open a photo page to add shots.</p>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
+}
+
+function SaveStatus({ state }: { state: "saved" | "saving" | "error" }) {
+  if (state === "error") return <p className="shrink-0 text-xs text-destructive">Could not save</p>;
+  return (
+    <p className="inline-flex shrink-0 items-center gap-1 text-xs text-[#1f7a45]">
+      <Check className="size-3.5" aria-hidden />
+      {state === "saving" ? "Saving…" : "All changes saved"}
+    </p>
+  );
+}
+
+function ModeSwitch({ mode, onChange }: { mode: ViewMode; onChange: (mode: ViewMode) => void }) {
+  const options: Array<{ id: ViewMode; label: string }> = [
+    { id: "edit", label: "Edit" },
+    { id: "split", label: "Split" },
+    { id: "preview", label: "Preview" },
+  ];
+  return (
+    <div className="flex rounded-full border bg-background p-0.5" role="group" aria-label="Editor layout">
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          aria-pressed={mode === option.id}
+          onClick={() => onChange(option.id)}
+          className={cn(
+            "rounded-full px-3 py-1 text-xs font-medium",
+            mode === option.id ? "bg-[#1f7a45] text-white" : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PagePager({
+  index,
+  count,
+  onPrev,
+  onNext,
+}: {
+  index: number;
+  count: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5 text-xs text-muted-foreground">
+      <Button type="button" variant="ghost" size="icon-xs" disabled={index <= 0} onClick={onPrev} aria-label="Previous page">
+        <ChevronLeft />
+      </Button>
+      <span className="tabular-nums">
+        Page {Math.min(count, index + 1)} of {count}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        disabled={index >= count - 1}
+        onClick={onNext}
+        aria-label="Next page"
+      >
+        <ChevronRight />
+      </Button>
+    </div>
+  );
+}
+
+function TrayTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex-1 px-2 py-2 text-xs font-medium",
+        active ? "border-b-2 border-primary text-foreground" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-full px-2.5 py-1 text-[11px] font-medium",
+        active ? "bg-foreground text-background" : "border bg-background text-foreground hover:bg-muted",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LayoutChoice({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded-sm px-2.5 py-1 text-xs font-medium",
+        active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DropSurface({
+  id,
+  disabled,
+  className,
+  children,
+}: {
+  id: string;
+  disabled?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled });
+  return (
+    <div ref={setNodeRef} className={cn(className, isOver && !disabled && "ring-2 ring-primary ring-inset")}>
+      {children}
+    </div>
+  );
+}
+
+function pageKicker(
+  pageNumber: number,
+  page: PhotoReportPage,
+  section: { index: number; total: number },
+) {
+  if (page.type === "photos" && section.index >= 0) {
+    return `Page ${pageNumber} · Section ${section.index + 1} of ${section.total}`;
+  }
+  if (page.type === "cover") return `Page ${pageNumber} · Cover`;
+  if (page.type === "work_order") return `Page ${pageNumber} · Work order`;
+  return `Page ${pageNumber} · ${pageLabel(page, pageNumber - 1)}`;
+}
+
+function PhotoSectionEditor({
+  page,
+  photos,
+  readOnly,
+  activeIndex,
+  onFocus,
+  onNotes,
+  onCaption,
+  onToggleTag,
+  onDraft,
+  onMove,
+  onRemove,
+}: {
+  page: PhotoReportPhotosPage;
+  photos: JobPhoto[];
+  readOnly: boolean;
+  activeIndex: number;
+  onFocus: (index: number) => void;
+  onNotes: (notes: string) => void;
+  onCaption: (index: number, caption: string) => void;
+  onToggleTag: (index: number, tag: PhotoCaptionTag) => void;
+  onDraft: (index: number) => void;
+  onMove: (index: number, delta: number) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <label className="block rounded-lg border bg-background px-3 py-2">
+        <span className="text-[11px] text-muted-foreground">
+          Section summary — prints above the photos and on the Summary page
+        </span>
+        <textarea
+          value={page.notes}
+          onChange={(event) => onNotes(event.target.value)}
+          readOnly={readOnly}
+          rows={2}
+          placeholder="What this part of the roof shows"
+          aria-label="Section summary"
+          className="mt-1 w-full resize-none border-0 bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted-foreground/50"
+        />
+      </label>
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          {page.items.length} photo{page.items.length === 1 ? "" : "s"}
+        </span>
+        <span>Tags print under each caption</span>
+      </div>
+      {page.items.length === 0 ? (
+        <p className="rounded-lg border border-dashed bg-background px-3 py-8 text-center text-sm text-muted-foreground">
+          No photos on this page yet. Add one from the job photos on the left.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {page.items.map((item, index) => {
+            const photo = photoById(photos, item.photoId);
+            return (
+              <CaptionCard
+                key={`${item.photoId}-${index}`}
+                id={`caption-card-${page.id}-${index}`}
+                item={item}
+                photo={photo}
+                active={activeIndex === index}
+                readOnly={readOnly}
+                canUp={index > 0}
+                canDown={index < page.items.length - 1}
+                onFocus={() => onFocus(index)}
+                onCaption={(caption) => onCaption(index, caption)}
+                onToggleTag={(tag) => onToggleTag(index, tag)}
+                onDraft={() => onDraft(index)}
+                onUp={() => onMove(index, -1)}
+                onDown={() => onMove(index, 1)}
+                onRemove={() => onRemove(index)}
+              />
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CaptionCard({
+  id,
+  item,
+  photo,
+  active,
+  readOnly,
+  canUp,
+  canDown,
+  onFocus,
+  onCaption,
+  onToggleTag,
+  onDraft,
+  onUp,
+  onDown,
+  onRemove,
+}: {
+  id: string;
+  item: PhotoReportPhotosPage["items"][number];
+  photo: JobPhoto | undefined;
+  active: boolean;
+  readOnly: boolean;
+  canUp: boolean;
+  canDown: boolean;
+  onFocus: () => void;
+  onCaption: (caption: string) => void;
+  onToggleTag: (tag: PhotoCaptionTag) => void;
+  onDraft: () => void;
+  onUp: () => void;
+  onDown: () => void;
+  onRemove: () => void;
+}) {
+  const label = photo ? photoFileLabel(photo) : "Missing photo";
+  const tags = item.tags ?? [];
+  return (
+    <li
+      id={id}
+      className={cn(
+        "rounded-lg border bg-background p-3",
+        active ? "border-primary ring-1 ring-primary" : "border-border",
+      )}
+      onClick={onFocus}
+    >
+      <div className="flex gap-3">
+        <div className="w-24 shrink-0">
+          <div className="relative aspect-square overflow-hidden bg-[repeating-linear-gradient(135deg,#e6e2da_0_7px,#f4f2ee_7px_14px)]">
+            {photo?.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photo.imageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+            ) : (
+              <span className="absolute inset-0 flex items-center justify-center px-1 text-center text-[10px] text-neutral-500">
+                {photo ? label : "Missing photo"}
+              </span>
+            )}
+          </div>
+          {photo?.imageUrl ? <p className="mt-1 truncate text-[10px] text-muted-foreground">{label}</p> : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Caption</p>
+            <p className="text-[11px] tabular-nums text-muted-foreground">
+              {item.caption.length} / {CAPTION_LIMIT}
+            </p>
+          </div>
+          <textarea
+            value={item.caption}
+            onChange={(event) => onCaption(event.target.value)}
+            onFocus={onFocus}
+            readOnly={readOnly}
+            rows={2}
+            maxLength={CAPTION_LIMIT}
+            placeholder="Describe what this photo shows..."
+            aria-label={`Caption for ${label}`}
+            className="mt-1 w-full resize-none rounded-md border bg-background px-2.5 py-1.5 text-sm leading-snug outline-none placeholder:text-muted-foreground/50 focus-visible:border-ring"
+          />
+          <div className="mt-2 flex flex-wrap gap-1">
+            {PHOTO_CAPTION_TAGS.map((tag) => {
+              const on = tags.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={on}
+                  disabled={readOnly}
+                  onClick={() => onToggleTag(tag)}
+                  className={cn(
+                    "rounded-full border px-2 py-0.5 text-[11px] disabled:opacity-60",
+                    on
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-input bg-background text-foreground hover:bg-muted",
+                  )}
+                >
+                  {PHOTO_CAPTION_TAG_LABELS[tag]}
+                </button>
+              );
+            })}
+          </div>
+          {readOnly ? null : (
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={onDraft}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+              >
+                <Sparkles className="size-3" />
+                Draft from tags
+              </button>
+              <div className="flex items-center gap-0.5">
+                <Button type="button" variant="ghost" size="icon-xs" disabled={!canUp} onClick={onUp} aria-label="Move photo up">
+                  <ChevronUp />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  disabled={!canDown}
+                  onClick={onDown}
+                  aria-label="Move photo down"
+                >
+                  <ChevronDown />
+                </Button>
+                <Button type="button" variant="ghost" size="icon-xs" onClick={onRemove} aria-label="Remove photo from page">
+                  <XIcon />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function TrayPhoto({
+  photo,
+  onThisPage,
+  disabled,
+  onAdd,
+}: {
+  photo: JobPhoto;
+  onThisPage: boolean;
+  disabled: boolean;
+  onAdd: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `tray:${photo.id}`,
+    disabled: disabled || onThisPage,
+  });
+  const label = photoFileLabel(photo);
+  return (
+    <li className={cn(isDragging && "opacity-40")}>
+      <div
+        ref={setNodeRef}
+        className="relative aspect-square cursor-grab overflow-hidden bg-[repeating-linear-gradient(135deg,#e6e2da_0_7px,#f4f2ee_7px_14px)] active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        {photo.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photo.imageUrl} alt={photo.caption || label} className="absolute inset-0 size-full object-cover" />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-500">{label}</span>
+        )}
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+        <span className="truncate">{label}</span>
+        <span className="shrink-0">{photoClock(photo)}</span>
+      </div>
+      <Button type="button" size="xs" className="mt-1.5 w-full" disabled={disabled || onThisPage} onClick={onAdd}>
+        <Plus data-icon="inline-start" />
+        {onThisPage ? "On this page" : "Add to page"}
+      </Button>
+    </li>
+  );
+}
+
+function TextPageFields({
+  page,
+  readOnly,
+  onChange,
+}: {
+  page: Extract<PhotoReportPage, { type: "text" }>;
+  readOnly: boolean;
+  onChange: (patch: Partial<PhotoReportPage>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <input
+        value={page.heading}
+        onChange={(event) => onChange({ heading: event.target.value })}
+        readOnly={readOnly}
+        placeholder="Heading"
+        aria-label="Heading"
+        className="w-full border-0 bg-transparent font-heading text-3xl leading-tight outline-none placeholder:text-muted-foreground/40"
+      />
+      <textarea
+        value={page.body}
+        onChange={(event) => onChange({ body: event.target.value })}
+        readOnly={readOnly}
+        rows={14}
+        placeholder="Write this page. Introduction, findings, next steps, or a blank note."
+        aria-label="Page body"
+        className="w-full resize-none rounded-lg border bg-background px-3 py-2 text-sm leading-relaxed outline-none placeholder:text-muted-foreground/50"
+      />
+    </div>
+  );
+}
+
+function photoClock(photo: JobPhoto) {
+  if (!photo.takenAt) return "";
+  if (!photo.takenAt.includes("T")) return formatDate(photo.takenAt);
+  return formatTime(photo.takenAt);
+}
+
+function photoIdFromTray(id: string) {
+  return id.startsWith("tray:") ? id.slice(5) : null;
 }
 
 function SortablePageCard({
@@ -709,8 +1542,8 @@ function SortablePageCard({
     >
       <div
         className={cn(
-          "flex items-start rounded-md border",
-          selected ? "border-primary bg-primary/8" : "hover:bg-muted/60",
+          "flex items-start rounded-md border bg-background/40",
+          selected ? "border-primary/50 bg-background shadow-sm" : "border-transparent hover:bg-background/80",
           isDragging && "bg-background shadow-sm",
         )}
       >
@@ -762,14 +1595,15 @@ function withJobBoundWorkOrder(
   return changed ? { ...report, pages } : report;
 }
 
-function chunkAsPages(photos: JobPhoto[], layout: PhotoPageLayout) {
+function chunkAsPages(photos: JobPhoto[], layout: PhotoPageLayout, frame?: PhotoPageFrame) {
   const cap = layoutCapacity(layout);
   const pages: PhotoReportPage[] = [];
   for (let index = 0; index < photos.length; index += cap) {
     const slice = photos.slice(index, index + cap);
     pages.push({
       ...emptyPhotosPage(layout),
-      items: slice.map((photo) => ({ photoId: photo.id, caption: photo.caption })),
+      frame: frame === "before_after" ? "before_after" : "grid",
+      items: slice.map((photo) => ({ photoId: photo.id, caption: photo.caption, tags: [] })),
     });
   }
   return pages;
@@ -873,53 +1707,6 @@ function PageInspector({
     </div>
   );
 }
-
-function PhotoPicker({
-  photos,
-  remaining,
-  onAdd,
-}: {
-  photos: JobPhoto[];
-  remaining: number;
-  onAdd: (photoIds: string[]) => void;
-}) {
-  const [selected, setSelected] = useState<string[]>([]);
-  if (photos.length === 0) {
-    return <p className="text-xs text-muted-foreground">Every photo on this job is already on this page.</p>;
-  }
-  return (
-    <div className="space-y-2 rounded-md border p-2">
-      <p className="text-xs text-muted-foreground">
-        {remaining === 0
-          ? "This page is full — extras open a new page."
-          : `${remaining} open slot${remaining === 1 ? "" : "s"} on this page.`}
-      </p>
-      <ul className="grid max-h-56 grid-cols-3 gap-1.5 overflow-y-auto">
-        {photos.map((photo) => {
-          const on = selected.includes(photo.id);
-          return (
-            <li key={photo.id}>
-              <button
-                type="button"
-                onClick={() =>
-                  setSelected((current) => (on ? current.filter((id) => id !== photo.id) : [...current, photo.id]))
-                }
-                className={cn("overflow-hidden border", on && "ring-2 ring-primary")}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.imageUrl} alt={photo.caption || "Job photo"} className="aspect-square w-full object-cover" />
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      <Button type="button" size="sm" disabled={selected.length === 0} onClick={() => onAdd(selected)}>
-        Add {selected.length || ""} to page
-      </Button>
-    </div>
-  );
-}
-
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
   return (
