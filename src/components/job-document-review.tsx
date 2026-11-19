@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { QbStatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/page-chrome";
+import { InvoiceJobEditor } from "@/components/invoice-job-editor";
 import { MentionComposer, ReviewCommentThread } from "@/components/qb-review-comments";
 import { DocumentPreview, ReviewRecordFields } from "@/components/qb-review-fields";
 import { useCrm } from "@/lib/crm-store";
@@ -126,6 +127,23 @@ export function JobDocumentReview({ job }: { job: Job }) {
     } finally {
       setPending(null);
     }
+  }
+
+  if (current.kind === "invoice") {
+    return (
+      <InvoiceJobEditor
+        job={job}
+        invoiceId={current.id}
+        locked={locked}
+        waiting={waiting}
+        note={note}
+        pending={pending}
+        onBack={backToJob}
+        onNote={setNote}
+        onComment={() => void postComment()}
+        onResubmit={() => void sendToAccounting()}
+      />
+    );
   }
 
   return (
