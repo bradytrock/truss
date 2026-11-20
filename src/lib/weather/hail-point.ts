@@ -51,6 +51,30 @@ export type HailHit = {
   jobsInSwath: number | null;
 };
 
+/** Rebuild enough of a HailHit from the wire shape for the sort and header helpers. */
+export function fromPopupHit(hit: HailPopupHit): HailHit {
+  return {
+    storm: {
+      id: hit.stormId,
+      stormDate: hit.stormDate,
+      startedAt: hit.passageAt,
+      endedAt: hit.passageAt,
+      radarSite: hit.radarSite,
+      stormMaxIn: hit.stormMaxIn,
+      source: hit.source,
+      track: [],
+      bands: [],
+      report: hit.report ? { ...hit.report, lat: 0, lng: 0 } : null,
+    },
+    maxBandIn: hit.maxBandIn,
+    distanceMi: hit.distanceMi,
+    passageAt: hit.passageAt,
+    passedStart: hit.passedStart,
+    passedEnd: hit.passedEnd,
+    jobsInSwath: hit.jobsInSwath,
+  };
+}
+
 export type MapJobPoint = { lat: number; lng: number };
 
 const CHICAGO = "America/Chicago";
@@ -119,6 +143,13 @@ export function formatChicagoClock(iso: string) {
     minute: "2-digit",
     timeZoneName: "short",
   }).format(new Date(iso));
+}
+
+/** "2:29 PM" with no zone, for rows that already say when. */
+export function formatChicagoShortClock(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", { timeZone: CHICAGO, hour: "numeric", minute: "2-digit" }).format(date);
 }
 
 export function formatChicagoRange(startIso: string, endIso: string) {

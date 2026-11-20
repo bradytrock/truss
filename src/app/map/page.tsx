@@ -19,7 +19,7 @@ import {
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { jobAddress, isDeletedJob } from "@/lib/job-record";
-import { formatCurrencyFull, formatDateShort, initials } from "@/lib/format";
+import { formatDateShort, initials } from "@/lib/format";
 import {
   addressNeedsGeocode,
   crewFreshness,
@@ -44,14 +44,20 @@ import {
 import { missingStormMapMessage } from "@/lib/supabase/schema-errors";
 import { alertChips, alertKind, type AlertChip } from "@/lib/weather/alerts";
 import { loadStormLayers, sendStormTexts } from "@/lib/weather/client";
-import { pointInGeometry } from "@/lib/weather/geometry";
-import { chicagoDaysAgoFromIso, daysAgoLabel, formatChicagoClock, nearestRadarSite } from "@/lib/weather/hail-point";
+import { milesBetween, pointInGeometry } from "@/lib/weather/geometry";
+import { formatChicagoClock, nearestRadarSite, type HailPopupHit } from "@/lib/weather/hail-point";
+import { hailClaimNote } from "@/lib/weather/overlays";
 import type { StormLayers } from "@/lib/weather/types";
 import { isCompanyLeader, staffForReports } from "@/lib/visibility";
-import { boardValue, WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
-import { ACTIVITY_LABELS, type Job } from "@/lib/types";
-import type { StormJobPin } from "@/components/storm-popup/job-pin-popup";
+import { WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
+import type { Job } from "@/lib/types";
+import type { CrewOnSite, StormJobPin } from "@/components/storm-popup/job-pin-popup";
 import { cn } from "@/lib/utils";
+
+/** A crew phone this close to a job site counts as checked in there. */
+const ON_SITE_MILES = 0.25;
+/** Storm cells move; re-read the picture this often while the page is open. */
+const LAYER_REFRESH_MS = 5 * 60 * 1000;
 
 const StormMap = dynamic(
   () => import("@/components/storm-map").then((mod) => mod.StormMap),
@@ -78,6 +84,7 @@ function MapPageInner() {
   const [showHail, setShowHail] = useState(true);
   const [showOutlook, setShowOutlook] = useState(true);
   const [showWarnings, setShowWarnings] = useState(true);
+  const [showCells, setShowCells] = useState(true);
   const [radarFull, setRadarFull] = useState(false);
   const [listTab, setListTab] = useState<"jobs" | "warnings">("jobs");
   const [texting, setTexting] = useState(false);
@@ -351,6 +358,19 @@ function MapPageInner() {
   useEffect(() => () => stopSharing(), [stopSharing]);
 
   const pins = useMemo(() => mapPins(crm, mappedJobs), [crm, mappedJobs]);
+  const crewSites = useMemo(() => {
+    const sites: Record<string, CrewOnSite> = {};
+    for (const person of liveCrew) {
+      if (person.freshness !== "live") continue;
+      let best: { id: string; miles: number } | null = null;
+      for (const pin of pins) {
+        const miles = milesBetween(person, pin);
+        if (miles <= ON_SITE_MILES && (!best || miles < best.miles)) best = { id: pin.id, miles };
+      }
+      if (best && !sites[best.id]) sites[best.id] = { name: person.name, sinceLabel: person.updatedLabel };
+    }
+    return sites;
+  }, [liveCrew, pins]);
   const radarSite = useMemo(() => {
     const fromSwath = stormLayers?.hailSwaths?.[0]?.radarSite;
     if (fromSwath) return fromSwath;
@@ -385,19 +405,26 @@ function MapPageInner() {
       lng: job.lng as number,
       state: job.state,
     }));
-    loadStormLayers(points, [crm.company.state, ...points.map((point) => point.state || "")])
-      .then((layers) => {
-        if (cancel) return;
-        setStormLayers(layers);
-        setSwathError(layers.errors.find((item) => /hail/i.test(item)) ?? "");
-      })
-      .catch((error: unknown) => {
-        if (cancel) return;
-        setStormLayers(null);
-        setSwathError(error instanceof Error ? error.message : "The hail swath did not load.");
-      });
+    const states = [crm.company.state, ...points.map((point) => point.state || "")];
+    const load = (force: boolean) =>
+      loadStormLayers(points, states, force)
+        .then((layers) => {
+          if (cancel) return;
+          setStormLayers(layers);
+          setSwathError(layers.errors.find((item) => /hail/i.test(item)) ?? "");
+        })
+        .catch((error: unknown) => {
+          if (cancel) return;
+          if (!force) setStormLayers(null);
+          setSwathError(error instanceof Error ? error.message : "The hail swath did not load.");
+        });
+    void load(false);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load(true);
+    }, LAYER_REFRESH_MS);
     return () => {
       cancel = true;
+      window.clearInterval(timer);
     };
   }, [crm.company.state, crm.hydrated, mappedJobs]);
 
@@ -497,14 +524,18 @@ function MapPageInner() {
             showOutlook={showOutlook}
             showWarnings={showWarnings}
             showPins={showProjects}
+            showCells={showCells}
             crew={liveCrew}
+            crewSites={crewSites}
             showCrew={showCrew}
             selectedStaffId={selectedStaffId}
             onSelectCrew={selectCrew}
+            canNotify={isCompanyLeader(crm.user.role)}
             focusId={jobId}
             outlooks={stormLayers?.outlooks}
             alerts={stormLayers?.alerts}
             reports={stormLayers?.reports}
+            cells={stormLayers?.cells}
             liveStorms={stormLayers?.hailSwaths}
             swathReady={stormLayers != null && !swathError}
             swathNote={swathCaption(stormLayers, swathError)}
@@ -520,12 +551,16 @@ function MapPageInner() {
               else if (layer === "warnings") setShowWarnings(next);
               else if (layer === "hail") setShowHail(next);
               else if (layer === "pins") setShowProjects(next);
+              else if (layer === "cells") setShowCells(next);
               else setShowOutlook(next);
             }}
             fitTo="pins"
             fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${showHail}|${pins.length}|${liveCrew.length}`}
             onDropLead={(lat, lng) => dropLead(crm, lat, lng)}
-            onLogVisit={(id) => logVisit(crm, id)}
+            onOpenJob={openJobRecord}
+            onWarnCrew={() => textCrew(setTexting)}
+            onNotifyWarning={() => textCrew(setTexting)}
+            onAttachHail={(id, hit) => attachHail(crm, id, hit)}
           />
           {radarFull ? null : (
           <div className="absolute top-3 right-3 z-10 hidden items-center gap-2 lg:flex">
@@ -823,10 +858,6 @@ function swathCaption(layers: StormLayers | null, error: string) {
 function mapPins(crm: ReturnType<typeof useCrm>, jobs: Job[]): StormJobPin[] {
   return jobs.filter(jobHasCoords).map((job) => {
     const opportunity = job.opportunityId ? crm.opportunities.find((item) => item.id === job.opportunityId) : undefined;
-    const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === job.id);
-    const activity = (crm.activities ?? [])
-      .filter((item) => item.entityType === "job" && item.entityId === job.id)
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
     const contact = crm.contacts.find((item) => item.id === job.primaryContactId);
     return {
       id: job.id,
@@ -834,19 +865,26 @@ function mapPins(crm: ReturnType<typeof useCrm>, jobs: Job[]): StormJobPin[] {
       name: job.name,
       customer: contact?.name?.trim() || job.name,
       address: jobAddress(job),
+      city: job.city?.trim() || "",
       lat: job.lat as number,
       lng: job.lng as number,
       color: workPinColor(job, opportunity),
       stage: workPinLabel(job, opportunity),
-      carrier: claim?.carrier?.trim() || "",
-      valueLabel: formatCurrencyFull(boardValue(job, opportunity)),
-      rep: job.projectManager || job.salesRep || "",
-      claimFiled: Boolean(claim),
-      lastActivity: activity
-        ? `${ACTIVITY_LABELS[activity.type]} · ${daysAgoLabel(chicagoDaysAgoFromIso(activity.createdAt))}`
-        : "No activity yet",
+      phone: contact?.phone?.trim() || "",
     };
   });
+}
+
+/** The radar hail estimate goes on the job as a note the adjuster can read. */
+async function attachHail(crm: ReturnType<typeof useCrm>, jobId: string, hit: HailPopupHit) {
+  const job = crm.getJob(jobId);
+  await crm.addActivity({
+    entityType: "job",
+    entityId: jobId,
+    type: "note",
+    body: hailClaimNote(hit, job ? jobAddress(job) : ""),
+  });
+  toast.success("Hail report attached to the job.");
 }
 
 async function dropLead(crm: ReturnType<typeof useCrm>, lat: number, lng: number) {
@@ -906,16 +944,6 @@ async function dropLead(crm: ReturnType<typeof useCrm>, lat: number, lng: number
     if (!saved) return;
   }
   toast.success("Lead dropped.");
-}
-
-async function logVisit(crm: ReturnType<typeof useCrm>, jobId: string) {
-  await crm.addActivity({
-    entityType: "job",
-    entityId: jobId,
-    type: "site_walk",
-    body: "Site visit logged from the map.",
-  });
-  toast.success("Visit logged.");
 }
 
 async function textCrew(setSending: (value: boolean) => void) {

@@ -1,7 +1,8 @@
-import { alertKind, alertOnMap, alertRoute, parseHailInches, parseWindMph, untilLabel } from "./alerts.ts";
+import { alertKind, alertOnMap, alertRoute, parseHailInches, parseThreatSource, parseWindMph, untilLabel } from "./alerts.ts";
+import { parseStormAttributes, significantCells } from "./cells.ts";
 import { countyUgcs, geometryFromZone, mergeGeometries } from "./counties.ts";
 import { asGeometry, bboxesOverlap, decimateGeometry, geometryBBox, pointNearBBox } from "./geometry.ts";
-import type { BBox, OutlookArea, OutlookProduct, StormReport, WeatherAlert, WeatherGeometry } from "./types.ts";
+import type { BBox, OutlookArea, OutlookProduct, StormCell, StormReport, WeatherAlert, WeatherGeometry } from "./types.ts";
 
 const USER_AGENT = "TheRoofingCRM (https://myroofingtools.com; storm desk)";
 
@@ -203,9 +204,57 @@ export async function fetchStormReports(bbox: BBox | null): Promise<StormReport[
       label,
       city: place,
       valid: String(props.valid ?? ""),
+      remarks: String(props.remark ?? "").trim(),
+      source: String(props.source ?? "").trim(),
+      state: String(props.st ?? props.state ?? "").trim(),
     });
   }
   return reports.slice(0, 120);
+}
+
+const CELL_LOOKBACK_MS = 45 * 60 * 1000;
+
+/**
+ * Latest scan of every storm cell the nearby NEXRAD sites are tracking, from
+ * the IEM copy of the storm attribute table. Sites are the three-letter ids
+ * without the leading K.
+ */
+export async function fetchStormCells(radarSites: string[], bbox: BBox | null, now = new Date()): Promise<StormCell[]> {
+  const sites = [...new Set(radarSites.map((site) => site.trim().toUpperCase().replace(/^K(?=[A-Z]{3}$)/, "")).filter((site) => /^[A-Z]{3}$/.test(site)))].slice(0, 4);
+  if (!sites.length) return [];
+  const start = new Date(now.getTime() - CELL_LOOKBACK_MS);
+  const batches = await Promise.all(
+    sites.map(async (site) => {
+      const url = new URL("https://mesonet.agron.iastate.edu/cgi-bin/request/gis/nexrad_storm_attrs.py");
+      url.searchParams.set("radar", site);
+      url.searchParams.set("sts", stamp(start));
+      url.searchParams.set("ets", stamp(now));
+      url.searchParams.set("fmt", "csv");
+      try {
+        const response = await fetch(url.toString(), {
+          headers: { "User-Agent": USER_AGENT },
+          signal: AbortSignal.timeout(12000),
+          cache: "no-store",
+        });
+        if (!response.ok) return [];
+        return parseStormAttributes(await response.text(), now);
+      } catch {
+        return [];
+      }
+    }),
+  );
+  const seen = new Map<string, StormCell>();
+  for (const cell of batches.flat()) {
+    if (bbox && !pointNearBBox(cell.lng, cell.lat, { west: bbox.west - 0.5, south: bbox.south - 0.5, east: bbox.east + 0.5, north: bbox.north + 0.5 })) continue;
+    const key = `${cell.radarSite}:${cell.id}`;
+    const existing = seen.get(key);
+    if (!existing || Date.parse(cell.valid) > Date.parse(existing.valid)) seen.set(key, cell);
+  }
+  return significantCells([...seen.values()]).slice(0, 40);
+}
+
+function stamp(date: Date) {
+  return date.toISOString().slice(0, 16) + "Z";
 }
 
 export function normalizeAlert(feature: { id?: unknown; properties?: unknown; geometry?: unknown }): WeatherAlert | null {
@@ -233,6 +282,9 @@ export function normalizeAlert(feature: { id?: unknown; properties?: unknown; ge
     geometry,
     ugc: countyUgcs(props),
     kind: alertKind(event),
+    sender: String(props.senderName ?? "").trim(),
+    source: parseThreatSource(parameters),
+    description: String(props.description ?? "").trim(),
   };
 }
 

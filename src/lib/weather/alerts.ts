@@ -120,6 +120,64 @@ export function parseWindMph(parameters: Record<string, unknown> | null | undefi
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+/** "Radar indicated" or "Observed", from the tornado, hail, or wind threat tag. */
+export function parseThreatSource(parameters: Record<string, unknown> | null | undefined) {
+  for (const key of ["tornadoDetection", "hailThreat", "windThreat", "thunderstormDamageThreat"]) {
+    const raw = firstParam(parameters, key).trim();
+    if (!raw) continue;
+    const lower = raw.toLowerCase();
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }
+  return "";
+}
+
+/** Whole minutes until the alert ends. Null when the end time is unknown; 0 once it has passed. */
+export function minutesLeft(ends: string, now = new Date()) {
+  const at = Date.parse(ends);
+  if (!Number.isFinite(at)) return null;
+  return Math.max(0, Math.round((at - now.getTime()) / 60_000));
+}
+
+export function minutesLeftLabel(ends: string, now = new Date()) {
+  const minutes = minutesLeft(ends, now);
+  if (minutes == null) return "";
+  if (minutes === 0) return "Expired";
+  if (minutes >= 120) return `${Math.round(minutes / 60)} hr left`;
+  return `${minutes} min left`;
+}
+
+/** "Issued 1:41 PM · expires 2:30 PM · NWS Fort Worth" */
+export function issuedLine(alert: { onset: string; ends: string; sender?: string }, timeZone = "America/Chicago") {
+  const clock = (iso: string) => {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone }).format(date);
+  };
+  const parts: string[] = [];
+  const issued = clock(alert.onset);
+  const expires = clock(alert.ends);
+  if (issued) parts.push(`Issued ${issued}`);
+  if (expires) parts.push(`expires ${expires}`);
+  const office = (alert.sender ?? "").replace(/\s+[A-Z]{2}$/, "").trim();
+  if (office) parts.push(office);
+  return parts.join(" · ");
+}
+
+/** The first county in an area line, with its state: "Denton County, TX". */
+export function leadCounty(areaDesc: string) {
+  const first = areaDesc.split(";")[0]?.trim() ?? "";
+  if (!first) return "";
+  const match = first.match(/^(.*?),\s*([A-Z]{2})$/);
+  if (!match) return first;
+  const name = match[1]?.trim() ?? "";
+  const county = /county|parish|borough/i.test(name) ? name : `${name} County`;
+  return `${county}, ${match[2]}`;
+}
+
+export function areaCount(areaDesc: string) {
+  return areaDesc.split(";").filter((part) => part.trim()).length;
+}
+
 function firstParam(parameters: Record<string, unknown> | null | undefined, key: string) {
   const value = parameters?.[key];
   if (Array.isArray(value)) return String(value[0] ?? "");

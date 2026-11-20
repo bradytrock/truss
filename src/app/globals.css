@@ -458,6 +458,141 @@
   border-color: #181818;
 }
 
+.project-map-cluster-btn.is-warned {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.45), 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.project-map-pin-btn {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+/* A pin inside a warning polygon pulses red so it reads from across the room. */
+.project-map-pin.is-warned .project-map-pin-btn {
+  border-color: #fecaca !important;
+  animation: storm-pin-pulse 1.4s ease-out infinite;
+}
+
+@keyframes storm-pin-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.75), 0 1px 4px rgba(0, 0, 0, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 1px 4px rgba(0, 0, 0, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0), 0 1px 4px rgba(0, 0, 0, 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-map-pin.is-warned .project-map-pin-btn {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.55), 0 1px 4px rgba(0, 0, 0, 0.45);
+  }
+}
+
+/* NEXRAD storm cell tag: a white pill with the cell id. */
+.storm-cell-tag {
+  display: flex;
+  height: 22px;
+  min-width: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #fff;
+  color: #12141a;
+  font: 700 11px/1 var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.storm-cell-tag.is-rotating {
+  border-color: #ef4444;
+}
+
+.storm-cell-tag.is-hail {
+  border-color: #facc15;
+}
+
+.storm-cell-tag.is-selected {
+  background: #12141a;
+  color: #fff;
+}
+
+/* Spotter hail report: a cyan triangle. */
+.storm-report-btn {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.storm-report-tri {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 12px solid #22d3ee;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
+.storm-report-tri.is-legend {
+  border-left-width: 5px;
+  border-right-width: 5px;
+  border-bottom-width: 9px;
+  filter: none;
+}
+
+.storm-report-btn.is-selected .storm-report-tri {
+  border-bottom-color: #fff;
+}
+
+.storm-report-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Forecast point tooltip: dark card, two lines. */
+.project-map-leaflet .storm-forecast-tip {
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #171a21;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.project-map-leaflet .storm-forecast-tip::before {
+  border-top-color: #171a21;
+}
+
+.storm-forecast-line {
+  display: block;
+  font: 600 11px/1.3 var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.storm-forecast-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
 .project-map-crew-pill {
   display: inline-flex;
   height: 28px;

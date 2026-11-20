@@ -31,6 +31,40 @@ export type WeatherAlert = {
   /** County UGC codes such as TXC439. Watches use these when the alert has no polygon. */
   ugc?: string[];
   kind?: AlertKind;
+  /** Issuing office, e.g. "NWS Fort Worth TX". */
+  sender?: string;
+  /** "Radar indicated" or "Observed", from the NWS hail/tornado threat tags. */
+  source?: string;
+  /** Full product text under the headline. */
+  description?: string;
+};
+
+/**
+ * One row of the NEXRAD storm attribute table (the "T3", "Q7" cells a radar
+ * desk shows). Motion follows the radar convention: the bearing the storm is
+ * moving FROM, in degrees, and the speed in knots.
+ */
+export type StormCell = {
+  id: string;
+  radarSite: string;
+  valid: string;
+  lat: number;
+  lng: number;
+  maxDbz: number;
+  echoTopKft: number;
+  vil: number;
+  /** Probability of severe hail, 0–100. */
+  posh: number;
+  /** Probability of any hail, 0–100. */
+  poh: number;
+  /** Radar-estimated max hail size in inches. 0 when none. */
+  meshIn: number;
+  motionFromDeg: number;
+  motionKt: number;
+  tvs: boolean;
+  meso: boolean;
+  /** dBZ change against the previous scan of the same cell. Null when this is the first scan seen. */
+  dbzTrend: number | null;
 };
 
 export type OutlookProduct = "hail" | "wind" | "tornado" | "sigHail";
@@ -56,6 +90,11 @@ export type StormReport = {
   label: string;
   city: string;
   valid: string;
+  /** Spotter remarks from the local storm report. */
+  remarks?: string;
+  /** Who reported it, e.g. "Trained Spotter". */
+  source?: string;
+  state?: string;
 };
 
 export type StormPoint = {
@@ -91,6 +130,8 @@ export type StormLayers = {
   lightning: LightningSample[];
   /** Radar-estimated hail polygons for the last 24 hours. Empty when MESH has none. */
   hailSwaths?: MeshHailSwath[];
+  /** Latest scan of each NEXRAD storm cell near the jobs. Empty when the radar is quiet. */
+  cells?: StormCell[];
   swathValid: string;
   errors: string[];
   attribution: string;
