@@ -524,7 +524,6 @@ function MapPageInner() {
             }}
             fitTo="pins"
             fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${showHail}|${pins.length}|${liveCrew.length}`}
-            onDropLead={(lat, lng) => dropLead(crm, lat, lng)}
             onLogVisit={(id) => logVisit(crm, id)}
           />
           {radarFull ? null : (
@@ -847,65 +846,6 @@ function mapPins(crm: ReturnType<typeof useCrm>, jobs: Job[]): StormJobPin[] {
         : "No activity yet",
     };
   });
-}
-
-async function dropLead(crm: ReturnType<typeof useCrm>, lat: number, lng: number) {
-  let place = {
-    street: "",
-    city: "",
-    state: crm.company.state || "",
-    postalCode: "",
-    label: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-  };
-  try {
-    const response = await fetch(`/api/map/reverse?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`);
-    if (response.ok) {
-      const body = (await response.json()) as typeof place;
-      if (body.label) place = body;
-    }
-  } catch {
-    place = { ...place };
-  }
-  const created = await crm.addOpportunity({
-    name: place.street ? `Storm lead · ${place.street}` : "Storm lead",
-    clientId: null,
-    primaryContactId: "",
-    stage: "pursuing",
-    value: 0,
-    bidDueAt: null,
-    preBidWalkAt: null,
-    location: place.label,
-    projectType: "roofing",
-    market: "residential",
-    deliveryMethod: "insurance_claim",
-    estimator: crm.user.name,
-    ownerStaffId: crm.user.staffId,
-    nextStep: "Call the homeowner.",
-    leadSource: "storm",
-    referralContactId: null,
-    street: place.street,
-    city: place.city,
-    state: place.state,
-    postalCode: place.postalCode,
-    notes: `Dropped on the map at ${lat.toFixed(4)}, ${lng.toFixed(4)}.`,
-  });
-  if (created.costingJob) {
-    const saved = await crm.updateJob(created.costingJob.id, {
-      lat,
-      lng,
-      street: place.street,
-      city: place.city,
-      state: place.state,
-      postalCode: place.postalCode,
-      location: place.label,
-      geocodedAt: new Date().toISOString(),
-      geocodeQuery: place.label,
-      ownerStaffId: crm.user.staffId,
-      projectManager: crm.user.name,
-    });
-    if (!saved) return;
-  }
-  toast.success("Lead dropped.");
 }
 
 async function logVisit(crm: ReturnType<typeof useCrm>, jobId: string) {

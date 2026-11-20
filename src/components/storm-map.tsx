@@ -72,7 +72,6 @@ export function StormMap({
   showRadar,
   focusId,
   rotation,
-  onDropLead,
   onLogVisit,
   outlooks = NO_OUTLOOKS,
   alerts = NO_ALERTS,
@@ -101,7 +100,6 @@ export function StormMap({
   showRadar: boolean;
   focusId?: string | null;
   rotation?: { url: string; bounds: { west: number; south: number; east: number; north: number } } | null;
-  onDropLead: (lat: number, lng: number) => Promise<void>;
   onLogVisit: (jobId: string) => Promise<void>;
   outlooks?: OutlookArea[];
   alerts?: WeatherAlert[];
@@ -156,7 +154,6 @@ export function StormMap({
   const [hover, setHover] = useState<{ text: string; coords: string } | null>(null);
   const [popup, setPopup] = useState<OpenPopup | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-  const [dropping, setDropping] = useState(false);
   const [logging, setLogging] = useState(false);
   const storms = liveStorms ?? NO_STORMS;
   const hiddenSet = new Set(hidden);
@@ -823,18 +820,10 @@ export function StormMap({
               message={popup.kind === "error" ? popup.message : ""}
               hits={popup.kind === "hail" ? popup.hits : []}
               hiddenIds={hiddenSet}
-              dropping={dropping}
               pinsForStorm={(stormId) => canvassPins(storms, pins, stormId)}
               onRetry={() => void lookup(popup.lat, popup.lng)}
               onClose={() => setPopup(null)}
               onInteract={arm}
-              onDropLead={() => {
-                setDropping(true);
-                void onDropLead(popup.lat, popup.lng)
-                  .then(() => setPopup(null))
-                  .catch(() => undefined)
-                  .finally(() => setDropping(false));
-              }}
               onOpenJob={(id) => setPopup({ kind: "job", id })}
             />
           ) : null}

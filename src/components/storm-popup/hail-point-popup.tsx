@@ -33,12 +33,10 @@ export function HailPointPopup({
   message,
   hits,
   hiddenIds,
-  dropping,
   pinsForStorm,
   onRetry,
   onClose,
   onInteract,
-  onDropLead,
   onOpenJob,
 }: {
   lat: number;
@@ -47,12 +45,10 @@ export function HailPointPopup({
   message: string;
   hits: HailPopupHit[];
   hiddenIds: ReadonlySet<string>;
-  dropping: boolean;
   pinsForStorm: (stormId: string) => CanvassPin[];
   onRetry: () => void;
   onClose: () => void;
   onInteract: () => void;
-  onDropLead: () => void;
   onOpenJob: (id: string) => void;
 }) {
   const split = splitVisibleStorms(
@@ -126,14 +122,9 @@ export function HailPointPopup({
         label="Hail lookup failed"
         header={<p id="hail-point-title" className="pr-8 text-sm font-medium">Could not read hail here</p>}
         actions={
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" className={popupButtonClass()} onClick={onRetry}>
-              Retry
-            </button>
-            <button type="button" className={popupButtonClass(true)} disabled={dropping} onClick={onDropLead}>
-              {dropping ? "Dropping…" : "Drop lead here"}
-            </button>
-          </div>
+          <button type="button" className={`${popupButtonClass()} w-full`} onClick={onRetry}>
+            Retry
+          </button>
         }
         footer={footer}
         onClose={onClose}
@@ -150,11 +141,6 @@ export function HailPointPopup({
         titleId="hail-point-title"
         label="No hail"
         header={<p id="hail-point-title" className="pr-8 text-lg font-semibold">No hail</p>}
-        actions={
-          <button type="button" className={`${popupButtonClass()} w-full`} disabled={dropping} onClick={onDropLead}>
-            {dropping ? "Dropping…" : "Drop lead here"}
-          </button>
-        }
         footer={footer}
         onClose={onClose}
         onInteract={onInteract}
@@ -235,14 +221,9 @@ export function HailPointPopup({
         </div>
       }
       actions={
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" className={popupButtonClass()} disabled={dropping} onClick={onDropLead}>
-            {dropping ? "Dropping…" : "Drop lead here"}
-          </button>
-          <button type="button" className={popupButtonClass(true)} onClick={() => setCanvass(true)}>
-            Build canvass list
-          </button>
-        </div>
+        <button type="button" className={`${popupButtonClass(true)} w-full`} onClick={() => setCanvass(true)}>
+          Build canvass list
+        </button>
       }
       footer={footer}
       onClose={onClose}
