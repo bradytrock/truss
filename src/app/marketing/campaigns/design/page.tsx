@@ -6,7 +6,14 @@ import { EmailStudio } from "@/components/marketing/email-editor";
 
 function DesignClient() {
   const params = useSearchParams();
-  return <EmailStudio documentId={params.get("doc") || undefined} />;
+  const step = params.get("step");
+  return (
+    <EmailStudio
+      documentId={params.get("doc") || undefined}
+      presetListId={params.get("list") || undefined}
+      initialStep={step === "audience" || step === "review" ? step : undefined}
+    />
+  );
 }
 
 export default function MarketingDesignPage() {

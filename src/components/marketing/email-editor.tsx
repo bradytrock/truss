@@ -45,10 +45,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import {
   EMAIL_CAMPAIGN_AUDIENCE_LABELS,
+  EMAIL_CAMPAIGN_AUDIENCES,
   EMAIL_CAMPAIGN_SEND_CAP,
   resolveEmailCampaignAudience,
-  type EmailCampaignAudience,
+  resolveListAudience,
 } from "@/lib/marketing/email-campaigns";
+import { useMarketingLists } from "@/lib/marketing/lists-store";
 import {
   EMAIL_BLOCK_LABELS,
   EMAIL_BLOCK_TYPES,
@@ -88,7 +90,15 @@ const PALETTE_ICONS: Record<EmailBlockType, typeof Type> = {
 
 type Step = "design" | "audience" | "review";
 
-export function EmailStudio({ documentId }: { documentId?: string }) {
+export function EmailStudio({
+  documentId,
+  presetListId,
+  initialStep,
+}: {
+  documentId?: string;
+  presetListId?: string;
+  initialStep?: Step;
+}) {
   const crm = useCrm();
   const router = useRouter();
   const companyId = crm.user.companyId || "local";
@@ -97,7 +107,8 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
   const stored = documentId ? docs.find((item) => item.id === documentId) ?? null : null;
   const [draft, setDraft] = useState<EmailDocument | null>(null);
   const doc = draft && draft.id === documentId ? draft : stored;
-  const [step, setStep] = useState<Step>("design");
+  const [step, setStep] = useState<Step>(initialStep ?? "design");
+  const lists = useMarketingLists(companyId);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [panel, setPanel] = useState<"blocks" | "styles" | "saved">("blocks");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -121,14 +132,16 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
     document.querySelector(`[data-block-id="${selectedId}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [selectedId, step]);
   const selected = doc?.blocks.find((block) => block.id === activeBlockId) ?? null;
+  const activeList = lists.find((list) => list.id === doc?.listId) ?? null;
   const recipients = useMemo(() => {
     if (!doc) return [];
+    if (doc.audienceKind === "list") return resolveListAudience(activeList?.contactIds ?? [], crm.contacts);
     return resolveEmailCampaignAudience(doc.audienceKind, crm.contacts, crm.jobs, {
       city: doc.city,
       zip: doc.zip,
       includePunch: doc.includePunch,
     });
-  }, [crm.contacts, crm.jobs, doc]);
+  }, [activeList, crm.contacts, crm.jobs, doc]);
 
   function withDoc(update: (current: EmailDocument) => EmailDocument) {
     setDraft((current) => {
@@ -190,6 +203,11 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
       setStep("audience");
       return;
     }
+    if (!test && doc.audienceKind === "list" && !doc.listId) {
+      toast.error("Pick a list before sending");
+      setStep("audience");
+      return;
+    }
     setSending(true);
     try {
       const html = renderEmailDocumentHtml({
@@ -214,6 +232,7 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
                 city: doc.city,
                 zip: doc.zip,
                 includePunch: doc.includePunch,
+                listId: doc.listId,
                 subject: doc.subject,
                 body,
                 html,
@@ -250,7 +269,8 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
             type="button"
             className="mt-4"
             onClick={() => {
-              const next = createDefaultEmailDocument();
+              const preset = lists.find((list) => list.id === presetListId);
+              const next = createDefaultEmailDocument(presetListId ? { listId: presetListId, name: preset?.name } : undefined);
               saveEmailDocuments(companyId, [next, ...docs]);
               router.push(`/marketing/campaigns/design?doc=${next.id}`);
             }}
@@ -484,7 +504,7 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
       {step === "audience" ? (
         <div className="mx-auto w-full max-w-xl space-y-4 overflow-y-auto p-6">
           <h2 className="font-heading text-2xl">Who gets this</h2>
-          {(Object.keys(EMAIL_CAMPAIGN_AUDIENCE_LABELS) as EmailCampaignAudience[]).map((kind) => {
+          {EMAIL_CAMPAIGN_AUDIENCES.map((kind) => {
             const count = resolveEmailCampaignAudience(kind, crm.contacts, crm.jobs, {
               city: doc.city,
               zip: doc.zip,
@@ -498,6 +518,23 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
               </label>
             );
           })}
+          <p className="pt-2 text-[11px] tracking-[0.14em] text-[#8a8680] uppercase">Your lists</p>
+          {lists.length === 0 ? (
+            <Link href="/marketing/contacts?capture=1" className="text-sm text-primary">
+              Create a list
+            </Link>
+          ) : null}
+          {lists.map((list) => (
+            <label key={list.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e7e4df] bg-white px-3 py-3">
+              <input
+                type="radio"
+                checked={doc.audienceKind === "list" && doc.listId === list.id}
+                onChange={() => patch({ audienceKind: "list", listId: list.id })}
+              />
+              <span className="flex-1 text-sm">{list.name}</span>
+              <span className="text-sm text-[#6f6a64]">{resolveListAudience(list.contactIds, crm.contacts).length}</span>
+            </label>
+          ))}
           {doc.audienceKind === "storm" ? (
             <div className="grid grid-cols-2 gap-2">
               <Input placeholder="City" value={doc.city} onChange={(event) => patch({ city: event.target.value })} />
