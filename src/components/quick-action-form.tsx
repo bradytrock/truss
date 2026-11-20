@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Calendar, Check, Info, RefreshCw, Search } from "lucide-react";
+import { Calendar, Info, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -167,18 +167,27 @@ export function Segmented<T extends string>({
   onChange,
   options,
   label,
+  fit = false,
+  size = "md",
 }: {
   value: T;
   onChange: (value: T) => void;
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; icon?: ReactNode }[];
   label: string;
+  /** Shrink to the labels. The default stretches across the row. */
+  fit?: boolean;
+  size?: "md" | "lg";
 }) {
   return (
     <div
       role="radiogroup"
       aria-label={label}
-      className="grid rounded-lg bg-[#f3f2ef] p-1"
-      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+      className={cn("grid rounded-lg bg-[#f3f2ef] p-1", fit && "w-fit")}
+      style={
+        fit
+          ? { gridTemplateColumns: `repeat(${options.length}, max-content)` }
+          : { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }
+      }
     >
       {options.map((option) => {
         const on = option.value === value;
@@ -190,10 +199,12 @@ export function Segmented<T extends string>({
             aria-checked={on}
             onClick={() => onChange(option.value)}
             className={cn(
-              "h-9 rounded-md px-2 text-sm font-medium transition-colors",
+              "inline-flex items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+              size === "lg" ? "h-10" : "h-9",
               on ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
+            {option.icon}
             {option.label}
           </button>
         );
@@ -262,13 +273,12 @@ export function TogglePills<T extends string>({
             aria-pressed={on}
             onClick={() => onToggle(option.value)}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-full border bg-white px-3 text-sm transition-colors",
+              "inline-flex h-9 items-center gap-1.5 rounded-full border bg-white px-3.5 text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
               on
                 ? "border-primary text-primary"
                 : "border-border text-foreground hover:bg-muted/40",
             )}
           >
-            {on ? <Check className="size-3.5" /> : null}
             {option.label}
           </button>
         );
