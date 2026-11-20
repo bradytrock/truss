@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { siteFieldsFromRecord } from "@/lib/contacts";
 import { useCrm } from "@/lib/crm-store";
+import { jobForEstimate } from "@/lib/estimate-job";
 import type { EagleviewOrder } from "@/lib/eagleview";
 import { formatJobSite } from "@/lib/leads";
 import { workMarket } from "@/lib/market";
@@ -96,10 +97,15 @@ export function useStartEstimate() {
       inflight.current = true;
       setPending(true);
       try {
-        const job = asUuid(draft.jobId) ? crm.jobs.find((item) => item.id === draft.jobId) : undefined;
+        const job = jobForEstimate(
+          { jobId: asUuid(draft.jobId), opportunityId: asUuid(draft.opportunityId) },
+          crm.jobs,
+        );
         const opportunity = asUuid(draft.opportunityId)
           ? crm.opportunities.find((item) => item.id === draft.opportunityId)
-          : undefined;
+          : job?.opportunityId
+            ? crm.opportunities.find((item) => item.id === job.opportunityId)
+            : undefined;
         const templateId = asUuid(choices.templateId);
         const template = templateId
           ? crm.estimateTemplates.find((item) => item.id === templateId)
@@ -111,7 +117,7 @@ export function useStartEstimate() {
           name,
           clientId: asUuid(draft.clientId) ?? asUuid(job?.clientId) ?? asUuid(opportunity?.clientId),
           opportunityId: asUuid(draft.opportunityId) ?? asUuid(job?.opportunityId),
-          jobId: asUuid(draft.jobId),
+          jobId: job?.id ?? asUuid(draft.jobId),
           contactId:
             asUuid(draft.contactId) ?? asUuid(job?.primaryContactId) ?? asUuid(opportunity?.primaryContactId),
           street: site.street,

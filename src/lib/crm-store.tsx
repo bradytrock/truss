@@ -57,6 +57,7 @@ import {
   realtorPortalUrl,
 } from "@/lib/realtor-portal";
 import { newShareToken, shareUrl } from "@/lib/share";
+import { claimEstimatesForJob } from "@/lib/estimate-job";
 import { fillJobRecord, jobAddress, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
 import { livePhotos } from "@/lib/photo-trash";
 import {
@@ -855,6 +856,18 @@ function siteFromLinked(
   return { street: "", city: "", state: "", postalCode: "" };
 }
 
+async function claimOpenEstimates(
+  supabase: ReturnType<typeof createClient>,
+  job: { id: string; opportunityId?: string | null },
+) {
+  if (!job.id || !job.opportunityId) return;
+  await supabase
+    .from("estimates")
+    .update({ job_id: job.id })
+    .eq("opportunity_id", job.opportunityId)
+    .is("job_id", null);
+}
+
 async function persistOpenLeadJobs(
   supabase: ReturnType<typeof createClient>,
   companyId: string,
@@ -875,10 +888,29 @@ async function persistOpenLeadJobs(
   for (const job of missing) {
     const payload = jobInsertPayload(job, companyId);
     // Unique on opportunity_id (23505) means this lead already has a costing job.
-    await insertJobWithFallbacks(payload, async (row) => {
-      const { error } = await supabase.from("jobs").insert(row as never);
-      return { data: null, error };
+    const inserted = await insertJobWithFallbacks(payload, async (row) => {
+      const result = await supabase.from("jobs").insert(row as never).select("id, opportunity_id").single();
+      return { data: result.data, error: result.error };
     });
+    if (!inserted.error && inserted.data?.id) {
+      await claimOpenEstimates(supabase, {
+        id: inserted.data.id,
+        opportunityId: inserted.data.opportunity_id ?? job.opportunityId,
+      });
+      continue;
+    }
+    if (inserted.error?.code === "23505" && job.opportunityId) {
+      const existing = await supabase
+        .from("jobs")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("opportunity_id", job.opportunityId)
+        .limit(1);
+      const existingId = existing.data?.[0]?.id;
+      if (existingId) {
+        await claimOpenEstimates(supabase, { id: existingId, opportunityId: job.opportunityId });
+      }
+    }
   }
   return missing.length;
 }
@@ -3476,6 +3508,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               { ...mapJob(data), code: data.code || payload.code },
               current,
             );
+            await claimOpenEstimates(supabase, {
+              id: createdJob.id,
+              opportunityId: createdJob.opportunityId,
+            });
             await addActivity({
               entityType: "job",
               entityId: data.id,
@@ -4138,10 +4174,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           toast.error(jobInsertError(jobError, "Lead opened. Could not open the job for costing."));
         }
       }
+      if (leadJobPersisted && pipelineJob) {
+        await claimOpenEstimates(supabase, {
+          id: pipelineJob.id,
+          opportunityId: pipelineJob.opportunityId ?? opportunity.id,
+        });
+      }
       setState((prev) => ({
         ...prev,
         opportunities: [opportunity, ...prev.opportunities],
         jobs: pipelineJob ? dedupeJobsByOpportunity([pipelineJob, ...prev.jobs]) : prev.jobs,
+        estimates:
+          leadJobPersisted && pipelineJob
+            ? claimEstimatesForJob(prev.estimates, pipelineJob)
+            : prev.estimates,
       }));
       void addActivity({
         entityType: "opportunity",
@@ -4537,7 +4583,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const job = fillJobRecord({ ...input, id: crypto.randomUUID(), ownerStaffId, code }, linked);
       const supabase = requireClient();
       if (!supabase) {
-        setState((prev) => ({ ...prev, jobs: [job, ...prev.jobs] }));
+        setState((prev) => ({
+          ...prev,
+          jobs: [job, ...prev.jobs],
+          estimates: claimEstimatesForJob(prev.estimates, job),
+        }));
         void recordCompanyAudit({
           entityType: "job",
           entityId: job.id,
@@ -4563,7 +4613,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         throw error ?? new Error("Could not log the job.");
       }
       const mapped = fillJobRecord({ ...job, id: data.id, code: data.code || code }, linked);
-      setState((prev) => ({ ...prev, jobs: [mapped, ...prev.jobs] }));
+      await claimOpenEstimates(supabase, { id: mapped.id, opportunityId: mapped.opportunityId });
+      setState((prev) => ({
+        ...prev,
+        jobs: [mapped, ...prev.jobs],
+        estimates: claimEstimatesForJob(prev.estimates, mapped),
+      }));
       void addActivity({
         entityType: "job",
         entityId: mapped.id,
