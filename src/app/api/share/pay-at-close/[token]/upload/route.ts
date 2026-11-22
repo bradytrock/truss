@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import { parseApplicationUploads, type ApplicationUpload } from "@/lib/pay-at-close";
+import { applicationLinkExpired, parseApplicationUploads, type ApplicationUpload } from "@/lib/pay-at-close";
 import { APPLICATION_UPLOAD_BUCKET, APPLICATION_UPLOAD_MAX_BYTES, APPLICATION_UPLOAD_TYPES } from "@/lib/pay-at-close-application";
-import { normalizeShareToken } from "@/lib/share";
+import { normalizeZip } from "@/lib/pay-at-close-homeowner";
+import { isApplicationToken, normalizeShareToken } from "@/lib/share";
 import { shareJson } from "@/lib/share-server";
 import type { Database } from "@/lib/supabase/database.types";
 import { getSupabaseUrl, isSupabaseConfigured } from "@/lib/supabase/env";
@@ -32,7 +33,7 @@ function safeFileName(name: string) {
 export async function POST(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
   const trimmed = normalizeShareToken(token);
-  if (trimmed.length < 16 || !isSupabaseConfigured()) return shareJson({ error: NOT_FOUND }, 404);
+  if (!isApplicationToken(trimmed) || !isSupabaseConfigured()) return shareJson({ error: NOT_FOUND }, 404);
   const supabase = serviceClient();
   if (!supabase) return shareJson({ error: NOT_CONFIGURED }, 503);
 
@@ -43,6 +44,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     return shareJson({ error: "Could not read the file." }, 400);
   }
   const file = form.get("file");
+  const zip = normalizeZip(typeof form.get("zip") === "string" ? (form.get("zip") as string) : "");
   if (!(file instanceof File) || file.size === 0) return shareJson({ error: "Choose a file first." }, 400);
   if (file.size > APPLICATION_UPLOAD_MAX_BYTES) return shareJson({ error: "Files are limited to 15 MB." }, 400);
   const contentType = file.type || "application/octet-stream";
@@ -52,7 +54,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
 
   const { data: row, error: rowError } = await supabase
     .from("job_pay_at_close")
-    .select("id, company_id, application_uploads, application_submitted_at")
+    .select("id, company_id, job_id, application_uploads, application_submitted_at, application_sent_at")
     .eq("application_token", trimmed)
     .maybeSingle();
   if (rowError) {
@@ -60,7 +62,14 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     return shareJson({ error: NOT_FOUND }, 404);
   }
   if (!row) return shareJson({ error: NOT_FOUND }, 404);
-  if (row.application_submitted_at) return shareJson({ error: "This application was already submitted." }, 409);
+  if (row.application_submitted_at) return shareJson({ error: "These answers were already sent." }, 409);
+  if (applicationLinkExpired({ sentAt: row.application_sent_at, submittedAt: row.application_submitted_at })) {
+    return shareJson({ error: "This link has expired. Ask for a new one." }, 409);
+  }
+  // Same gate as the page: the file goes nowhere until the property ZIP matches.
+  const { data: job } = await supabase.from("jobs").select("postal_code").eq("id", row.job_id).maybeSingle();
+  const jobZip = (job?.postal_code ?? "").replace(/\D/g, "").slice(0, 5);
+  if (jobZip && jobZip !== zip) return shareJson({ error: "Confirm the property ZIP code first." }, 403);
   const existing = parseApplicationUploads(row.application_uploads);
   if (existing.length >= MAX_FILES) return shareJson({ error: `Up to ${MAX_FILES} files per application.` }, 400);
 
