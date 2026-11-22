@@ -215,6 +215,19 @@ export function canViewInsurance(role: SeatRole | undefined) {
   return Boolean(role) && role !== "business_development";
 }
 
+/**
+ * Pay at Close desk and the job Pay at Close tab. This is company money carried
+ * to a closing, so it follows project financials.
+ */
+export function canViewPayAtClose(role: SeatRole | undefined) {
+  return canViewProjectFinancials(role);
+}
+
+/** Approve or decline a pay-at-close deal. Owners, directors, and accounting. */
+export function canDecidePayAtClose(role: SeatRole | undefined) {
+  return role === "company_admin" || role === "director" || role === "accountant";
+}
+
 /** Company name, people, payments, integrations, and other business settings. Directors do not get this. */
 export function canManageSettings(role: SeatRole, member?: StaffMember) {
   if (member?.restricted || member?.locked) return false;

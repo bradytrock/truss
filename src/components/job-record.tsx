@@ -43,8 +43,10 @@ import { PhotoViewer } from "@/components/photo-viewer";
 import { JobFinancials } from "@/components/job-financials";
 import { JobCloseout } from "@/components/job-closeout";
 import { JobInsurancePanel } from "@/components/job-insurance-panel";
+import { JobPayAtClosePanel } from "@/components/job-pay-at-close-panel";
 import { JobStormChip } from "@/components/job-storm-chip";
 import { claimTotals } from "@/lib/insurance";
+import { PAY_AT_CLOSE_STATUS_LABELS, RECOMMENDATION_LABELS } from "@/lib/pay-at-close";
 import { AutomationRuns } from "@/components/automation-runs";
 import { PaperArchiveButton } from "@/components/paper-archive-button";
 import { Badge } from "@/components/ui/badge";
@@ -128,6 +130,7 @@ import {
   canManageCompanyCamMapping,
   canManageJobPhotos,
   canViewInsurance,
+  canViewPayAtClose,
   canViewJobPaper,
   canViewProjectFinancials,
   canViewTraining,
@@ -142,7 +145,7 @@ import { JobRelatedContacts } from "@/components/job-related-contacts";
 import { JobTagField } from "@/components/job-tag-field";
 import { jobTagSuggestions } from "@/lib/job-tags";
 
-const JOB_TABS = ["overview", "photos", "files", "insurance", "financials", "closeout", "paper"] as const;
+const JOB_TABS = ["overview", "photos", "files", "insurance", "pay-at-close", "financials", "closeout", "paper"] as const;
 type JobTab = (typeof JOB_TABS)[number];
 
 function parseJobTab(raw: string | null): JobTab {
@@ -422,6 +425,7 @@ export function JobRecord({
   const showFinancials = canViewProjectFinancials(seatRole);
   const showPaper = canViewJobPaper(seatRole);
   const showInsurance = canViewInsurance(seatRole);
+  const showPayAtClose = canViewPayAtClose(seatRole);
   const allowEstimates = canCreateEstimates(seatRole);
   const allowPages = canCreatePages(seatRole);
   const editPages = canEditPages(seatRole);
@@ -435,6 +439,7 @@ export function JobRecord({
     (requestedTab === "financials" && !showFinancials) ||
     (requestedTab === "paper" && !showPaper) ||
     (requestedTab === "insurance" && !showInsurance) ||
+    (requestedTab === "pay-at-close" && !showPayAtClose) ||
     (requestedTab === "closeout" && !showCloseout)
       ? "overview"
       : requestedTab;
@@ -522,6 +527,8 @@ export function JobRecord({
         (opportunity?.referralContactId ? (crm.getContact(opportunity.referralContactId)?.name ?? "") : "")
       : "";
   const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === job.id);
+  const payAtClose = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+  const payAtCloseHighFlags = (payAtClose?.report?.flags ?? []).filter((flag) => flag.severity === "high").length;
   const claimMath = claim ? claimTotals(claim) : null;
   const client = crm.getClient(job.clientId);
   const primary = crm.getContact(job.primaryContactId);
@@ -1043,6 +1050,14 @@ export function JobRecord({
                 ) : null}
               </TabsTrigger>
             ) : null}
+            {showPayAtClose ? (
+              <TabsTrigger value="pay-at-close" className="flex-none px-0 after:bg-primary">
+                Pay at close
+                {payAtCloseHighFlags ? (
+                  <span className="text-primary tabular-nums">{payAtCloseHighFlags}</span>
+                ) : null}
+              </TabsTrigger>
+            ) : null}
             {showFinancials ? (
               <TabsTrigger value="financials" className="flex-none px-0 after:bg-primary">Financials</TabsTrigger>
             ) : null}
@@ -1488,6 +1503,31 @@ export function JobRecord({
                 onClick={() => setJobTab("insurance")}
               />
             ) : null}
+            {showPayAtClose ? (
+              <SummaryCard
+                eyebrow="Pay at close"
+                title={
+                  payAtClose
+                    ? PAY_AT_CLOSE_STATUS_LABELS[payAtClose.status]
+                    : "Not a pay-at-close job"
+                }
+                detail={
+                  payAtClose
+                    ? [
+                        payAtClose.contractValue ? `${formatCurrencyFull(payAtClose.contractValue)} due at closing` : null,
+                        payAtClose.expectedCloseDate ? `closes ${formatDate(payAtClose.expectedCloseDate)}` : "no closing date",
+                        payAtClose.report
+                          ? `${RECOMMENDATION_LABELS[payAtClose.report.recommendation]} · score ${payAtClose.report.score}`
+                          : "not reviewed yet",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Repairs paid from seller proceeds at closing. Pull public records and score the equity."
+                }
+                action={payAtClose ? "Open file" : "Start review"}
+                onClick={() => setJobTab("pay-at-close")}
+              />
+            ) : null}
             <SummaryCard
               eyebrow="Next step"
               title={nextStepTitle}
@@ -1902,6 +1942,12 @@ export function JobRecord({
         {showInsurance ? (
           <TabsContent value="insurance" className="mt-0">
             <JobInsurancePanel job={job} readOnly={deleted} />
+          </TabsContent>
+        ) : null}
+
+        {showPayAtClose ? (
+          <TabsContent value="pay-at-close" className="mt-0">
+            <JobPayAtClosePanel job={job} readOnly={deleted} />
           </TabsContent>
         ) : null}
 
