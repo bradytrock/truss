@@ -1590,6 +1590,13 @@ export type Database = {
           checklist: Json;
           report: Json | null;
           notes: string;
+          requested_by: string | null;
+          requested_by_name: string;
+          requested_at: string | null;
+          decided_by: string | null;
+          decided_by_name: string;
+          decided_at: string | null;
+          decision_note: string;
           updated_at: string;
         };
         Insert: {
@@ -1616,6 +1623,13 @@ export type Database = {
           checklist?: Json;
           report?: Json | null;
           notes?: string;
+          requested_by?: string | null;
+          requested_by_name?: string;
+          requested_at?: string | null;
+          decided_by?: string | null;
+          decided_by_name?: string;
+          decided_at?: string | null;
+          decision_note?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["job_pay_at_close"]["Insert"]>;

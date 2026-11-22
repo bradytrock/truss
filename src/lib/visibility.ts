@@ -223,9 +223,17 @@ export function canViewPayAtClose(role: SeatRole | undefined) {
   return canViewProjectFinancials(role);
 }
 
-/** Approve or decline a pay-at-close deal. Owners, directors, and accounting. */
+/** Start a Pay at Close request on a job. Anyone who can see the desk may ask. */
+export function canRequestPayAtClose(role: SeatRole | undefined) {
+  return canViewPayAtClose(role);
+}
+
+/**
+ * Approve or decline a pay-at-close request. Company admins only; the database trigger
+ * `job_pay_at_close_guard_decision` enforces the same rule.
+ */
 export function canDecidePayAtClose(role: SeatRole | undefined) {
-  return role === "company_admin" || role === "director" || role === "accountant";
+  return role === "company_admin";
 }
 
 /** Company name, people, payments, integrations, and other business settings. Directors do not get this. */

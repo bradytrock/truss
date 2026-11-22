@@ -2,16 +2,21 @@ import assert from "node:assert/strict";
 import {
   assumedRateForYear,
   buildPayAtCloseReport,
+  decidePayAtClose,
   effectiveLiens,
   emptyJobPayAtClose,
   equityWaterfall,
   estimateMortgageBalance,
+  jobPayAtClosePayload,
+  newPayAtCloseRequest,
   parseChecklist,
   parseLiens,
   parsePropertyRecord,
   parseReport,
   payAtCloseActivityNote,
+  payAtCloseAwaitingApproval,
   payAtCloseExposure,
+  payAtCloseStatusChoices,
   pickEstimatedValue,
   recommend,
   resolveThresholds,
@@ -273,5 +278,39 @@ assert.equal(payAtCloseActivityNote(record, record), null);
 const moved = payAtCloseActivityNote(record, { ...record, status: "approved", report });
 assert.ok(moved?.includes("Pay at close is approved."));
 assert.ok(moved?.includes("Property review ran: approve"));
+
+// Requests and company-admin decisions.
+const rep = { id: "staff_rep", name: "Casey Rep" };
+const admin = { id: "staff_admin", name: "Brady Admin" };
+const request = newPayAtCloseRequest({ jobId: "job_9", id: "pac_9", state: "TX", contractValue: 22_000, requester: rep, now: today });
+assert.equal(request.status, "screening");
+assert.equal(request.requestedBy, "staff_rep");
+assert.equal(request.requestedByName, "Casey Rep");
+assert.equal(request.requestedAt, today.toISOString());
+assert.equal(request.decidedAt, null);
+assert.ok(payAtCloseAwaitingApproval(request));
+assert.equal(payAtCloseActivityNote(undefined, request), "Requested pay at close for $22,000. Waiting on a company admin.");
+// Before a decision the plain status menu offers neither approve/decline nor work statuses.
+assert.deepEqual(payAtCloseStatusChoices(request), ["screening", "fell_through"]);
+
+const approved = decidePayAtClose(request, "approved", admin, "  Collect a $2,000 deposit. ", today);
+assert.equal(approved.status, "approved");
+assert.equal(approved.decidedBy, "staff_admin");
+assert.equal(approved.decidedByName, "Brady Admin");
+assert.equal(approved.decidedAt, today.toISOString());
+assert.equal(approved.decisionNote, "Collect a $2,000 deposit.");
+assert.ok(!payAtCloseAwaitingApproval(approved));
+assert.equal(payAtCloseActivityNote(request, approved), "Pay at close approved by Brady Admin. Collect a $2,000 deposit.");
+assert.deepEqual(payAtCloseStatusChoices(approved), ["screening", "approved", "in_progress", "awaiting_close", "paid", "fell_through"]);
+
+const declined = decidePayAtClose(request, "declined", admin, "", today);
+assert.equal(payAtCloseActivityNote(request, declined), "Pay at close declined by Brady Admin.");
+assert.deepEqual(payAtCloseStatusChoices(declined), ["screening", "declined", "fell_through"]);
+
+const payload = jobPayAtClosePayload(approved, "co_1");
+assert.equal(payload.requested_by, "staff_rep");
+assert.equal(payload.decided_by, "staff_admin");
+assert.equal(payload.decided_at, today.toISOString());
+assert.equal(jobPayAtClosePayload(emptyJobPayAtClose("job_1"), "co_1").requested_by, null);
 
 console.log("pay-at-close.test.ts ok");

@@ -1246,6 +1246,13 @@ export function mapJobPayAtClose(
     checklist: parseChecklist(row.checklist, jobState),
     report: parseReport(row.report),
     notes: row.notes ?? "",
+    requestedBy: row.requested_by ?? "",
+    requestedByName: row.requested_by_name ?? "",
+    requestedAt: row.requested_at,
+    decidedBy: row.decided_by ?? "",
+    decidedByName: row.decided_by_name ?? "",
+    decidedAt: row.decided_at,
+    decisionNote: row.decision_note ?? "",
     updatedAt: row.updated_at,
   };
 }

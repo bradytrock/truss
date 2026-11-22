@@ -296,7 +296,40 @@ export interface JobPayAtClose {
   checklist: ChecklistItem[];
   report: PayAtCloseReport | null;
   notes: string;
+  /** Who asked for the request (staff id and name as recorded at the time). */
+  requestedBy: string;
+  requestedByName: string;
+  requestedAt: string | null;
+  /** The company admin who approved or declined. Empty until a decision is made. */
+  decidedBy: string;
+  decidedByName: string;
+  decidedAt: string | null;
+  decisionNote: string;
   updatedAt: string;
+}
+
+/** A request is waiting on a company admin until someone records a decision. */
+export function payAtCloseAwaitingApproval(record: Pick<JobPayAtClose, "status" | "decidedAt">) {
+  return record.status === "screening" && !record.decidedAt;
+}
+
+/** Statuses that mean the office is relying on the approval: work or money is in motion. */
+export const PAY_AT_CLOSE_POST_APPROVAL_STATUSES: readonly PayAtCloseStatus[] = [
+  "approved",
+  "in_progress",
+  "awaiting_close",
+  "paid",
+];
+
+/** Which statuses a user may pick from the plain status menu. Approve/decline go through the decision controls. */
+export function payAtCloseStatusChoices(record: Pick<JobPayAtClose, "status" | "decidedAt">): PayAtCloseStatus[] {
+  const approved = Boolean(record.decidedAt) && record.status !== "declined";
+  return PAY_AT_CLOSE_STATUSES.filter((status) => {
+    if (status === record.status) return true;
+    if (status === "approved" || status === "declined") return false;
+    if (PAY_AT_CLOSE_POST_APPROVAL_STATUSES.includes(status)) return approved || PAY_AT_CLOSE_POST_APPROVAL_STATUSES.includes(record.status);
+    return true;
+  });
 }
 
 function money(value: unknown) {
@@ -549,7 +582,52 @@ export function emptyJobPayAtClose(jobId: string, id?: string, state = ""): JobP
     checklist: stateChecklist(state),
     report: null,
     notes: "",
+    requestedBy: "",
+    requestedByName: "",
+    requestedAt: null,
+    decidedBy: "",
+    decidedByName: "",
+    decidedAt: null,
+    decisionNote: "",
     updatedAt: new Date().toISOString(),
+  };
+}
+
+/** A fresh request from the job's New menu: screening, stamped with who asked. */
+export function newPayAtCloseRequest(input: {
+  jobId: string;
+  id: string;
+  state?: string;
+  contractValue?: number;
+  requester?: { id: string; name: string } | null;
+  now?: Date;
+}): JobPayAtClose {
+  const now = input.now ?? new Date();
+  const record = emptyJobPayAtClose(input.jobId, input.id, input.state ?? "");
+  record.contractValue = input.contractValue ?? 0;
+  record.requestedBy = input.requester?.id ?? "";
+  record.requestedByName = input.requester?.name ?? "";
+  record.requestedAt = now.toISOString();
+  record.updatedAt = now.toISOString();
+  return record;
+}
+
+/** Record a company admin's decision. Callers check `canDecidePayAtClose` first; the database checks again. */
+export function decidePayAtClose(
+  record: JobPayAtClose,
+  decision: "approved" | "declined",
+  admin: { id: string; name: string },
+  note = "",
+  now = new Date(),
+): JobPayAtClose {
+  return {
+    ...record,
+    status: decision,
+    decidedBy: admin.id,
+    decidedByName: admin.name,
+    decidedAt: now.toISOString(),
+    decisionNote: note.trim(),
+    updatedAt: now.toISOString(),
   };
 }
 
@@ -578,6 +656,13 @@ export function jobPayAtClosePayload(record: JobPayAtClose, companyId: string) {
     checklist: record.checklist,
     report: record.report,
     notes: record.notes,
+    requested_by: record.requestedBy || null,
+    requested_by_name: record.requestedByName.trim(),
+    requested_at: record.requestedAt || null,
+    decided_by: record.decidedBy || null,
+    decided_by_name: record.decidedByName.trim(),
+    decided_at: record.decidedAt || null,
+    decision_note: record.decisionNote.trim(),
     updated_at: record.updatedAt,
   };
 }
@@ -1407,10 +1492,18 @@ export function dollars(amount: number) {
 
 export function payAtCloseActivityNote(before: JobPayAtClose | undefined, after: JobPayAtClose) {
   if (!before) {
-    return `Opened a pay-at-close review${after.contractValue ? ` for ${dollars(after.contractValue)}` : ""}.`;
+    const amount = after.contractValue ? ` for ${dollars(after.contractValue)}` : "";
+    return after.requestedAt
+      ? `Requested pay at close${amount}. Waiting on a company admin.`
+      : `Opened a pay-at-close review${amount}.`;
   }
   const lines: string[] = [];
-  if (before.status !== after.status) {
+  const decided = after.decidedAt && after.decidedAt !== before.decidedAt;
+  if (decided && (after.status === "approved" || after.status === "declined")) {
+    const who = after.decidedByName ? ` by ${after.decidedByName}` : "";
+    const note = after.decisionNote ? ` ${after.decisionNote}` : "";
+    lines.push(`Pay at close ${after.status}${who}.${note}`);
+  } else if (before.status !== after.status) {
     lines.push(`Pay at close is ${PAY_AT_CLOSE_STATUS_LABELS[after.status].toLowerCase()}.`);
   }
   if (after.report && after.report.generatedAt !== before.report?.generatedAt) {

@@ -24621,6 +24621,13 @@ create table if not exists public.job_pay_at_close (
   checklist jsonb not null default '[]'::jsonb,
   report jsonb,
   notes text not null default '',
+  requested_by uuid references public.team_members (id) on delete set null,
+  requested_by_name text not null default '',
+  requested_at timestamptz,
+  decided_by uuid references public.team_members (id) on delete set null,
+  decided_by_name text not null default '',
+  decided_at timestamptz,
+  decision_note text not null default '',
   updated_at timestamptz not null default now(),
   constraint job_pay_at_close_job_id_key unique (job_id),
   constraint job_pay_at_close_status_check check (
@@ -24649,6 +24656,45 @@ create policy "company isolation" on public.job_pay_at_close
   with check (company_id = public.current_company_id());
 
 grant select, insert, update, delete on table public.job_pay_at_close to authenticated;
+
+-- Approving or declining a request is a company admin decision. The UI hides the controls
+-- from everyone else; this trigger makes the rule hold for any client.
+create or replace function public.job_pay_at_close_guard_decision()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  decision_changed boolean;
+begin
+  decision_changed :=
+    tg_op = 'INSERT'
+      and (new.status in ('approved', 'declined') or new.decided_at is not null)
+    or tg_op = 'UPDATE'
+      and (
+        (new.status in ('approved', 'declined') and new.status is distinct from old.status)
+        or new.decided_at is distinct from old.decided_at
+        or new.decided_by is distinct from old.decided_by
+      );
+  if decision_changed and auth.uid() is not null and not public.current_is_company_admin() then
+    raise exception 'Only a company admin can approve or decline a pay-at-close request.'
+      using errcode = '42501';
+  end if;
+  if tg_op = 'UPDATE' and old.status = 'screening' and old.decided_at is null
+     and new.status in ('in_progress', 'awaiting_close', 'paid') then
+    raise exception 'A pay-at-close request must be approved by a company admin before work starts.'
+      using errcode = '23514';
+  end if;
+  return new;
+end $$;
+
+revoke all on function public.job_pay_at_close_guard_decision() from public;
+
+drop trigger if exists job_pay_at_close_guard_decision on public.job_pay_at_close;
+create trigger job_pay_at_close_guard_decision
+  before insert or update on public.job_pay_at_close
+  for each row execute function public.job_pay_at_close_guard_decision();
 
 do $$
 begin

@@ -467,7 +467,7 @@ import { imessageEffectId, imessageEffectLabel, imessageReactionText } from "@/l
 import { looksLikePhone, storedPhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
-import { canDeleteJobs, canLeadCompany, canLoginAs, canManageAutomations, canManageSettings, canViewProjectFinancials, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canDecidePayAtClose, canDeleteJobs, canLeadCompany, canLoginAs, canManageAutomations, canManageSettings, canViewProjectFinancials, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 import { teamsAfterLeavingLead } from "@/lib/teams";
 
 export type LiveStatus = "offline" | "connecting" | "live";
@@ -10144,6 +10144,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       const previous = (state.jobPayAtClose ?? []).find((item) => item.jobId === next.jobId || item.id === next.id);
+      const decisionChanged =
+        ((next.status === "approved" || next.status === "declined") && next.status !== previous?.status) ||
+        next.decidedAt !== (previous?.decidedAt ?? null);
+      if (decisionChanged && !canDecidePayAtClose(effectiveStaff?.role)) {
+        toast.error("Only a company admin can approve or decline a pay-at-close request.");
+        return null;
+      }
       const place = (item: JobPayAtClose) => (current: CrmState) => ({
         ...current,
         jobPayAtClose: [
@@ -10195,7 +10202,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           const without = (current.jobPayAtClose ?? []).filter((item) => item.jobId !== next.jobId && item.id !== next.id);
           return { ...current, jobPayAtClose: previous ? [previous, ...without] : without };
         });
-        toast.error(error?.message ?? "Could not save the pay-at-close file.");
+        toast.error(
+          error?.code === "42501"
+            ? "Only a company admin can approve or decline a pay-at-close request."
+            : (error?.message ?? "Could not save the pay-at-close file."),
+        );
         return null;
       }
       const jobState = state.jobs.find((job) => job.id === next.jobId)?.state ?? "";
@@ -10207,7 +10218,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       toast.success("Pay at close saved.");
       return saved;
     },
-    [addActivity, state.jobPayAtClose, state.jobs, user.companyId],
+    [addActivity, effectiveStaff?.role, state.jobPayAtClose, state.jobs, user.companyId],
   );
 
   const placeCloseout = useCallback(
