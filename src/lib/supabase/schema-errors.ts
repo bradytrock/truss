@@ -290,6 +290,24 @@ export function missingJobInsuranceMessage() {
   return `Saved in this browser. Run ${JOB_INSURANCE_SQL}, then ${JOB_INSURANCE_ADJUSTER_SQL}, in the SQL editor so the claim and its adjuster stay on the job.`;
 }
 
+export const JOB_PAY_AT_CLOSE_SQL = "supabase/migrations/20261122120000_job_pay_at_close.sql";
+
+export function isMissingJobPayAtClose(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("job_pay_at_close")
+  );
+}
+
+export function missingJobPayAtCloseMessage() {
+  return `Saved in this browser. Run ${JOB_PAY_AT_CLOSE_SQL} in the SQL editor so the pay-at-close file stays on the job.`;
+}
+
 export const COMMISSION_CLOSEOUT_SQL = "supabase/migrations/20261012120000_commission_closeouts.sql";
 export const COMMISSION_CLOSEOUT_ADJUSTMENTS_SQL =
   "supabase/migrations/20261014160000_closeout_expense_adjustments.sql";

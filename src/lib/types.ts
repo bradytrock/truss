@@ -1553,6 +1553,8 @@ export interface CrmState {
   chartAccounts: CompanyChartAccount[];
   /** One insurance claim per job: carrier, supplements, and checks. */
   jobInsurance: import("@/lib/insurance").JobInsurance[];
+  /** One pay-at-close underwriting file per job: property record, liens, checklist, and risk report. */
+  jobPayAtClose: import("@/lib/pay-at-close").JobPayAtClose[];
   /** One commission closeout per job. */
   commissionCloseouts: import("@/lib/commission-closeout").CommissionCloseout[];
   /** Refunds requested from a job and processed in Accounting. */

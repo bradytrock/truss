@@ -1565,6 +1565,62 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["job_insurance"]["Insert"]>;
         Relationships: [];
       };
+      job_pay_at_close: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          status: string;
+          contract_value: number;
+          deposit_amount: number;
+          expected_close_date: string | null;
+          listing_status: string;
+          list_price: number;
+          contract_price: number;
+          seller_concessions: number;
+          title_company: string;
+          escrow_officer: string;
+          escrow_email: string;
+          escrow_phone: string;
+          escrow_file_number: string;
+          listing_agent: string;
+          signer_names: string;
+          property: Json | null;
+          liens: Json;
+          checklist: Json;
+          report: Json | null;
+          notes: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          status?: string;
+          contract_value?: number;
+          deposit_amount?: number;
+          expected_close_date?: string | null;
+          listing_status?: string;
+          list_price?: number;
+          contract_price?: number;
+          seller_concessions?: number;
+          title_company?: string;
+          escrow_officer?: string;
+          escrow_email?: string;
+          escrow_phone?: string;
+          escrow_file_number?: string;
+          listing_agent?: string;
+          signer_names?: string;
+          property?: Json | null;
+          liens?: Json;
+          checklist?: Json;
+          report?: Json | null;
+          notes?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["job_pay_at_close"]["Insert"]>;
+        Relationships: [];
+      };
       roof_reports: {
         Row: {
           id: string;

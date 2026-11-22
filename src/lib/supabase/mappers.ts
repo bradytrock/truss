@@ -44,6 +44,15 @@ import {
   type JobInsurance,
 } from "@/lib/insurance";
 import {
+  isListingStatus,
+  isPayAtCloseStatus,
+  parseChecklist,
+  parseLiens,
+  parsePropertyRecord,
+  parseReport,
+  type JobPayAtClose,
+} from "@/lib/pay-at-close";
+import {
   parseCloseoutStatus,
   parseExpenseAdjustments,
   parseQbLines,
@@ -1204,6 +1213,39 @@ export function mapJobInsurance(row: Database["public"]["Tables"]["job_insurance
     notes: row.notes,
     supplements: parseSupplements(row.supplements),
     checks: parseChecks(row.checks),
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapJobPayAtClose(
+  row: Database["public"]["Tables"]["job_pay_at_close"]["Row"],
+  jobState = "",
+): JobPayAtClose {
+  const status = row.status;
+  const listing = row.listing_status;
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    status: isPayAtCloseStatus(status) ? status : "screening",
+    contractValue: Number(row.contract_value),
+    depositAmount: Number(row.deposit_amount),
+    expectedCloseDate: row.expected_close_date,
+    listingStatus: isListingStatus(listing) ? listing : "",
+    listPrice: Number(row.list_price),
+    contractPrice: Number(row.contract_price),
+    sellerConcessions: Number(row.seller_concessions),
+    titleCompany: row.title_company ?? "",
+    escrowOfficer: row.escrow_officer ?? "",
+    escrowEmail: row.escrow_email ?? "",
+    escrowPhone: storedPhone(row.escrow_phone ?? ""),
+    escrowFileNumber: row.escrow_file_number ?? "",
+    listingAgent: row.listing_agent ?? "",
+    signerNames: row.signer_names ?? "",
+    property: parsePropertyRecord(row.property),
+    liens: parseLiens(row.liens),
+    checklist: parseChecklist(row.checklist, jobState),
+    report: parseReport(row.report),
+    notes: row.notes ?? "",
     updatedAt: row.updated_at,
   };
 }

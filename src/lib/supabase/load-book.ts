@@ -32,6 +32,7 @@ import {
   mapCommissionCloseout,
   mapRefundRequest,
   mapJobInsurance,
+  mapJobPayAtClose,
   mapQbVendor,
   mapVendorFeedback,
   mapVendorPrice,
@@ -219,6 +220,7 @@ const DEFERRED_ID_KEYS = [
   "automationTemplates",
   "commissionCloseouts",
   "refundRequests",
+  "jobPayAtClose",
 ] as const satisfies readonly (keyof CrmState)[];
 
 /** Merge photos, mail, files, and the rest onto a book that already painted. */
@@ -480,6 +482,13 @@ function queryDeferred(
         .order("updated_at", { ascending: false }),
     ),
     selectAllRows(() =>
+      supabase
+        .from("job_pay_at_close")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("updated_at", { ascending: false }),
+    ),
+    selectAllRows(() =>
       supabase.from("expense_categories").select("*").eq("company_id", companyId).order("sort_order"),
     ),
     selectAllRows(() =>
@@ -558,6 +567,7 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     automationTemplatesRes,
     commissionCloseoutsRes,
     refundRequestsRes,
+    jobPayAtCloseRes,
     expenseCategoriesRes,
     chartAccountsRes,
   ] = deferred;
@@ -603,6 +613,7 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     : (googleLocationsRes.data ?? []).map(mapGoogleLocation);
   const opportunities = mapRows(oppsRes.data, mapOpportunity);
   const jobs = jobsFilledFromLeads(mapRows(jobsRes.data, mapJob), opportunities);
+  const jobStateById = new Map(jobs.map((job) => [job.id, job.state]));
 
   const state: CrmState = {
     staff: staffWithInvites,
@@ -639,6 +650,9 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
       ? []
       : (commissionCloseoutsRes.data ?? []).map(mapCommissionCloseout),
     refundRequests: refundRequestsRes.error ? [] : (refundRequestsRes.data ?? []).map(mapRefundRequest),
+    jobPayAtClose: jobPayAtCloseRes.error
+      ? []
+      : (jobPayAtCloseRes.data ?? []).map((row) => mapJobPayAtClose(row, jobStateById.get(row.job_id) ?? "")),
     qbVendors: qbVendorsRes.error ? [] : (qbVendorsRes.data ?? []).map(mapQbVendor),
     vendorProfiles: vendorProfilesRes.error ? [] : (vendorProfilesRes.data ?? []).map(mapVendorProfile),
     vendorFeedback: vendorFeedbackRes.error ? [] : (vendorFeedbackRes.data ?? []).map(mapVendorFeedback),

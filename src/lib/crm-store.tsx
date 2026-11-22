@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingAssigneeSignature, missingAssigneeSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoNotes, missingPhotoNotesMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingTaskAssigneesColumn, missingTaskAssigneesMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingAssigneeSignature, missingAssigneeSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoNotes, missingPhotoNotesMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingMaterialOrderWorkflow, missingMaterialOrderWorkflowMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingTaskAssigneesColumn, missingTaskAssigneesMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingJobPayAtClose, missingJobPayAtCloseMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -227,6 +227,7 @@ import {
   mapCommissionCloseout,
   mapRefundRequest,
   mapJobInsurance,
+  mapJobPayAtClose,
   expensePatch,
   mapMaterialOrder,
   mapMaterialOrderLine,
@@ -282,6 +283,7 @@ import {
 import type { CategoryDraft, ChartDraft } from "@/lib/expense-categories";
 import type { CompanyChartAccount, ExpenseCategory } from "@/lib/types";
 import { insuranceActivityNote, jobInsurancePayload, type JobInsurance } from "@/lib/insurance";
+import { jobPayAtClosePayload, payAtCloseActivityNote, type JobPayAtClose } from "@/lib/pay-at-close";
 import {
   buildCommissionSheet,
   canMarkCommissionPayout,
@@ -529,6 +531,7 @@ const emptyState: CrmState = {
   expenseCategories: [],
   chartAccounts: [],
   jobInsurance: [],
+  jobPayAtClose: [],
   commissionCloseouts: [],
   refundRequests: [],
   materialOrders: [],
@@ -919,6 +922,7 @@ async function pruneDuplicateLeadJobs(supabase: ReturnType<typeof createClient>,
         "expenses",
         "forecasted_expenses",
         "job_insurance",
+        "job_pay_at_close",
         "commission_closeouts",
         "schedule_events",
         "job_photos",
@@ -1458,6 +1462,7 @@ type CrmContextValue = CrmState & {
   saveChartAccount: (draft: ChartDraft) => Promise<CompanyChartAccount | null>;
   removeChartAccount: (id: string) => Promise<boolean>;
   saveJobInsurance: (claim: JobInsurance) => Promise<JobInsurance | null>;
+  saveJobPayAtClose: (record: JobPayAtClose) => Promise<JobPayAtClose | null>;
   submitCommissionCloseout: (
     jobId: string,
     notes?: string,
@@ -2036,6 +2041,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...claim,
             jobId: remapDroppedJobId(claim.jobId, pruned.dropped) ?? claim.jobId,
           })),
+          jobPayAtClose: (book.state.jobPayAtClose ?? []).map((record) => ({
+            ...record,
+            jobId: remapDroppedJobId(record.jobId, pruned.dropped) ?? record.jobId,
+          })),
           commissionCloseouts: (book.state.commissionCloseouts ?? []).map((closeout) => ({
             ...closeout,
             jobId: remapDroppedJobId(closeout.jobId, pruned.dropped) ?? closeout.jobId,
@@ -2085,6 +2094,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               jobInsurance: merged.jobInsurance.map((claim) => ({
                 ...claim,
                 jobId: remapDroppedJobId(claim.jobId, dropped) ?? claim.jobId,
+              })),
+              jobPayAtClose: (merged.jobPayAtClose ?? []).map((record) => ({
+                ...record,
+                jobId: remapDroppedJobId(record.jobId, dropped) ?? record.jobId,
               })),
               commissionCloseouts: (merged.commissionCloseouts ?? []).map((closeout) => ({
                 ...closeout,
@@ -10112,6 +10125,91 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, state.jobInsurance, user.companyId],
   );
 
+  const saveJobPayAtClose = useCallback(
+    async (record: JobPayAtClose) => {
+      if (!record.jobId) {
+        toast.error("This pay-at-close file needs a job.");
+        return null;
+      }
+      const next: JobPayAtClose = {
+        ...record,
+        id: record.id || crypto.randomUUID(),
+        titleCompany: record.titleCompany.trim(),
+        escrowOfficer: record.escrowOfficer.trim(),
+        escrowEmail: record.escrowEmail.trim(),
+        escrowPhone: storedPhone(record.escrowPhone),
+        escrowFileNumber: record.escrowFileNumber.trim(),
+        listingAgent: record.listingAgent.trim(),
+        signerNames: record.signerNames.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      const previous = (state.jobPayAtClose ?? []).find((item) => item.jobId === next.jobId || item.id === next.id);
+      const place = (item: JobPayAtClose) => (current: CrmState) => ({
+        ...current,
+        jobPayAtClose: [
+          item,
+          ...(current.jobPayAtClose ?? []).filter((row) => row.jobId !== item.jobId && row.id !== item.id),
+        ],
+      });
+      setState(place(next));
+      const note = payAtCloseActivityNote(previous, next);
+      const supabase = maybeClient();
+      if (!supabase) {
+        if (note) {
+          void addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
+        }
+        toast.success("Pay at close saved.");
+        return next;
+      }
+      const payload = {
+        ...jobPayAtClosePayload(next, user.companyId),
+        property: next.property as unknown as Json,
+        liens: next.liens as unknown as Json,
+        checklist: next.checklist as unknown as Json,
+        report: next.report as unknown as Json,
+      };
+      let { data, error } = await supabase
+        .from("job_pay_at_close")
+        .upsert(payload, { onConflict: "job_id" })
+        .select("*")
+        .single();
+      if (error && error.code === "23505") {
+        const retry = await supabase
+          .from("job_pay_at_close")
+          .update(payload)
+          .eq("job_id", next.jobId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
+      if (error || !data) {
+        if (error && isMissingJobPayAtClose(error)) {
+          toast.message(missingJobPayAtCloseMessage());
+          if (note) {
+            void addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
+          }
+          return next;
+        }
+        setState((current) => {
+          const without = (current.jobPayAtClose ?? []).filter((item) => item.jobId !== next.jobId && item.id !== next.id);
+          return { ...current, jobPayAtClose: previous ? [previous, ...without] : without };
+        });
+        toast.error(error?.message ?? "Could not save the pay-at-close file.");
+        return null;
+      }
+      const jobState = state.jobs.find((job) => job.id === next.jobId)?.state ?? "";
+      const saved = mapJobPayAtClose(data, jobState);
+      setState(place(saved));
+      if (note) {
+        void addActivity({ entityType: "job", entityId: saved.jobId, type: "note", body: note });
+      }
+      toast.success("Pay at close saved.");
+      return saved;
+    },
+    [addActivity, state.jobPayAtClose, state.jobs, user.companyId],
+  );
+
   const placeCloseout = useCallback(
     (record: CommissionCloseout) => (current: CrmState) => ({
       ...current,
@@ -16724,6 +16822,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       saveChartAccount,
       removeChartAccount,
       saveJobInsurance,
+      saveJobPayAtClose,
       submitCommissionCloseout,
       saveCommissionCloseoutReview,
       returnCommissionCloseout,
@@ -16948,6 +17047,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       saveChartAccount,
       removeChartAccount,
       saveJobInsurance,
+      saveJobPayAtClose,
       submitCommissionCloseout,
       saveCommissionCloseoutReview,
       returnCommissionCloseout,
