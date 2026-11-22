@@ -40,6 +40,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
       : [
           "Job expenses (materials, labor, subs, equipment, dumpsters, permits, fuel, other) must name the job so QuickBooks costs them to Customer:Job. Office and insurance may omit a job.",
           "Expected costs that have not been incurred yet use log_forecasted_expense. They need a job and a vendor, no receipt, and they show under Forecasted expenses. Do not use log_expense for a forecast.",
+          "Pay at Close means the homeowner is selling and we are paid from seller proceeds at closing. Use review_pay_at_close to pull public records and score equity; use get_pay_at_close to read what is on file. Quote coverage, seller net, and the recommendation exactly as the tool returns them, and say which figures are estimates.",
         ]),
     "When a returning client already has a project manager, create_lead still opens the job. Company admins and directors are notified that it came from that book. Pass assignToPreviousPm true only when the user explicitly wants that project manager to own it.",
     "When a rental or commercial property is owned by an LLC, pass llcName on create_lead so the LLC is the customer. Pass relatedContactName, and relatedContactTitle such as Property manager or Tenant, when someone else is on the project.",

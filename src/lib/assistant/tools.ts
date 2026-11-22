@@ -300,6 +300,39 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
     ),
   },
   {
+    name: "review_pay_at_close",
+    description:
+      "Run or refresh the Pay at Close risk review on a job: pull public property records for the job site (owner of record, recorded loans, liens, AVM), estimate seller net after loans, liens, and closing costs, score the risk, and save the report on the job. Use when a homeowner wants repairs paid from the sale proceeds at closing. Pass the pay-at-close amount, list or contract price, listing status, expected closing date, and who signs when the user gives them.",
+    status: "Reviewing the property…",
+    gate: "ops",
+    parameters: object(
+      {
+        job: str("Job id or job code"),
+        contractValue: num("Dollars this company collects at closing. Omit to keep what is on file or use the job contract value."),
+        depositAmount: num("Dollars collected up front."),
+        listPrice: num("Current list price in dollars."),
+        contractPrice: num("Agreed sale price in dollars once under contract."),
+        listingStatus: {
+          type: "string",
+          enum: ["not_listed", "coming_soon", "active", "pending", "under_contract", "sold", "off_market"],
+          description: "Where the sale stands.",
+        },
+        expectedCloseDate: str("Expected closing date YYYY-MM-DD."),
+        signerNames: str("Who signs our agreement, checked against the owner of record."),
+        titleCompany: str("Title or escrow company."),
+        refreshRecords: bool("True to pull public records again instead of re-scoring the saved record. Default true when no record exists."),
+      },
+      ["job"],
+    ),
+  },
+  {
+    name: "get_pay_at_close",
+    description: "Read the saved Pay at Close file on a job: status, amount due at closing, expected closing, coverage, recommendation, flags, and checklist.",
+    status: "Opening the pay-at-close file…",
+    gate: "ops",
+    parameters: object({ job: str("Job id or job code") }, ["job"]),
+  },
+  {
     name: "convert_estimate_to_invoice",
     description: "Turn an accepted or sent estimate’s included lines into an invoice.",
     status: "Converting the estimate…",

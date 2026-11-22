@@ -7,7 +7,7 @@ import {
   matchingCompany,
   resolveLeadReferrer,
 } from "@/lib/leads";
-import { isDeletedJob, uniqueIds } from "@/lib/job-record";
+import { isDeletedJob, jobRecordHref, uniqueIds } from "@/lib/job-record";
 import { localYmd } from "@/lib/format";
 import { estimateTotals, allPackageTotals, jobSoldAmount } from "@/lib/estimate-totals";
 import { assigneeSignatureReady, estimateAssigneeNames, staffCanSignEstimate } from "@/lib/estimate-signers";
@@ -23,12 +23,21 @@ import { toolByName } from "@/lib/assistant/tools";
 import { LEAD_SOURCES, isPickableLeadSource } from "@/lib/lead-sources";
 import { useCrm } from "@/lib/crm-store";
 import {
+  PAY_AT_CLOSE_STATUS_LABELS,
+  RECOMMENDATION_LABELS,
+  emptyJobPayAtClose,
+  isListingStatus,
+  type JobPayAtClose,
+  type PayAtCloseReport,
+} from "@/lib/pay-at-close";
+import {
   EVENT_KINDS,
   EXPENSE_ACCOUNTS,
   PHOTO_CATEGORIES,
   type EventKind,
   type ExpenseAccount,
   type ExpenseMethod,
+  type Job,
   type JobMarket,
   type PhotoCategory,
 } from "@/lib/types";
@@ -62,6 +71,61 @@ function matches(hay: string, query: string) {
   const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (!tokens.length) return false;
   return tokens.every((token) => hay.includes(token));
+}
+
+type PayAtCloseReviewResponse = {
+  ok?: boolean;
+  error?: string;
+  property?: unknown;
+  report?: PayAtCloseReport;
+  provider?: string;
+  live?: boolean;
+  lookupError?: string | null;
+};
+
+function summarizePayAtClose(job: Job, record: JobPayAtClose) {
+  const report = record.report;
+  return {
+    job: job.code,
+    name: job.name,
+    site: job.location,
+    status: record.status,
+    statusLabel: PAY_AT_CLOSE_STATUS_LABELS[record.status],
+    payAtCloseAmount: record.contractValue,
+    depositAmount: record.depositAmount,
+    dueAtClosing: Math.max(0, record.contractValue - record.depositAmount),
+    expectedCloseDate: record.expectedCloseDate,
+    listingStatus: record.listingStatus,
+    listPrice: record.listPrice,
+    contractPrice: record.contractPrice,
+    titleCompany: record.titleCompany,
+    signerNames: record.signerNames,
+    ownerOfRecord: record.property?.ownerNames ?? [],
+    vesting: record.property?.vesting ?? "",
+    recordedLoans: (record.property?.mortgages ?? []).map((mortgage) => ({
+      lender: mortgage.lender,
+      originalAmount: mortgage.originalAmount,
+      recordedDate: mortgage.recordedDate,
+      heloc: mortgage.isHeloc,
+    })),
+    review: report
+      ? {
+          generatedAt: report.generatedAt,
+          recommendation: RECOMMENDATION_LABELS[report.recommendation],
+          score: report.score,
+          estimatedValue: report.waterfall.estimatedValue,
+          valueSource: report.waterfall.valueSource,
+          seniorClaims: report.waterfall.seniorClaims,
+          closingCosts: report.waterfall.closingCosts,
+          estimatedSellerNet: report.waterfall.netProceeds,
+          coverageRatio: report.waterfall.coverageRatio,
+          flags: report.flags.map((flag) => `${flag.severity}: ${flag.title}`),
+          narrative: report.narrative,
+          assumptions: report.assumptions,
+        }
+      : null,
+    checklist: record.checklist.map((item) => `${item.done ? "done" : "open"}: ${item.label}`),
+  };
 }
 
 function fail(error: string): AssistantToolResult {
@@ -827,6 +891,70 @@ async function runTool(
       return ok(
         { id: invoice.id, number: invoice.number },
         { href: `/invoices/${invoice.id}`, label: `Open ${invoice.number}` },
+      );
+    }
+    case "get_pay_at_close": {
+      const job = resolveJob(crm, arg(args, "job"));
+      if (!job) return fail("No job in this book matches that.");
+      const record = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+      if (!record) {
+        return ok(
+          { job: job.code, name: job.name, payAtClose: null, hint: "No pay-at-close file yet. Call review_pay_at_close to start one." },
+          { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
+        );
+      }
+      return ok(summarizePayAtClose(job, record), { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name });
+    }
+    case "review_pay_at_close": {
+      const job = resolveJob(crm, arg(args, "job"));
+      if (!job) return fail("No job in this book matches that.");
+      if (!job.street || !(job.postalCode || (job.city && job.state))) {
+        return fail(`${job.name} needs a street address with a city and state or ZIP before a property review can run.`);
+      }
+      const existing = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+      const base = existing ?? emptyJobPayAtClose(job.id, crypto.randomUUID(), job.state);
+      const listing = arg(args, "listingStatus");
+      const draft: JobPayAtClose = {
+        ...base,
+        contractValue: args.contractValue != null ? asNumber(args.contractValue) : base.contractValue || job.contractValue || 0,
+        depositAmount: args.depositAmount != null ? asNumber(args.depositAmount) : base.depositAmount,
+        listPrice: args.listPrice != null ? asNumber(args.listPrice) : base.listPrice,
+        contractPrice: args.contractPrice != null ? asNumber(args.contractPrice) : base.contractPrice,
+        listingStatus: isListingStatus(listing) ? listing : base.listingStatus,
+        expectedCloseDate: arg(args, "expectedCloseDate") || base.expectedCloseDate,
+        signerNames: arg(args, "signerNames") || base.signerNames,
+        titleCompany: arg(args, "titleCompany") || base.titleCompany,
+      };
+      const refresh = args.refreshRecords == null ? !draft.property : asBoolean(args.refreshRecords);
+      const homeowner = crm.getContact(job.primaryContactId)?.name ?? crm.customerName(job);
+      let body: PayAtCloseReviewResponse | null = null;
+      try {
+        const response = await fetch("/api/pay-at-close/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address: { street: job.street, city: job.city, state: job.state, postalCode: job.postalCode },
+            record: draft,
+            reuseProperty: !refresh,
+            jobName: job.name,
+            homeowner,
+          }),
+        });
+        body = (await response.json().catch(() => null)) as PayAtCloseReviewResponse | null;
+        if (!response.ok || !body?.ok || !body.report) return fail(body?.error ?? "The property review did not run.");
+      } catch (error) {
+        return fail(error instanceof Error ? error.message : "The property review did not run.");
+      }
+      const property = (body.property ?? draft.property) as JobPayAtClose["property"];
+      const saved = await crm.saveJobPayAtClose({ ...draft, property, report: body.report });
+      if (!saved) return fail("Could not save the pay-at-close file.");
+      return ok(
+        {
+          ...summarizePayAtClose(job, saved),
+          recordsSource: body.live ? body.provider : "Sample records (no ATTOM_API_KEY on the host)",
+          lookupError: body.lookupError ?? null,
+        },
+        { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
       );
     }
     case "convert_estimate_to_invoice": {
