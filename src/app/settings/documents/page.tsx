@@ -26,6 +26,9 @@ import {
   INVOICE_TERMS_HINT,
 } from "@/lib/document-terms";
 import { formatMarginPercent } from "@/lib/catalog-margin";
+import { PAY_AT_CLOSE_CONTRACT_BODY } from "@/lib/pay-at-close";
+
+const PAY_AT_CLOSE_CONTRACT_NAME = "Pay at Close";
 
 export default function DocumentSettingsPage() {
   return (
@@ -38,6 +41,7 @@ export default function DocumentSettingsPage() {
 function DocumentSettingsForm() {
   const { form, dirty, pending, patch, save, discard } = useCompanySettingsDraft();
   const contracts = contractTypesFromCompany(form);
+  const hasPayAtClose = contracts.some((contract) => contract.name.trim().toLowerCase() === PAY_AT_CLOSE_CONTRACT_NAME.toLowerCase());
 
   return (
     <form
@@ -53,14 +57,32 @@ function DocumentSettingsForm() {
         title="Documents & margin"
         description="The contracts homeowners sign, and the margin guardrail every estimate is checked against."
         actions={
-          <Button
-            type="button"
-            className="rounded-lg"
-            onClick={() => patch("contractTypes", addCompanyContractType(contracts))}
-          >
-            <Plus data-icon="inline-start" />
-            New template
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {hasPayAtClose ? null : (
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-lg"
+                onClick={() =>
+                  patch(
+                    "contractTypes",
+                    addCompanyContractType(contracts, { name: PAY_AT_CLOSE_CONTRACT_NAME, body: PAY_AT_CLOSE_CONTRACT_BODY }),
+                  )
+                }
+              >
+                <Plus data-icon="inline-start" />
+                Pay at Close template
+              </Button>
+            )}
+            <Button
+              type="button"
+              className="rounded-lg"
+              onClick={() => patch("contractTypes", addCompanyContractType(contracts))}
+            >
+              <Plus data-icon="inline-start" />
+              New template
+            </Button>
+          </div>
         }
       />
 
