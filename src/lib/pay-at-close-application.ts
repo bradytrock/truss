@@ -78,9 +78,11 @@ export function parseFieldValues(raw: unknown): Partial<Record<InterviewFieldKey
   for (const key of FIELD_KEYS) {
     const value = raw[key];
     if (value === undefined) continue;
-    // Postgres numerics arrive as strings through jsonb.
-    if (typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value) && /Price|Value|Amount/.test(key)) {
-      out[key] = Number(value);
+    if (/Price|Value|Amount/.test(key)) {
+      // Money keys only ever carry numbers; the submit RPC casts them.
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0) out[key] = value;
+      else if (typeof value === "string" && /^\d+(\.\d+)?$/.test(value)) out[key] = Number(value);
+      else if (value === null) out[key] = null;
       continue;
     }
     const parsed = scalar(value);
