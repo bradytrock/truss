@@ -22,8 +22,10 @@ import type { AssistantToolCall, AssistantToolResult } from "@/lib/assistant/typ
 import { toolByName } from "@/lib/assistant/tools";
 import { LEAD_SOURCES, isPickableLeadSource } from "@/lib/lead-sources";
 import { useCrm } from "@/lib/crm-store";
+import { newShareToken } from "@/lib/share";
 import {
-  INTERVIEW_STEPS,
+  APPLICATION_STATE_LABELS,
+  REP_INTERVIEW_STEPS,
   PAY_AT_CLOSE_STATUS_LABELS,
   RECOMMENDATION_LABELS,
   buildPayAtCloseReport,
@@ -34,6 +36,9 @@ import {
   interviewSummary,
   newPayAtCloseRequest,
   isListingStatus,
+  applicationProgress,
+  applicationState,
+  sendPayAtCloseApplication,
   setInterviewValue,
   type InterviewValue,
   type JobPayAtClose,
@@ -135,13 +140,29 @@ function summarizePayAtClose(job: Job, record: JobPayAtClose) {
       : null,
     checklist: record.checklist.map((item) => `${item.done ? "done" : "open"}: ${item.label}`),
     interview: interviewState(record),
+    homeownerApplication: applicationSummary(record),
+  };
+}
+
+function applicationSummary(record: JobPayAtClose) {
+  const state = applicationState(record.application);
+  const progress = applicationProgress(record);
+  return {
+    state: APPLICATION_STATE_LABELS[state],
+    link: record.application.token ? `/share/q/${record.application.token}` : "",
+    sentAt: record.application.sentAt,
+    sentTo: record.application.sentTo,
+    submittedAt: record.application.submittedAt,
+    signedBy: record.application.signatureName,
+    answered: state === "submitted" ? `${progress.answered} of ${progress.total}` : "",
+    files: record.application.uploads.map((upload) => upload.name),
   };
 }
 
 /** Where the qualification interview stands, in a shape the model can ask the next question from. */
 function interviewState(record: JobPayAtClose) {
   const progress = interviewProgress(record);
-  const next = INTERVIEW_STEPS.flatMap((step) =>
+  const next = REP_INTERVIEW_STEPS.flatMap((step) =>
     step.questions
       .filter((question) => interviewQuestionVisible(record, question) && !interviewAnswered(record, question))
       .map((question) => ({
@@ -326,6 +347,8 @@ export function describeToolCall(call: AssistantToolCall) {
       return `Record a ${money(asNumber(args.amount))} payment${arg(args, "invoice") || arg(args, "job") ? ` on ${arg(args, "invoice") || arg(args, "job")}` : ""}?`;
     case "send_mail":
       return `Send “${arg(args, "subject") || "this email"}” to ${arg(args, "to") || "the recipient"}?`;
+    case "send_pay_at_close_application":
+      return `Prepare the homeowner's Pay at Close application link on ${arg(args, "job") || "this job"}?`;
     default:
       return toolByName(call.name)?.status ?? "Do this?";
   }
@@ -997,6 +1020,38 @@ async function runTool(
             : state.requiredMissing.length
               ? "Ask the next question in plain language, then call again with the answer."
               : "All required questions answered. Call review_pay_at_close to pull records, then call again with submit true.",
+        },
+        { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
+      );
+    }
+    case "send_pay_at_close_application": {
+      const job = resolveJob(crm, arg(args, "job"));
+      if (!job) return fail("No job in this book matches that.");
+      const existing = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+      const base =
+        existing ??
+        newPayAtCloseRequest({
+          jobId: job.id,
+          id: crypto.randomUUID(),
+          state: job.state,
+          contractValue: job.contractValue || 0,
+          requester: crm.effectiveStaff ? { id: crm.effectiveStaff.id, name: crm.effectiveStaff.name } : null,
+        });
+      if (base.application.submittedAt) {
+        return ok(
+          { job: job.code, ...applicationSummary(base), hint: "The homeowner already signed this application. Nothing to send." },
+          { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
+        );
+      }
+      const token = base.application.token || newShareToken();
+      const saved = await crm.saveJobPayAtClose(sendPayAtCloseApplication(base, token, arg(args, "to")));
+      if (!saved) return fail("Could not save the application link.");
+      return ok(
+        {
+          job: job.code,
+          name: job.name,
+          ...applicationSummary(saved),
+          hint: "Text or email this link to the homeowner only. They answer and sign from their phone; the answers land on the job's Pay at close tab.",
         },
         { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
       );

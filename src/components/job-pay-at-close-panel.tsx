@@ -47,6 +47,7 @@ import {
 import { downloadPayAtClosePdf } from "@/lib/pay-at-close-pdf";
 import { jobHasReviewableAddress, requestPayAtCloseReview, reviewRanToast } from "@/lib/pay-at-close-review-client";
 import { PayAtCloseInterviewDialog } from "@/components/pay-at-close-interview";
+import { HomeownerApplicationSection } from "@/components/pay-at-close-application-section";
 import { canDecidePayAtClose, canRequestPayAtClose } from "@/lib/visibility";
 import type { Job } from "@/lib/types";
 
@@ -304,7 +305,10 @@ function PayAtCloseEditor({
               .filter((row) => !["Listing", "List price", "Sale price", "Expected closing", "Signers", "Pay-at-close amount", "Deposit", "Title company", "Escrow officer", "Escrow email", "Escrow phone", "File number", "Listing agent"].includes(row.label))
               .map((row) => (
                 <div key={`${row.step}:${row.label}`} className="flex justify-between gap-3 border-b border-border/60 pb-1.5">
-                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dt className="text-muted-foreground">
+                    {row.label}
+                    {row.source === "homeowner" ? <span className="ml-1.5 rounded-full border px-1.5 py-px text-[10px] uppercase tracking-wide">Homeowner</span> : null}
+                  </dt>
                   <dd className="text-right">{row.value}</dd>
                 </div>
               ))}
@@ -316,6 +320,16 @@ function PayAtCloseEditor({
           </p>
         ) : null}
       </section>
+
+      <HomeownerApplicationSection
+        job={job}
+        record={draft}
+        readOnly={readOnly}
+        onSave={async (next) => {
+          setDraft(next);
+          return onSave(next);
+        }}
+      />
 
       <section className="space-y-4 rounded-[12px] border bg-card p-4">
         <div className="flex items-center justify-between gap-3">

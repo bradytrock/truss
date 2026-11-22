@@ -8,6 +8,10 @@ import {
   PAY_AT_CLOSE_STATUS_LABELS,
   interviewProgress,
   interviewSummary,
+  APPLICATION_AUTHORIZATIONS,
+  applicationProgress,
+  applicationState,
+  authorizationText,
   RECOMMENDATION_LABELS,
   estimateMortgageBalance,
   type JobPayAtClose,
@@ -374,7 +378,52 @@ export async function buildPayAtClosePdf(input: PayAtClosePdfInput) {
         ? `In progress: ${interview.answered} of ${interview.total} answered, not yet submitted.`
         : "Not started.",
   );
-  if (interviewRows.length) y = keyValueGrid(doc, y, interviewRows.map((row) => [row.label, row.value] as [string, string]), 2);
+  if (interviewRows.length) {
+    y = keyValueGrid(doc, y, interviewRows.map((row) => [row.source === "homeowner" ? `${row.label} (homeowner)` : row.label, row.value] as [string, string]), 2);
+  }
+  y += 4;
+
+  const application = record.application;
+  const appState = applicationState(application);
+  y = sectionTitle(doc, y, "Homeowner application");
+  if (appState === "submitted") {
+    const appProgress = applicationProgress(record);
+    y = paragraph(
+      doc,
+      y,
+      `Signed by ${application.signatureName || "the homeowner"} on ${dateLabel(application.submittedAt)}. ${appProgress.answered} of ${appProgress.total} questions answered${application.uploads.length ? `; ${application.uploads.length} file${application.uploads.length === 1 ? "" : "s"} uploaded (${application.uploads.map((upload) => upload.name).join(", ")})` : ""}.${application.ip ? ` Signed from ${application.ip}.` : ""}`,
+    );
+    for (const authorization of APPLICATION_AUTHORIZATIONS) {
+      const on = application.authorizations.includes(authorization.id);
+      y = paragraph(doc, y, `${on ? "[x]" : "[ ]"} ${authorization.title}. ${authorizationText(authorization, company.name)}`);
+    }
+    if (application.signatureImage.startsWith("data:image/")) {
+      y = ensure(doc, y, 70);
+      const format = application.signatureImage.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
+      try {
+        doc.addImage(application.signatureImage, format, INSET, y, 160, 54);
+      } catch {
+        /* a malformed data URL should not block the report */
+      }
+      stroke(doc, RULE);
+      doc.setLineWidth(0.5);
+      doc.line(INSET, y + 56, INSET + 220, y + 56);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      paint(doc, MUTED);
+      doc.text(`${application.signatureName} · ${dateLabel(application.submittedAt)}`, INSET, y + 66);
+      paint(doc, INK);
+      y += 76;
+    }
+  } else {
+    y = paragraph(
+      doc,
+      y,
+      appState === "sent"
+        ? `Sent ${dateLabel(application.sentAt)}${application.sentTo ? ` to ${application.sentTo}` : ""}; not yet signed.`
+        : "Not sent.",
+    );
+  }
   y += 4;
 
   y = sectionTitle(doc, y, "Deal");
