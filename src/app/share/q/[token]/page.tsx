@@ -1,17 +1,10 @@
-import type { Metadata } from "next";
-import { normalizeShareToken } from "@/lib/share";
-import { PayAtCloseApplicationClient } from "./application-client";
+import { permanentRedirect } from "next/navigation";
+import { normalizeShareToken, sharePath } from "@/lib/share";
 
 export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
-export const metadata: Metadata = {
-  title: "Pay at Close application",
-  description: "Answer a few questions about your sale and sign so the repairs can be paid from your closing.",
-  robots: { index: false, follow: false },
-};
-
-export default async function PayAtCloseApplicationPage({ params }: { params: Promise<{ token: string }> }) {
+/** Links minted before the application moved to the short `/q/<code>` path. */
+export default async function LegacyPayAtCloseApplicationPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  return <PayAtCloseApplicationClient token={normalizeShareToken(token)} />;
+  permanentRedirect(sharePath("q", normalizeShareToken(token)));
 }

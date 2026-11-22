@@ -71,19 +71,16 @@ export function seedShareToken(kind: "e" | "i", number: string) {
   return digits ? `nl-${kind}-${digits}` : newShareToken();
 }
 
-/** e = estimate, i = invoice, p = page, f = file, q = pay-at-close qualification application. */
-export type ShareKind = "e" | "i" | "p" | "f" | "q";
-
-export function sharePath(kind: ShareKind, token: string) {
-  return `/share/${kind}/${token}`;
-}
-
-export function shareUrl(kind: ShareKind, token: string, origin = "") {
-  const path = sharePath(kind, token);
-  if (origin) return `${origin.replace(/\/+$/, "")}${path}`;
-  if (typeof window !== "undefined") return `${window.location.origin}${path}`;
-  return path;
-}
+/** e = estimate, i = invoice, p = page, f = file, q = pay-at-close homeowner application. */
+export {
+  APPLICATION_TOKEN_LENGTH,
+  displayShareLink,
+  isApplicationToken,
+  newApplicationToken,
+  sharePath,
+  shareUrl,
+  type ShareKind,
+} from "./share-link";
 
 function copyTextLegacy(value: string) {
   try {

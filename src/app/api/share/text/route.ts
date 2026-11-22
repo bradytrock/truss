@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { looksLikePhone } from "@/lib/phone";
 import { officePhotonConfigured, sendOfficeText } from "@/lib/photon-server";
-import { requestOrigin, shareUrlAllowed } from "@/lib/share-text";
+import { messageCarriesLink, requestOrigin, shareUrlAllowed } from "@/lib/share-text";
 import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   if (!shareUrlAllowed(url, requestOrigin(request))) {
     return NextResponse.json({ error: "That share link does not belong to this app." }, { status: 400 });
   }
-  if (!content.includes(url)) {
+  if (!messageCarriesLink(content, url)) {
     return NextResponse.json({ error: "The text has to include the share link." }, { status: 400 });
   }
 

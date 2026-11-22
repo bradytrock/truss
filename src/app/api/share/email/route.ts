@@ -7,6 +7,7 @@ import {
 } from "@/lib/resend-mail";
 import {
   looksLikeEmail,
+  messageCarriesLink,
   requestOrigin,
   shareUrlAllowed,
 } from "@/lib/share-text";
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
   if (!shareUrlAllowed(url, requestOrigin(request))) {
     return NextResponse.json({ error: "That share link does not belong to this app." }, { status: 400 });
   }
-  if (!(html.includes(url) || text.includes(url))) {
+  if (!(messageCarriesLink(html, url) || messageCarriesLink(text, url))) {
     return NextResponse.json({ error: "The email has to include the share link." }, { status: 400 });
   }
   if (!senderName) {

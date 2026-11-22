@@ -404,29 +404,7 @@ export function looksLikeEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 }
 
-export function shareUrlAllowed(url: string, origin: string) {
-  try {
-    const parsed = new URL(url);
-    const allowed = new Set<string>();
-    try {
-      allowed.add(new URL(origin).origin);
-    } catch {
-      /* ignore */
-    }
-    const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-    if (configured) {
-      try {
-        allowed.add(new URL(configured).origin);
-      } catch {
-        /* ignore */
-      }
-    }
-    if (!allowed.has(parsed.origin)) return false;
-    return /^\/share\/[eip]\/[A-Za-z0-9_-]+\/?$/.test(parsed.pathname);
-  } catch {
-    return false;
-  }
-}
+export { messageCarriesLink, shareUrlAllowed } from "./share-link";
 
 export function requestOrigin(request: Request) {
   const url = new URL(request.url);

@@ -35,6 +35,7 @@ function redirectToLogin(request: NextRequest) {
 function isSharePath(path: string) {
   return (
     path.startsWith("/share") ||
+    path.startsWith("/q/") ||
     path.startsWith("/portal") ||
     path.startsWith("/realtor-portal") ||
     path.startsWith("/api/share") ||
