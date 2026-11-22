@@ -1597,6 +1597,7 @@ export type Database = {
           decided_by_name: string;
           decided_at: string | null;
           decision_note: string;
+          interview: Json;
           updated_at: string;
         };
         Insert: {
@@ -1630,6 +1631,7 @@ export type Database = {
           decided_by_name?: string;
           decided_at?: string | null;
           decision_note?: string;
+          interview?: Json;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["job_pay_at_close"]["Insert"]>;

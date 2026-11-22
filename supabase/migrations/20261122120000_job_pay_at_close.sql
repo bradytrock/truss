@@ -33,6 +33,7 @@ create table if not exists public.job_pay_at_close (
   decided_by_name text not null default '',
   decided_at timestamptz,
   decision_note text not null default '',
+  interview jsonb not null default '{"answers":{},"completedAt":null}'::jsonb,
   updated_at timestamptz not null default now(),
   constraint job_pay_at_close_job_id_key unique (job_id),
   constraint job_pay_at_close_status_check check (

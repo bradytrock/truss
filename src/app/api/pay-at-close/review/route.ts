@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import {
   buildPayAtCloseReport,
   emptyJobPayAtClose,
+  interviewSummary,
   isListingStatus,
+  isPayAtCloseStatus,
   parseChecklist,
+  parseInterview,
   parseLiens,
   parsePropertyRecord,
   RECOMMENDATION_LABELS,
@@ -80,8 +83,9 @@ function recordFromBody(raw: unknown, state: string): JobPayAtClose {
     property: parsePropertyRecord(row.property),
     liens: parseLiens(row.liens),
     checklist: parseChecklist(row.checklist, state),
-    status: base.status,
+    status: isPayAtCloseStatus(str(row.status)) ? (str(row.status) as JobPayAtClose["status"]) : base.status,
     notes: str(row.notes),
+    interview: parseInterview(row.interview),
   };
 }
 
@@ -95,10 +99,12 @@ async function narrateWithOpenAi(input: {
   homeowner: string;
   report: PayAtCloseReport;
   property: PropertyRecord | null;
+  interview: Array<{ label: string; value: string }>;
 }) {
   const key = process.env.OPENAI_API_KEY?.trim();
   if (!key) return "";
   const facts = {
+    homeownerInterview: input.interview,
     address: input.address,
     job: input.jobName,
     homeowner: input.homeowner,
@@ -112,7 +118,7 @@ async function narrateWithOpenAi(input: {
     assumptions: input.report.assumptions,
   };
   const prompt = `You write the summary paragraph of a Pay at Close risk report for a roofing and exterior contractor. The contractor completes repairs before a home sale and is paid from seller proceeds at closing.
-Write 3 to 5 plain sentences for the office manager. Use only the numbers given; do not invent or recompute any figure. State the value basis, the estimated seller net, how many times it covers the contractor's payment, the biggest risks in order, and end with the recommendation exactly as given. No bullet points, no headings, no markdown.`;
+Write 3 to 5 plain sentences for the office manager. Use only the numbers given; do not invent or recompute any figure. State the value basis, the estimated seller net, how many times it covers the contractor's payment, the biggest risks in order (including anything the homeowner interview revealed), and end with the recommendation exactly as given. No bullet points, no headings, no markdown.`;
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -190,6 +196,7 @@ export async function POST(request: Request) {
     homeowner: str(body.homeowner),
     report: draft,
     property,
+    interview: interviewSummary(record).map(({ label, value }) => ({ label, value })),
   });
   const report = narrative ? { ...draft, narrative } : draft;
 

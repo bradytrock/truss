@@ -49,6 +49,7 @@ import {
   parseChecklist,
   parseLiens,
   parsePropertyRecord,
+  parseInterview,
   parseReport,
   type JobPayAtClose,
 } from "@/lib/pay-at-close";
@@ -1253,6 +1254,7 @@ export function mapJobPayAtClose(
     decidedByName: row.decided_by_name ?? "",
     decidedAt: row.decided_at,
     decisionNote: row.decision_note ?? "",
+    interview: parseInterview(row.interview),
     updatedAt: row.updated_at,
   };
 }

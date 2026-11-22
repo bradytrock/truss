@@ -7,9 +7,14 @@ import {
   emptyJobPayAtClose,
   equityWaterfall,
   estimateMortgageBalance,
+  findInterviewQuestion,
+  interviewProgress,
+  interviewSummary,
+  interviewValue,
   jobPayAtClosePayload,
   newPayAtCloseRequest,
   parseChecklist,
+  parseInterview,
   parseLiens,
   parsePropertyRecord,
   parseReport,
@@ -22,6 +27,7 @@ import {
   resolveThresholds,
   riskFlags,
   riskScore,
+  setInterviewValue,
   signersMatchOwners,
   stateChecklist,
   type JobPayAtClose,
@@ -100,9 +106,22 @@ assert.equal(pickEstimatedValue({ listPrice: 800_000, contractPrice: 0, listingS
 assert.equal(pickEstimatedValue({ listPrice: 0, contractPrice: 0, listingStatus: "" }, { ...property, avmValue: null }, thresholds).value, 480_000);
 assert.equal(pickEstimatedValue({ listPrice: 0, contractPrice: 0, listingStatus: "" }, null, thresholds).value, 0);
 
+// A finished interview with nothing alarming in it.
+const cleanAnswers = {
+  sale_reason: "Relocating for work",
+  prior_fall_through: false,
+  all_owners_signing: true,
+  legal_situation: "none",
+  mortgage_current: true,
+  payoff_statement: false,
+  completion_before_close: true,
+  agent_committed: true,
+};
+
 // Waterfall: $615k sale, ~$355k loan, 7% closing costs, $18k contract.
 const record: JobPayAtClose = {
   ...emptyJobPayAtClose("job_1", "pac_1", "CO"),
+  interview: { answers: cleanAnswers, completedAt: null },
   contractValue: 18_000,
   depositAmount: 0,
   listingStatus: "under_contract",
@@ -312,5 +331,88 @@ assert.equal(payload.requested_by, "staff_rep");
 assert.equal(payload.decided_by, "staff_admin");
 assert.equal(payload.decided_at, today.toISOString());
 assert.equal(jobPayAtClosePayload(emptyJobPayAtClose("job_1"), "co_1").requested_by, null);
+
+// Qualification interview.
+const blank = emptyJobPayAtClose("job_5", "pac_5", "TX");
+const blankProgress = interviewProgress(blank);
+assert.equal(blankProgress.complete, false);
+assert.equal(blankProgress.nextStepIndex, 0);
+assert.ok(blankProgress.requiredMissing.some((question) => question.id === "agent_committed"));
+// Conditional questions stay hidden until relevant.
+assert.ok(!blankProgress.requiredMissing.some((question) => question.id === "contractPrice"));
+const depositQ = findInterviewQuestion("depositAmount")!;
+assert.equal(depositQ.showWhen?.(blank), false);
+
+// Field-bound questions write to the record; interview-only ones to answers.
+const q = (id: string) => findInterviewQuestion(id)!;
+let filled = setInterviewValue(blank, q("contractValue"), 24_000);
+filled = setInterviewValue(filled, q("listingStatus"), "under_contract");
+filled = setInterviewValue(filled, q("contractPrice"), 400_000);
+filled = setInterviewValue(filled, q("expectedCloseDate"), "2027-01-15");
+filled = setInterviewValue(filled, q("signerNames"), "Dana Reyes");
+filled = setInterviewValue(filled, q("deposit_possible"), true);
+filled = setInterviewValue(filled, q("depositAmount"), 1_500);
+assert.equal(filled.contractValue, 24_000);
+assert.equal(filled.listingStatus, "under_contract");
+assert.equal(filled.depositAmount, 1_500);
+assert.equal(filled.interview.answers.deposit_possible, true);
+assert.equal(interviewValue(filled, q("contractPrice")), 400_000);
+assert.equal(depositQ.showWhen?.(filled), true);
+for (const [key, value] of Object.entries(cleanAnswers)) filled = setInterviewValue(filled, q(key), value);
+const filledProgress = interviewProgress(filled);
+assert.equal(filledProgress.complete, true, filledProgress.requiredMissing.map((m) => m.id).join(","));
+assert.equal(filledProgress.nextStepIndex, 5);
+assert.ok(interviewSummary(filled).some((row) => row.label === "Deposit" && row.value === "$1,500"));
+// Clearing removes the key.
+assert.equal("deposit_possible" in setInterviewValue(filled, q("deposit_possible"), null).interview.answers, false);
+
+// An unfinished interview cannot reach approve, even on a clean property.
+const unfinished: JobPayAtClose = { ...record, interview: { answers: {}, completedAt: null } };
+const unfinishedFlags = riskFlags({ record: unfinished, property, waterfall, state: "CO", today });
+assert.ok(unfinishedFlags.some((flag) => flag.code === "interview_incomplete"));
+assert.equal(recommend(waterfall, unfinishedFlags), "review");
+
+// Homeowner answers raise flags public records cannot see.
+const risky: JobPayAtClose = {
+  ...record,
+  interview: {
+    answers: {
+      ...cleanAnswers,
+      legal_situation: "divorce",
+      all_owners_signing: false,
+      mortgage_current: false,
+      prior_fall_through: true,
+      agent_committed: false,
+      completion_before_close: false,
+      repair_required_by: "lender_appraisal",
+      mortgage_balance: 450_000,
+    },
+    completedAt: null,
+  },
+};
+const riskyFlags = riskFlags({ record: risky, property, waterfall, state: "CO", today });
+const riskyCodes = new Set(riskyFlags.map((flag) => flag.code));
+for (const code of ["court_or_dispute", "missing_signer", "mortgage_delinquent", "prior_fall_through", "agent_not_committed", "completion_after_close", "lender_required", "homeowner_balance_differs"]) {
+  assert.ok(riskyCodes.has(code), `missing ${code}`);
+}
+assert.ok(!riskyCodes.has("interview_incomplete"));
+assert.equal(riskyFlags.find((flag) => flag.code === "agent_not_committed")?.severity, "watch");
+assert.equal(recommend(waterfall, riskyFlags), "review");
+assert.ok(riskScore(riskyFlags) < riskScore(cleanFlags));
+// Once approved, an uncommitted agent is a high flag.
+const approvedRisky = riskFlags({ record: { ...risky, status: "approved" }, property, waterfall, state: "CO", today });
+assert.equal(approvedRisky.find((flag) => flag.code === "agent_not_committed")?.severity, "high");
+// A lender-required repair earns a small credit.
+const credited: JobPayAtClose = { ...record, interview: { answers: { ...cleanAnswers, repair_required_by: "buyer_inspection" }, completedAt: null } };
+const creditedFlags = riskFlags({ record: credited, property, waterfall, state: "CO", today });
+assert.ok(riskScore(creditedFlags) >= riskScore(cleanFlags));
+
+// Interview round-trips through jsonb.
+const parsedInterview = parseInterview({ answers: { a: true, b: "x", c: 12, d: null, e: { nested: 1 } }, completedAt: "2026-11-22T00:00:00Z" });
+assert.deepEqual(parsedInterview.answers, { a: true, b: "x", c: 12, d: null });
+assert.equal(parsedInterview.completedAt, "2026-11-22T00:00:00Z");
+assert.deepEqual(parseInterview(null), { answers: {}, completedAt: null });
+const submitted = { ...filled, interview: { ...filled.interview, completedAt: today.toISOString() } };
+assert.ok(payAtCloseActivityNote(filled, submitted)?.includes("Qualification interview submitted"));
 
 console.log("pay-at-close.test.ts ok");

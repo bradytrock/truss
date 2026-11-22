@@ -305,7 +305,21 @@ export interface JobPayAtClose {
   decidedByName: string;
   decidedAt: string | null;
   decisionNote: string;
+  /** Rep's qualification interview. Answers for facts that are not record fields; see INTERVIEW_STEPS. */
+  interview: PayAtCloseInterview;
   updatedAt: string;
+}
+
+export type InterviewValue = string | number | boolean | null;
+
+export interface PayAtCloseInterview {
+  answers: Record<string, InterviewValue>;
+  /** Set when the rep finishes the review step and submits the request. */
+  completedAt: string | null;
+}
+
+export function emptyInterview(): PayAtCloseInterview {
+  return { answers: {}, completedAt: null };
 }
 
 /** A request is waiting on a company admin until someone records a decision. */
@@ -558,6 +572,19 @@ export function parseReport(value: unknown): PayAtCloseReport | null {
   };
 }
 
+export function parseInterview(value: unknown): PayAtCloseInterview {
+  if (!isRecord(value)) return emptyInterview();
+  const answers: Record<string, InterviewValue> = {};
+  if (isRecord(value.answers)) {
+    for (const [key, raw] of Object.entries(value.answers)) {
+      if (raw === null || typeof raw === "string" || typeof raw === "boolean") answers[key] = raw;
+      else if (typeof raw === "number" && Number.isFinite(raw)) answers[key] = raw;
+    }
+  }
+  const completedAt = typeof value.completedAt === "string" && value.completedAt ? value.completedAt : null;
+  return { answers, completedAt };
+}
+
 export function emptyJobPayAtClose(jobId: string, id?: string, state = ""): JobPayAtClose {
   return {
     id: id ?? "",
@@ -589,6 +616,7 @@ export function emptyJobPayAtClose(jobId: string, id?: string, state = ""): JobP
     decidedByName: "",
     decidedAt: null,
     decisionNote: "",
+    interview: emptyInterview(),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -663,8 +691,291 @@ export function jobPayAtClosePayload(record: JobPayAtClose, companyId: string) {
     decided_by_name: record.decidedByName.trim(),
     decided_at: record.decidedAt || null,
     decision_note: record.decisionNote.trim(),
+    interview: record.interview,
     updated_at: record.updatedAt,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Qualification interview                                              */
+/* ------------------------------------------------------------------ */
+
+export type InterviewQuestionKind = "yes_no" | "text" | "long_text" | "money" | "date" | "select";
+
+/** Record fields a question can write to directly, so the interview and the file never disagree. */
+export type InterviewFieldKey =
+  | "listingStatus"
+  | "listingAgent"
+  | "listPrice"
+  | "contractPrice"
+  | "expectedCloseDate"
+  | "signerNames"
+  | "contractValue"
+  | "depositAmount"
+  | "titleCompany"
+  | "escrowOfficer"
+  | "escrowEmail"
+  | "escrowPhone"
+  | "escrowFileNumber";
+
+export interface InterviewQuestion {
+  /** Answer key. When `field` is set the value lives on the record instead of `interview.answers`. */
+  id: string;
+  field?: InterviewFieldKey;
+  kind: InterviewQuestionKind;
+  /** What the rep asks the homeowner, or reads off the file. */
+  prompt: string;
+  /** Short label for summaries and the PDF. */
+  label: string;
+  help?: string;
+  required?: boolean;
+  options?: Array<{ value: string; label: string }>;
+  /** Hide the question until the record makes it relevant. */
+  showWhen?: (record: JobPayAtClose) => boolean;
+}
+
+export interface InterviewStep {
+  id: string;
+  title: string;
+  /** One line the rep can say to open the step. */
+  intro: string;
+  questions: InterviewQuestion[];
+}
+
+export const LEGAL_SITUATIONS = [
+  { value: "none", label: "None of these" },
+  { value: "trust", label: "Held in a trust" },
+  { value: "llc", label: "Held by an LLC or company" },
+  { value: "estate_probate", label: "Estate or probate" },
+  { value: "divorce", label: "Divorce or separation" },
+  { value: "other", label: "Something else" },
+] as const;
+
+export const REPAIR_REQUIRED_BY = [
+  { value: "none", label: "No one; seller's choice" },
+  { value: "buyer_inspection", label: "Buyer's inspection" },
+  { value: "lender_appraisal", label: "Lender or appraiser" },
+  { value: "insurance", label: "Insurance carrier" },
+  { value: "listing_prep", label: "Listing agent, to list" },
+] as const;
+
+const underContract = (record: JobPayAtClose) =>
+  record.listingStatus === "pending" || record.listingStatus === "under_contract" || record.listingStatus === "sold";
+
+export const INTERVIEW_STEPS: InterviewStep[] = [
+  {
+    id: "sale",
+    title: "The sale",
+    intro: "Tell me about the sale so we can line our payment up with the closing.",
+    questions: [
+      { id: "sale_reason", kind: "text", label: "Why selling", prompt: "Why is the homeowner selling?", required: true, help: "Relocation, downsizing, estate, financial pressure. The reason shapes how firm the closing date is." },
+      {
+        id: "listingStatus",
+        field: "listingStatus",
+        kind: "select",
+        label: "Listing",
+        prompt: "Where does the listing stand today?",
+        required: true,
+        options: LISTING_STATUSES.map((value) => ({ value, label: LISTING_STATUS_LABELS[value] })),
+      },
+      { id: "listingAgent", field: "listingAgent", kind: "text", label: "Listing agent", prompt: "Who is the listing agent, and with which brokerage?" },
+      { id: "listPrice", field: "listPrice", kind: "money", label: "List price", prompt: "What is the list price, or the price they expect to list at?" },
+      { id: "contractPrice", field: "contractPrice", kind: "money", label: "Sale price", prompt: "What is the agreed sale price?", showWhen: underContract },
+      { id: "expectedCloseDate", field: "expectedCloseDate", kind: "date", label: "Expected closing", prompt: "When is closing expected?", required: true },
+      { id: "prior_fall_through", kind: "yes_no", label: "Prior contract fell through", prompt: "Has this home been under contract before and fallen through?", required: true },
+      { id: "listing_expires_before_close", kind: "yes_no", label: "Listing expires before closing", prompt: "Does the listing agreement expire before the expected closing?" },
+    ],
+  },
+  {
+    id: "owners",
+    title: "Ownership and signers",
+    intro: "We need everyone on title to sign, so let's confirm who that is.",
+    questions: [
+      { id: "signerNames", field: "signerNames", kind: "text", label: "Signers", prompt: "Who will sign our agreement? Write the names exactly as they appear on the deed.", required: true, help: "Checked against the owner of record when the property review runs." },
+      { id: "all_owners_signing", kind: "yes_no", label: "All owners signing", prompt: "Will every person on title, including a spouse, sign our agreement?", required: true, help: "In Texas a homestead needs both spouses before work starts." },
+      {
+        id: "legal_situation",
+        kind: "select",
+        label: "Legal situation",
+        prompt: "Is the property held in a trust or LLC, part of an estate or probate, or involved in a divorce?",
+        required: true,
+        options: [...LEGAL_SITUATIONS],
+      },
+      { id: "owner_occupied", kind: "yes_no", label: "Seller lives there", prompt: "Does the seller live in the home?" },
+    ],
+  },
+  {
+    id: "debt",
+    title: "What is owed",
+    intro: "Our payment comes after the loans and liens, so we need a picture of what is owed.",
+    questions: [
+      { id: "mortgage_balance", kind: "money", label: "Mortgage balance (homeowner)", prompt: "About how much is owed on the first mortgage?", help: "Shown next to the public-record estimate. Only a payoff letter changes the math." },
+      { id: "mortgage_current", kind: "yes_no", label: "Current on mortgage", prompt: "Is the seller current on the mortgage?", required: true },
+      { id: "heloc_balance", kind: "money", label: "HELOC or second balance", prompt: "Is there a HELOC or second mortgage? What is the balance?" },
+      { id: "other_liens", kind: "long_text", label: "Other liens known", prompt: "Any property-tax, HOA, judgment, IRS, or contractor liens the seller knows of? Describe and estimate." },
+      { id: "payoff_statement", kind: "yes_no", label: "Payoff statement available", prompt: "Can the seller share a recent mortgage statement or payoff letter?", required: true, help: "When yes, enter the figures as verified office liens on the file and they replace the estimate." },
+    ],
+  },
+  {
+    id: "work",
+    title: "The work",
+    intro: "Now the job itself and what we are asking the closing to carry.",
+    questions: [
+      { id: "contractValue", field: "contractValue", kind: "money", label: "Pay-at-close amount", prompt: "How much will we collect at closing?", required: true },
+      { id: "deposit_possible", kind: "yes_no", label: "Deposit possible", prompt: "Can the seller pay anything up front?" },
+      { id: "depositAmount", field: "depositAmount", kind: "money", label: "Deposit", prompt: "How much up front?", showWhen: (record) => record.interview.answers.deposit_possible === true },
+      {
+        id: "repair_required_by",
+        kind: "select",
+        label: "Repair required by",
+        prompt: "Is someone requiring this repair for the sale to go through?",
+        options: [...REPAIR_REQUIRED_BY],
+      },
+      { id: "completion_before_close", kind: "yes_no", label: "Done a week before closing", prompt: "Will the work be complete at least a week before closing?", required: true },
+    ],
+  },
+  {
+    id: "title",
+    title: "Title and escrow",
+    intro: "Last part: who pays us at the table.",
+    questions: [
+      { id: "titleCompany", field: "titleCompany", kind: "text", label: "Title company", prompt: "Which title or escrow company is handling the closing?" },
+      { id: "escrowOfficer", field: "escrowOfficer", kind: "text", label: "Escrow officer", prompt: "Who is the escrow officer?" },
+      { id: "escrowEmail", field: "escrowEmail", kind: "text", label: "Escrow email", prompt: "Escrow officer email?" },
+      { id: "escrowPhone", field: "escrowPhone", kind: "text", label: "Escrow phone", prompt: "Escrow officer phone?" },
+      { id: "escrowFileNumber", field: "escrowFileNumber", kind: "text", label: "File number", prompt: "Escrow or title file number?" },
+      { id: "agent_committed", kind: "yes_no", label: "Agent agreed to settlement line", prompt: "Has the seller's agent agreed to put our payment on the settlement statement?", required: true },
+    ],
+  },
+];
+
+export function interviewQuestions(): InterviewQuestion[] {
+  return INTERVIEW_STEPS.flatMap((step) => step.questions);
+}
+
+export function findInterviewQuestion(id: string): InterviewQuestion | undefined {
+  return interviewQuestions().find((question) => question.id === id);
+}
+
+export function interviewQuestionVisible(record: JobPayAtClose, question: InterviewQuestion) {
+  return question.showWhen ? question.showWhen(record) : true;
+}
+
+export function interviewValue(record: JobPayAtClose, question: InterviewQuestion): InterviewValue {
+  if (question.field) {
+    const raw = record[question.field];
+    return raw === undefined ? null : (raw as InterviewValue);
+  }
+  const raw = record.interview.answers[question.id];
+  return raw === undefined ? null : raw;
+}
+
+export function interviewAnswered(record: JobPayAtClose, question: InterviewQuestion) {
+  const value = interviewValue(record, question);
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return question.kind === "money" ? value > 0 : Number.isFinite(value);
+  return true;
+}
+
+/** Returns a new record with the answer written where it belongs. Pass null to clear. */
+export function setInterviewValue(record: JobPayAtClose, question: InterviewQuestion, value: InterviewValue): JobPayAtClose {
+  if (question.field) {
+    const next: JobPayAtClose = { ...record };
+    switch (question.field) {
+      case "listPrice":
+      case "contractPrice":
+      case "contractValue":
+      case "depositAmount":
+        next[question.field] = typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+        break;
+      case "listingStatus":
+        next.listingStatus = typeof value === "string" && isListingStatus(value) ? value : "";
+        break;
+      case "expectedCloseDate":
+        next.expectedCloseDate = typeof value === "string" && value ? value : null;
+        break;
+      default:
+        next[question.field] = typeof value === "string" ? value : "";
+    }
+    return next;
+  }
+  const answers = { ...record.interview.answers };
+  if (value === null) delete answers[question.id];
+  else answers[question.id] = value;
+  return { ...record, interview: { ...record.interview, answers } };
+}
+
+export interface InterviewProgress {
+  answered: number;
+  total: number;
+  requiredMissing: InterviewQuestion[];
+  /** Every required, visible question has an answer. */
+  complete: boolean;
+  /** The rep submitted the review step. */
+  submitted: boolean;
+  /** First step with a missing required answer, or the review step index when none. */
+  nextStepIndex: number;
+}
+
+export function interviewProgress(record: JobPayAtClose): InterviewProgress {
+  let answered = 0;
+  let total = 0;
+  const requiredMissing: InterviewQuestion[] = [];
+  let nextStepIndex = INTERVIEW_STEPS.length;
+  INTERVIEW_STEPS.forEach((step, index) => {
+    let stepMissing = false;
+    for (const question of step.questions) {
+      if (!interviewQuestionVisible(record, question)) continue;
+      total += 1;
+      const done = interviewAnswered(record, question);
+      if (done) answered += 1;
+      else if (question.required) {
+        requiredMissing.push(question);
+        stepMissing = true;
+      }
+    }
+    if (stepMissing && nextStepIndex === INTERVIEW_STEPS.length) nextStepIndex = index;
+  });
+  return {
+    answered,
+    total,
+    requiredMissing,
+    complete: requiredMissing.length === 0,
+    submitted: Boolean(record.interview.completedAt),
+    nextStepIndex,
+  };
+}
+
+/** Has the rep started answering at all? Old files and assistant-only reviews may have nothing. */
+export function interviewStarted(record: JobPayAtClose) {
+  return Object.keys(record.interview.answers).length > 0 || Boolean(record.interview.completedAt);
+}
+
+export function interviewValueLabel(question: InterviewQuestion, value: InterviewValue): string {
+  if (value === null || value === undefined || value === "") return "—";
+  switch (question.kind) {
+    case "yes_no":
+      return value === true ? "Yes" : value === false ? "No" : String(value);
+    case "money":
+      return typeof value === "number" ? dollars(value) : String(value);
+    case "select":
+      return question.options?.find((option) => option.value === value)?.label ?? String(value);
+    default:
+      return String(value);
+  }
+}
+
+/** Interview answers as label/value pairs for summaries and the PDF. Skips unanswered questions. */
+export function interviewSummary(record: JobPayAtClose): Array<{ step: string; label: string; value: string }> {
+  const rows: Array<{ step: string; label: string; value: string }> = [];
+  for (const step of INTERVIEW_STEPS) {
+    for (const question of step.questions) {
+      if (!interviewQuestionVisible(record, question) || !interviewAnswered(record, question)) continue;
+      rows.push({ step: step.title, label: question.label, value: interviewValueLabel(question, interviewValue(record, question)) });
+    }
+  }
+  return rows;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1157,6 +1468,8 @@ export function riskFlags(input: RiskInput): RiskFlag[] {
     });
   }
 
+  flags.push(...interviewFlags(record, property, today));
+
   if (record.contractValue > thresholds.maxContractValue) {
     flags.push({
       code: "large_contract",
@@ -1191,6 +1504,141 @@ export function riskFlags(input: RiskInput): RiskFlag[] {
   return flags.sort((a, b) => order[a.severity] - order[b.severity]);
 }
 
+/** What the rep learned from the homeowner. Public records cannot see most of this. */
+function interviewFlags(record: JobPayAtClose, property: PropertyRecord | null, today: Date): RiskFlag[] {
+  const a = record.interview.answers;
+  const flags: RiskFlag[] = [];
+  const progress = interviewProgress(record);
+  const afterApproval = PAY_AT_CLOSE_POST_APPROVAL_STATUSES.includes(record.status);
+
+  if (!progress.complete) {
+    const names = progress.requiredMissing.slice(0, 3).map((question) => question.label.toLowerCase());
+    flags.push({
+      code: "interview_incomplete",
+      severity: "watch",
+      title: `Qualification interview not finished (${progress.answered} of ${progress.total})`,
+      detail: `Still needed: ${names.join(", ")}${progress.requiredMissing.length > 3 ? ", and more" : ""}. The deal cannot be approved until the required questions are answered.`,
+    });
+  }
+
+  if (a.legal_situation === "estate_probate" || a.legal_situation === "divorce") {
+    const probate = a.legal_situation === "estate_probate";
+    flags.push({
+      code: "court_or_dispute",
+      severity: "high",
+      title: probate ? "Estate or probate sale" : "Divorce or separation",
+      detail: probate
+        ? "The personal representative must have letters testamentary and, in some states, court approval to sell and to sign for repairs. Get the letters before approving."
+        : "Both spouses usually must sign, and a decree or court order may control who gets proceeds. Get the order or both signatures before approving.",
+    });
+  } else if ((a.legal_situation === "trust" || a.legal_situation === "llc") && !flagsHaveEntity(property)) {
+    flags.push({
+      code: "entity_vesting",
+      severity: "watch",
+      title: a.legal_situation === "trust" ? "Seller says title is held in a trust" : "Seller says an LLC holds title",
+      detail: "Collect the trust certificate or operating agreement showing who can sign. The public record did not show this yet.",
+    });
+  }
+
+  if (a.all_owners_signing === false) {
+    flags.push({
+      code: "missing_signer",
+      severity: "high",
+      title: "Not every owner will sign",
+      detail: "An assignment of proceeds signed by one of two owners only reaches that owner's half, and a homestead spouse can void the contract. Get every owner on the agreement.",
+    });
+  }
+
+  if (a.mortgage_current === false) {
+    flags.push({
+      code: "mortgage_delinquent",
+      severity: "high",
+      title: "Seller is behind on the mortgage",
+      detail: "Arrears, late fees, and foreclosure costs come out ahead of us at closing, and the lender may start foreclosure before the sale closes. Get a payoff letter before approving.",
+    });
+  }
+
+  if (a.prior_fall_through === true) {
+    flags.push({
+      code: "prior_fall_through",
+      severity: "watch",
+      title: "A prior contract fell through",
+      detail: "Ask why. Inspection, appraisal, or financing problems tend to repeat and push the closing out.",
+    });
+  }
+
+  if (a.listing_expires_before_close === true) {
+    flags.push({
+      code: "listing_expires",
+      severity: "watch",
+      title: "Listing agreement expires before closing",
+      detail: "If the seller changes agents or pulls the listing, our settlement line goes with it. Get the extension or a direct commitment from the seller.",
+    });
+  }
+
+  if (a.agent_committed === false || (a.agent_committed == null && afterApproval)) {
+    flags.push({
+      code: "agent_not_committed",
+      severity: afterApproval ? "high" : "watch",
+      title: a.agent_committed === false ? "Agent has not agreed to the settlement line" : "Agent commitment unknown",
+      detail: "The closing agent pays what the settlement statement says. Get the listing agent's written agreement to add our payment, then send the escrow instruction letter.",
+    });
+  }
+
+  if (a.repair_required_by === "buyer_inspection" || a.repair_required_by === "lender_appraisal") {
+    flags.push({
+      code: "lender_required",
+      severity: "info",
+      title: a.repair_required_by === "lender_appraisal" ? "Repair required by the lender" : "Repair required by the buyer's inspection",
+      detail: "The sale depends on this work, which makes the closing more likely to carry our payment.",
+    });
+  }
+
+  if (a.completion_before_close === false) {
+    flags.push({
+      code: "completion_after_close",
+      severity: "high",
+      title: "Work will not be done a week before closing",
+      detail: "Closing agents need the invoice and lien waiver before funding. If we finish after closing there is nothing to pay us from.",
+    });
+  }
+
+  if (a.owner_occupied === false && !property) {
+    flags.push({
+      code: "non_owner_occupied",
+      severity: "info",
+      title: "Seller does not live in the home",
+      detail: "Likely a rental or inherited home. Confirm who is selling and where notices go.",
+    });
+  }
+
+  const reported = typeof a.mortgage_balance === "number" ? a.mortgage_balance : 0;
+  const verifiedMortgage = record.liens.some((lien) => lien.verified && lien.kind === "mortgage");
+  if (reported > 0 && !verifiedMortgage && property?.mortgages.length) {
+    const estimated = property.mortgages
+      .filter((mortgage) => !mortgage.isHeloc)
+      .reduce((sum, mortgage) => sum + estimateMortgageBalance(mortgage, today).balance, 0);
+    if (estimated > 0 && Math.abs(reported - estimated) / estimated > 0.15) {
+      flags.push({
+        code: "homeowner_balance_differs",
+        severity: reported > estimated ? "watch" : "info",
+        title: `Homeowner says ${dollars(reported)} is owed; records estimate ${dollars(estimated)}`,
+        detail:
+          reported > estimated
+            ? "The homeowner's figure is higher than the amortized estimate. A refinance or second may not be recorded yet. Get the payoff letter."
+            : "The homeowner's figure is lower than the amortized estimate; they may have paid ahead. Only a payoff letter changes the math.",
+      });
+    }
+  }
+
+  return flags;
+}
+
+function flagsHaveEntity(property: PropertyRecord | null) {
+  if (!property) return false;
+  return /trust|llc|estate|corp|inc\b/i.test(property.vesting) || property.ownerNames.some((name) => /trust|llc|estate|corp|inc\b/i.test(name));
+}
+
 const FLAG_WEIGHTS: Record<string, number> = {
   coverage_thin: 45,
   coverage_low: 30,
@@ -1220,6 +1668,16 @@ const FLAG_WEIGHTS: Record<string, number> = {
   off_market: 30,
   large_contract: 6,
   no_title_company: 5,
+  interview_incomplete: 10,
+  court_or_dispute: 25,
+  missing_signer: 30,
+  mortgage_delinquent: 25,
+  prior_fall_through: 6,
+  listing_expires: 6,
+  agent_not_committed: 8,
+  lender_required: -5,
+  completion_after_close: 25,
+  homeowner_balance_differs: 3,
 };
 
 export function riskScore(flags: RiskFlag[]) {
@@ -1239,6 +1697,7 @@ export function recommend(waterfall: EquityWaterfall, flags: RiskFlag[], thresho
   if (waterfall.coverageRatio < t.declineCoverage) return "decline";
   const highs = flags.filter((flag) => flag.severity === "high").length;
   if (highs > 0) return "review";
+  if (flags.some((flag) => flag.code === "interview_incomplete")) return "review";
   if (waterfall.coverageRatio >= t.approveCoverage) return "approve";
   if (waterfall.coverageRatio >= t.depositCoverage) return "approve_with_deposit";
   return "review";
@@ -1517,6 +1976,10 @@ export function payAtCloseActivityNote(before: JobPayAtClose | undefined, after:
   }
   if (before.contractValue !== after.contractValue && after.contractValue) {
     lines.push(`Pay-at-close amount ${dollars(after.contractValue)}.`);
+  }
+  if (after.interview.completedAt && after.interview.completedAt !== before.interview.completedAt) {
+    const progress = interviewProgress(after);
+    lines.push(`Qualification interview submitted (${progress.answered} of ${progress.total} answered).`);
   }
   const previous = new Set(before.checklist.filter((item) => item.done).map((item) => item.key));
   for (const item of after.checklist) {
