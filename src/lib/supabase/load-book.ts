@@ -500,9 +500,14 @@ function queryDeferred(
 type CoreRows = Awaited<ReturnType<typeof queryCore>>;
 type DeferredRows = Awaited<ReturnType<typeof queryDeferred>>;
 
+// Typed against the Promise.all tuple: adding a deferred query without bumping
+// this fails to compile, instead of leaving the tail of assembleBook's
+// destructure undefined on the first paint.
+const DEFERRED_QUERY_COUNT: DeferredRows["length"] = 42;
+
 function emptyDeferred(): DeferredRows {
   const blank = { data: [] as never[], error: null };
-  return Array.from({ length: 41 }, () => blank) as unknown as DeferredRows;
+  return Array.from({ length: DEFERRED_QUERY_COUNT }, () => blank) as unknown as DeferredRows;
 }
 
 function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {

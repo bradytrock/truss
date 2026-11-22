@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { BOOK_PAGE_SIZE, isTransientRequestError, limitBookQuery, selectAllRows } from "./load-book.ts";
+import {
+  BOOK_PAGE_SIZE,
+  isTransientRequestError,
+  limitBookQuery,
+  loadCompanyBook,
+  selectAllRows,
+} from "./load-book.ts";
 
 assert.equal(isTransientRequestError({ message: "TypeError: Failed to fetch" }), true);
 assert.equal(isTransientRequestError({ message: "Could not find the table public.messages" }), false);
@@ -94,6 +100,22 @@ async function main() {
   assert.equal(brokenAll.data, null);
   assert.equal(brokenAll.error?.message, "boom");
   assert.equal(broken.ranges.length, 2, "stops at the failed page");
+
+  // The first paint pairs the core tables with one blank result per deferred
+  // query. A deferred query added without a matching blank once left the tail
+  // of the destructure undefined and threw "Cannot read properties of
+  // undefined (reading 'error')" for every user on load.
+  const blankPage = Promise.resolve({ data: [], error: null });
+  const chain: Record<string, unknown> = {};
+  for (const method of ["select", "eq", "order", "range"]) chain[method] = () => chain;
+  chain.then = blankPage.then.bind(blankPage);
+  const fakeClient = { from: () => chain } as unknown as Parameters<typeof loadCompanyBook>[0];
+  const { core, full } = loadCompanyBook(fakeClient, "company-1");
+  const firstPaint = await core;
+  assert.deepEqual(firstPaint.state.chartAccounts, []);
+  assert.deepEqual(firstPaint.state.jobPayAtClose, []);
+  assert.equal(firstPaint.messagesError, null);
+  await full;
 
   console.log("load-book.test.ts ok");
 }
