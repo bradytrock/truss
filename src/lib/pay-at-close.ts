@@ -307,19 +307,126 @@ export interface JobPayAtClose {
   decisionNote: string;
   /** Rep's qualification interview. Answers for facts that are not record fields; see INTERVIEW_STEPS. */
   interview: PayAtCloseInterview;
+  /** The homeowner-facing application sent from the office. */
+  application: PayAtCloseApplication;
   updatedAt: string;
 }
 
 export type InterviewValue = string | number | boolean | null;
 
+export type InterviewSource = "rep" | "homeowner";
+
 export interface PayAtCloseInterview {
   answers: Record<string, InterviewValue>;
+  /** Who gave each answer. Missing means the rep typed it. */
+  sources: Record<string, InterviewSource>;
   /** Set when the rep finishes the review step and submits the request. */
   completedAt: string | null;
 }
 
 export function emptyInterview(): PayAtCloseInterview {
-  return { answers: {}, completedAt: null };
+  return { answers: {}, sources: {}, completedAt: null };
+}
+
+export interface ApplicationUpload {
+  /** Storage path inside the private bucket: company/record/file. */
+  path: string;
+  name: string;
+  size: number;
+  contentType: string;
+  uploadedAt: string;
+}
+
+export interface PayAtCloseApplication {
+  /** Public link token. Empty until the office sends the application. */
+  token: string;
+  sentAt: string | null;
+  /** Who it went to, as typed or picked when sending. */
+  sentTo: string;
+  submittedAt: string | null;
+  signatureName: string;
+  /** PNG data URL from the signature pad. */
+  signatureImage: string;
+  /** Ids of APPLICATION_AUTHORIZATIONS the homeowner checked. */
+  authorizations: string[];
+  uploads: ApplicationUpload[];
+  ip: string;
+  userAgent: string;
+}
+
+export function emptyApplication(): PayAtCloseApplication {
+  return {
+    token: "",
+    sentAt: null,
+    sentTo: "",
+    submittedAt: null,
+    signatureName: "",
+    signatureImage: "",
+    authorizations: [],
+    uploads: [],
+    ip: "",
+    userAgent: "",
+  };
+}
+
+export type ApplicationState = "not_sent" | "sent" | "submitted";
+
+export function applicationState(application: PayAtCloseApplication): ApplicationState {
+  if (application.submittedAt) return "submitted";
+  if (application.token && application.sentAt) return "sent";
+  return "not_sent";
+}
+
+export const APPLICATION_STATE_LABELS: Record<ApplicationState, string> = {
+  not_sent: "Not sent",
+  sent: "Sent, waiting on homeowner",
+  submitted: "Signed and submitted",
+};
+
+export interface ApplicationAuthorization {
+  id: string;
+  title: string;
+  /** Plain-language text the homeowner agrees to. `{company}` is replaced with the company name. */
+  text: string;
+}
+
+/**
+ * What the homeowner agrees to when they sign the application. These are consents and
+ * acknowledgments, not the construction contract; that is signed separately on the proposal.
+ */
+export const APPLICATION_AUTHORIZATIONS: ApplicationAuthorization[] = [
+  {
+    id: "records",
+    title: "Property and title review",
+    text:
+      "I authorize {company} to review public property records, title information, and recorded liens for the property listed above, and to contact the title or escrow company handling my sale to confirm the closing.",
+  },
+  {
+    id: "proceeds",
+    title: "Payment from sale proceeds",
+    text:
+      "I understand the cost of the work will be paid from my proceeds at closing. I agree to instruct the title or escrow company to pay {company} from those proceeds, and I understand the final construction agreement will carry the exact amount.",
+  },
+  {
+    id: "balance",
+    title: "If the sale does not close",
+    text:
+      "I understand that if the sale is canceled, does not close, or the proceeds are not enough to cover the balance, the balance for completed work is still owed and becomes due as described in the construction agreement.",
+  },
+  {
+    id: "truthful",
+    title: "My answers are accurate",
+    text:
+      "The information I gave in this application is true and complete to the best of my knowledge. I will let {company} know if the closing date, the sale price, or what is owed on the home changes.",
+  },
+];
+
+export function authorizationText(authorization: ApplicationAuthorization, companyName: string) {
+  return authorization.text.replace(/\{company\}/g, companyName.trim() || "the contractor");
+}
+
+export function applicationAuthorizationsComplete(checked: readonly string[]) {
+  return APPLICATION_AUTHORIZATIONS.every((authorization) => checked.includes(authorization.id));
 }
 
 /** A request is waiting on a company admin until someone records a decision. */
@@ -581,8 +688,50 @@ export function parseInterview(value: unknown): PayAtCloseInterview {
       else if (typeof raw === "number" && Number.isFinite(raw)) answers[key] = raw;
     }
   }
+  const sources: Record<string, InterviewSource> = {};
+  if (isRecord(value.sources)) {
+    for (const [key, raw] of Object.entries(value.sources)) {
+      if (raw === "rep" || raw === "homeowner") sources[key] = raw;
+    }
+  }
   const completedAt = typeof value.completedAt === "string" && value.completedAt ? value.completedAt : null;
-  return { answers, completedAt };
+  return { answers, sources, completedAt };
+}
+
+export function parseApplicationUploads(value: unknown): ApplicationUpload[] {
+  if (!Array.isArray(value)) return [];
+  const uploads: ApplicationUpload[] = [];
+  for (const raw of value) {
+    if (!isRecord(raw) || typeof raw.path !== "string" || !raw.path) continue;
+    uploads.push({
+      path: raw.path,
+      name: text(raw.name) || raw.path.split("/").pop() || "file",
+      size: typeof raw.size === "number" && Number.isFinite(raw.size) ? raw.size : 0,
+      contentType: text(raw.contentType),
+      uploadedAt: text(raw.uploadedAt),
+    });
+  }
+  return uploads;
+}
+
+/** Builds the application from the row's flat columns. Every input may be missing on old rows. */
+export function parseApplication(row: Record<string, unknown> | null | undefined): PayAtCloseApplication {
+  if (!row) return emptyApplication();
+  const authorizations = Array.isArray(row.authorizations)
+    ? row.authorizations.filter((item): item is string => typeof item === "string")
+    : [];
+  return {
+    token: text(row.token),
+    sentAt: typeof row.sentAt === "string" && row.sentAt ? row.sentAt : null,
+    sentTo: text(row.sentTo),
+    submittedAt: typeof row.submittedAt === "string" && row.submittedAt ? row.submittedAt : null,
+    signatureName: text(row.signatureName),
+    signatureImage: text(row.signatureImage),
+    authorizations,
+    uploads: parseApplicationUploads(row.uploads),
+    ip: text(row.ip),
+    userAgent: text(row.userAgent),
+  };
 }
 
 export function emptyJobPayAtClose(jobId: string, id?: string, state = ""): JobPayAtClose {
@@ -617,6 +766,7 @@ export function emptyJobPayAtClose(jobId: string, id?: string, state = ""): JobP
     decidedAt: null,
     decisionNote: "",
     interview: emptyInterview(),
+    application: emptyApplication(),
     updatedAt: new Date().toISOString(),
   };
 }
@@ -692,7 +842,31 @@ export function jobPayAtClosePayload(record: JobPayAtClose, companyId: string) {
     decided_at: record.decidedAt || null,
     decision_note: record.decisionNote.trim(),
     interview: record.interview,
+    application_token: record.application.token || null,
+    application_sent_at: record.application.sentAt || null,
+    application_sent_to: record.application.sentTo.trim(),
+    application_submitted_at: record.application.submittedAt || null,
+    application_signature_name: record.application.signatureName,
+    application_signature_image: record.application.signatureImage,
+    application_authorizations: record.application.authorizations,
+    application_uploads: record.application.uploads,
+    application_ip: record.application.ip,
+    application_user_agent: record.application.userAgent,
     updated_at: record.updatedAt,
+  };
+}
+
+/** Stamp a fresh link on the record. Re-sending after a submission keeps the signed copy; send a new request instead. */
+export function sendPayAtCloseApplication(record: JobPayAtClose, token: string, sentTo: string, now = new Date()): JobPayAtClose {
+  return {
+    ...record,
+    application: {
+      ...record.application,
+      token: record.application.token || token,
+      sentAt: now.toISOString(),
+      sentTo: sentTo.trim(),
+    },
+    updatedAt: now.toISOString(),
   };
 }
 
@@ -718,6 +892,8 @@ export type InterviewFieldKey =
   | "escrowPhone"
   | "escrowFileNumber";
 
+export type InterviewAudience = "rep" | "homeowner";
+
 export interface InterviewQuestion {
   /** Answer key. When `field` is set the value lives on the record instead of `interview.answers`. */
   id: string;
@@ -725,13 +901,19 @@ export interface InterviewQuestion {
   kind: InterviewQuestionKind;
   /** What the rep asks the homeowner, or reads off the file. */
   prompt: string;
+  /** Second-person wording for the homeowner application. Falls back to `prompt`. */
+  homeownerPrompt?: string;
   /** Short label for summaries and the PDF. */
   label: string;
   help?: string;
+  /** Help shown on the homeowner application instead of `help`. */
+  homeownerHelp?: string;
   required?: boolean;
   options?: Array<{ value: string; label: string }>;
   /** Hide the question until the record makes it relevant. */
   showWhen?: (record: JobPayAtClose) => boolean;
+  /** Who sees the question. Default: both the rep interview and the homeowner application. */
+  audience?: InterviewAudience;
 }
 
 export interface InterviewStep {
@@ -739,6 +921,8 @@ export interface InterviewStep {
   title: string;
   /** One line the rep can say to open the step. */
   intro: string;
+  /** Opening line on the homeowner application. */
+  homeownerIntro?: string;
   questions: InterviewQuestion[];
 }
 
@@ -767,87 +951,322 @@ export const INTERVIEW_STEPS: InterviewStep[] = [
     id: "sale",
     title: "The sale",
     intro: "Tell me about the sale so we can line our payment up with the closing.",
+    homeownerIntro: "A few questions about the sale so we can line our payment up with your closing.",
     questions: [
-      { id: "sale_reason", kind: "text", label: "Why selling", prompt: "Why is the homeowner selling?", required: true, help: "Relocation, downsizing, estate, financial pressure. The reason shapes how firm the closing date is." },
+      {
+        id: "sale_reason",
+        kind: "text",
+        label: "Why selling",
+        prompt: "Why is the homeowner selling?",
+        homeownerPrompt: "Why are you selling?",
+        required: true,
+        help: "Relocation, downsizing, estate, financial pressure. The reason shapes how firm the closing date is.",
+        homeownerHelp: "Moving, downsizing, settling an estate. A sentence is plenty.",
+      },
       {
         id: "listingStatus",
         field: "listingStatus",
         kind: "select",
         label: "Listing",
         prompt: "Where does the listing stand today?",
+        homeownerPrompt: "Where does your listing stand today?",
         required: true,
         options: LISTING_STATUSES.map((value) => ({ value, label: LISTING_STATUS_LABELS[value] })),
       },
-      { id: "listingAgent", field: "listingAgent", kind: "text", label: "Listing agent", prompt: "Who is the listing agent, and with which brokerage?" },
-      { id: "listPrice", field: "listPrice", kind: "money", label: "List price", prompt: "What is the list price, or the price they expect to list at?" },
-      { id: "contractPrice", field: "contractPrice", kind: "money", label: "Sale price", prompt: "What is the agreed sale price?", showWhen: underContract },
-      { id: "expectedCloseDate", field: "expectedCloseDate", kind: "date", label: "Expected closing", prompt: "When is closing expected?", required: true },
-      { id: "prior_fall_through", kind: "yes_no", label: "Prior contract fell through", prompt: "Has this home been under contract before and fallen through?", required: true },
-      { id: "listing_expires_before_close", kind: "yes_no", label: "Listing expires before closing", prompt: "Does the listing agreement expire before the expected closing?" },
+      {
+        id: "listingAgent",
+        field: "listingAgent",
+        kind: "text",
+        label: "Listing agent",
+        prompt: "Who is the listing agent, and with which brokerage?",
+        homeownerPrompt: "Who is your listing agent, and with which brokerage?",
+      },
+      { id: "agent_email", kind: "text", label: "Agent email or phone", prompt: "", homeownerPrompt: "How do we reach your agent?", audience: "homeowner" },
+      {
+        id: "listPrice",
+        field: "listPrice",
+        kind: "money",
+        label: "List price",
+        prompt: "What is the list price, or the price they expect to list at?",
+        homeownerPrompt: "What is the list price, or the price you expect to list at?",
+      },
+      {
+        id: "contractPrice",
+        field: "contractPrice",
+        kind: "money",
+        label: "Sale price",
+        prompt: "What is the agreed sale price?",
+        homeownerPrompt: "What sale price did you agree to?",
+        showWhen: underContract,
+      },
+      {
+        id: "expectedCloseDate",
+        field: "expectedCloseDate",
+        kind: "date",
+        label: "Expected closing",
+        prompt: "When is closing expected?",
+        homeownerPrompt: "When do you expect to close?",
+        required: true,
+        homeownerHelp: "Your best guess is fine if a date is not set yet.",
+      },
+      {
+        id: "prior_fall_through",
+        kind: "yes_no",
+        label: "Prior contract fell through",
+        prompt: "Has this home been under contract before and fallen through?",
+        homeownerPrompt: "Has this home been under contract before and fallen through?",
+        required: true,
+      },
+      {
+        id: "listing_expires_before_close",
+        kind: "yes_no",
+        label: "Listing expires before closing",
+        prompt: "Does the listing agreement expire before the expected closing?",
+        homeownerPrompt: "Does your listing agreement expire before the expected closing?",
+      },
     ],
   },
   {
     id: "owners",
     title: "Ownership and signers",
     intro: "We need everyone on title to sign, so let's confirm who that is.",
+    homeownerIntro: "Everyone on the deed signs the agreement, so help us confirm who that is.",
     questions: [
-      { id: "signerNames", field: "signerNames", kind: "text", label: "Signers", prompt: "Who will sign our agreement? Write the names exactly as they appear on the deed.", required: true, help: "Checked against the owner of record when the property review runs." },
-      { id: "all_owners_signing", kind: "yes_no", label: "All owners signing", prompt: "Will every person on title, including a spouse, sign our agreement?", required: true, help: "In Texas a homestead needs both spouses before work starts." },
+      {
+        id: "signerNames",
+        field: "signerNames",
+        kind: "text",
+        label: "Signers",
+        prompt: "Who will sign our agreement? Write the names exactly as they appear on the deed.",
+        homeownerPrompt: "Who is on the deed? Write each name exactly as it appears there.",
+        required: true,
+        help: "Checked against the owner of record when the property review runs.",
+        homeownerHelp: "Found on your deed or your last property-tax statement.",
+      },
+      {
+        id: "all_owners_signing",
+        kind: "yes_no",
+        label: "All owners signing",
+        prompt: "Will every person on title, including a spouse, sign our agreement?",
+        homeownerPrompt: "Will every person on the deed be able to sign our agreement?",
+        required: true,
+        help: "In Texas a homestead needs both spouses before work starts.",
+      },
+      {
+        id: "spouse_not_on_deed",
+        kind: "yes_no",
+        label: "Married; spouse not on deed",
+        prompt: "",
+        homeownerPrompt: "Are you married to someone who is not on the deed?",
+        homeownerHelp: "In some states a spouse signs even when they are not on the deed.",
+        audience: "homeowner",
+      },
       {
         id: "legal_situation",
         kind: "select",
         label: "Legal situation",
         prompt: "Is the property held in a trust or LLC, part of an estate or probate, or involved in a divorce?",
+        homeownerPrompt: "Does any of these apply to the home?",
         required: true,
         options: [...LEGAL_SITUATIONS],
       },
-      { id: "owner_occupied", kind: "yes_no", label: "Seller lives there", prompt: "Does the seller live in the home?" },
+      {
+        id: "owner_occupied",
+        kind: "yes_no",
+        label: "Seller lives there",
+        prompt: "Does the seller live in the home?",
+        homeownerPrompt: "Do you live in the home?",
+      },
     ],
   },
   {
     id: "debt",
     title: "What is owed",
     intro: "Our payment comes after the loans and liens, so we need a picture of what is owed.",
+    homeownerIntro: "We are paid after your loans and liens at closing, so we need a picture of what is owed. Round numbers are fine.",
     questions: [
-      { id: "mortgage_balance", kind: "money", label: "Mortgage balance (homeowner)", prompt: "About how much is owed on the first mortgage?", help: "Shown next to the public-record estimate. Only a payoff letter changes the math." },
-      { id: "mortgage_current", kind: "yes_no", label: "Current on mortgage", prompt: "Is the seller current on the mortgage?", required: true },
-      { id: "heloc_balance", kind: "money", label: "HELOC or second balance", prompt: "Is there a HELOC or second mortgage? What is the balance?" },
-      { id: "other_liens", kind: "long_text", label: "Other liens known", prompt: "Any property-tax, HOA, judgment, IRS, or contractor liens the seller knows of? Describe and estimate." },
-      { id: "payoff_statement", kind: "yes_no", label: "Payoff statement available", prompt: "Can the seller share a recent mortgage statement or payoff letter?", required: true, help: "When yes, enter the figures as verified office liens on the file and they replace the estimate." },
+      {
+        id: "lender_names",
+        kind: "text",
+        label: "Lender(s)",
+        prompt: "",
+        homeownerPrompt: "Who is your mortgage lender or servicer?",
+        homeownerHelp: "The company you send the payment to.",
+        audience: "homeowner",
+      },
+      {
+        id: "mortgage_balance",
+        kind: "money",
+        label: "Mortgage balance (homeowner)",
+        prompt: "About how much is owed on the first mortgage?",
+        homeownerPrompt: "About how much is owed on your mortgage?",
+        help: "Shown next to the public-record estimate. Only a payoff letter changes the math.",
+      },
+      {
+        id: "mortgage_current",
+        kind: "yes_no",
+        label: "Current on mortgage",
+        prompt: "Is the seller current on the mortgage?",
+        homeownerPrompt: "Are you current on your mortgage payments?",
+        required: true,
+      },
+      {
+        id: "heloc_balance",
+        kind: "money",
+        label: "HELOC or second balance",
+        prompt: "Is there a HELOC or second mortgage? What is the balance?",
+        homeownerPrompt: "Do you have a home equity line or second mortgage? If so, about how much is owed?",
+      },
+      {
+        id: "other_liens",
+        kind: "long_text",
+        label: "Other liens known",
+        prompt: "Any property-tax, HOA, judgment, IRS, or contractor liens the seller knows of? Describe and estimate.",
+        homeownerPrompt: "Are there any property-tax, HOA, judgment, IRS, or contractor liens on the home that you know of?",
+        homeownerHelp: "If none, write none.",
+      },
+      {
+        id: "payoff_statement",
+        kind: "yes_no",
+        label: "Payoff statement available",
+        prompt: "Can the seller share a recent mortgage statement or payoff letter?",
+        homeownerPrompt: "Can you share a recent mortgage statement or payoff letter?",
+        required: true,
+        help: "When yes, enter the figures as verified office liens on the file and they replace the estimate.",
+        homeownerHelp: "You can upload it on this page. A statement lets us use your real balance instead of an estimate.",
+      },
     ],
   },
   {
     id: "work",
     title: "The work",
     intro: "Now the job itself and what we are asking the closing to carry.",
+    homeownerIntro: "A little about the repair and how it fits the sale.",
     questions: [
-      { id: "contractValue", field: "contractValue", kind: "money", label: "Pay-at-close amount", prompt: "How much will we collect at closing?", required: true },
-      { id: "deposit_possible", kind: "yes_no", label: "Deposit possible", prompt: "Can the seller pay anything up front?" },
-      { id: "depositAmount", field: "depositAmount", kind: "money", label: "Deposit", prompt: "How much up front?", showWhen: (record) => record.interview.answers.deposit_possible === true },
+      {
+        id: "contractValue",
+        field: "contractValue",
+        kind: "money",
+        label: "Pay-at-close amount",
+        prompt: "How much will we collect at closing?",
+        required: true,
+        audience: "rep",
+      },
+      {
+        id: "deposit_possible",
+        kind: "yes_no",
+        label: "Deposit possible",
+        prompt: "Can the seller pay anything up front?",
+        homeownerPrompt: "Are you able to pay any part of the work up front?",
+        homeownerHelp: "Not required. A deposit can make approval easier.",
+      },
+      {
+        id: "depositAmount",
+        field: "depositAmount",
+        kind: "money",
+        label: "Deposit",
+        prompt: "How much up front?",
+        homeownerPrompt: "About how much?",
+        showWhen: (record) => record.interview.answers.deposit_possible === true,
+      },
       {
         id: "repair_required_by",
         kind: "select",
         label: "Repair required by",
         prompt: "Is someone requiring this repair for the sale to go through?",
+        homeownerPrompt: "Is someone requiring this repair for the sale to go through?",
         options: [...REPAIR_REQUIRED_BY],
       },
-      { id: "completion_before_close", kind: "yes_no", label: "Done a week before closing", prompt: "Will the work be complete at least a week before closing?", required: true },
+      {
+        id: "completion_before_close",
+        kind: "yes_no",
+        label: "Done a week before closing",
+        prompt: "Will the work be complete at least a week before closing?",
+        required: true,
+        audience: "rep",
+      },
     ],
   },
   {
     id: "title",
     title: "Title and escrow",
     intro: "Last part: who pays us at the table.",
+    homeownerIntro: "Last part: who is handling your closing. Skip anything you do not know yet.",
     questions: [
-      { id: "titleCompany", field: "titleCompany", kind: "text", label: "Title company", prompt: "Which title or escrow company is handling the closing?" },
-      { id: "escrowOfficer", field: "escrowOfficer", kind: "text", label: "Escrow officer", prompt: "Who is the escrow officer?" },
-      { id: "escrowEmail", field: "escrowEmail", kind: "text", label: "Escrow email", prompt: "Escrow officer email?" },
-      { id: "escrowPhone", field: "escrowPhone", kind: "text", label: "Escrow phone", prompt: "Escrow officer phone?" },
-      { id: "escrowFileNumber", field: "escrowFileNumber", kind: "text", label: "File number", prompt: "Escrow or title file number?" },
-      { id: "agent_committed", kind: "yes_no", label: "Agent agreed to settlement line", prompt: "Has the seller's agent agreed to put our payment on the settlement statement?", required: true },
+      {
+        id: "titleCompany",
+        field: "titleCompany",
+        kind: "text",
+        label: "Title company",
+        prompt: "Which title or escrow company is handling the closing?",
+        homeownerPrompt: "Which title or escrow company is handling your closing?",
+      },
+      { id: "escrowOfficer", field: "escrowOfficer", kind: "text", label: "Escrow officer", prompt: "Who is the escrow officer?", homeownerPrompt: "Who is your escrow or closing officer?" },
+      { id: "escrowEmail", field: "escrowEmail", kind: "text", label: "Escrow email", prompt: "Escrow officer email?", homeownerPrompt: "Their email" },
+      { id: "escrowPhone", field: "escrowPhone", kind: "text", label: "Escrow phone", prompt: "Escrow officer phone?", homeownerPrompt: "Their phone" },
+      { id: "escrowFileNumber", field: "escrowFileNumber", kind: "text", label: "File number", prompt: "Escrow or title file number?", homeownerPrompt: "Your escrow or title file number, if you have it" },
+      {
+        id: "agent_committed",
+        kind: "yes_no",
+        label: "Agent agreed to settlement line",
+        prompt: "Has the seller's agent agreed to put our payment on the settlement statement?",
+        homeownerPrompt: "Has your agent agreed to put our payment on the settlement statement?",
+        required: true,
+        homeownerHelp: "If you are not sure, answer no and we will reach out to them.",
+      },
     ],
   },
 ];
+
+/** Steps as the rep sees them in the office interview. */
+export const REP_INTERVIEW_STEPS: InterviewStep[] = INTERVIEW_STEPS.map((step) => ({
+  ...step,
+  questions: step.questions.filter((question) => question.audience !== "homeowner"),
+}));
+
+/** Steps as the homeowner sees them on the application: second-person wording, no office-only questions. */
+export const APPLICATION_STEPS: InterviewStep[] = INTERVIEW_STEPS.map((step) => ({
+  ...step,
+  intro: step.homeownerIntro ?? step.intro,
+  questions: step.questions
+    .filter((question) => question.audience !== "rep")
+    .map((question) => ({
+      ...question,
+      prompt: question.homeownerPrompt ?? question.prompt,
+      help: question.homeownerHelp ?? (question.audience === "homeowner" ? question.help : undefined),
+    })),
+}));
+
+export interface ApplicationProgress {
+  answered: number;
+  total: number;
+  requiredMissing: InterviewQuestion[];
+  complete: boolean;
+  /** First step with a missing required answer, or the step count when none. */
+  nextStepIndex: number;
+}
+
+/** Progress through the homeowner application, counting only questions the homeowner sees. */
+export function applicationProgress(record: JobPayAtClose): ApplicationProgress {
+  let answered = 0;
+  let total = 0;
+  const requiredMissing: InterviewQuestion[] = [];
+  let nextStepIndex = APPLICATION_STEPS.length;
+  APPLICATION_STEPS.forEach((step, index) => {
+    let stepMissing = false;
+    for (const question of step.questions) {
+      if (!interviewQuestionVisible(record, question)) continue;
+      total += 1;
+      if (interviewAnswered(record, question)) answered += 1;
+      else if (question.required) {
+        requiredMissing.push(question);
+        stepMissing = true;
+      }
+    }
+    if (stepMissing && nextStepIndex === APPLICATION_STEPS.length) nextStepIndex = index;
+  });
+  return { answered, total, requiredMissing, complete: requiredMissing.length === 0, nextStepIndex };
+}
 
 export function interviewQuestions(): InterviewQuestion[] {
   return INTERVIEW_STEPS.flatMap((step) => step.questions);
@@ -922,8 +1341,8 @@ export function interviewProgress(record: JobPayAtClose): InterviewProgress {
   let answered = 0;
   let total = 0;
   const requiredMissing: InterviewQuestion[] = [];
-  let nextStepIndex = INTERVIEW_STEPS.length;
-  INTERVIEW_STEPS.forEach((step, index) => {
+  let nextStepIndex = REP_INTERVIEW_STEPS.length;
+  REP_INTERVIEW_STEPS.forEach((step, index) => {
     let stepMissing = false;
     for (const question of step.questions) {
       if (!interviewQuestionVisible(record, question)) continue;
@@ -935,7 +1354,7 @@ export function interviewProgress(record: JobPayAtClose): InterviewProgress {
         stepMissing = true;
       }
     }
-    if (stepMissing && nextStepIndex === INTERVIEW_STEPS.length) nextStepIndex = index;
+    if (stepMissing && nextStepIndex === REP_INTERVIEW_STEPS.length) nextStepIndex = index;
   });
   return {
     answered,
@@ -966,16 +1385,64 @@ export function interviewValueLabel(question: InterviewQuestion, value: Intervie
   }
 }
 
+export interface InterviewSummaryRow {
+  step: string;
+  label: string;
+  value: string;
+  /** Who answered. Field-bound values carry the source only when the homeowner supplied them. */
+  source: InterviewSource;
+}
+
 /** Interview answers as label/value pairs for summaries and the PDF. Skips unanswered questions. */
-export function interviewSummary(record: JobPayAtClose): Array<{ step: string; label: string; value: string }> {
-  const rows: Array<{ step: string; label: string; value: string }> = [];
+export function interviewSummary(record: JobPayAtClose): InterviewSummaryRow[] {
+  const rows: InterviewSummaryRow[] = [];
   for (const step of INTERVIEW_STEPS) {
     for (const question of step.questions) {
       if (!interviewQuestionVisible(record, question) || !interviewAnswered(record, question)) continue;
-      rows.push({ step: step.title, label: question.label, value: interviewValueLabel(question, interviewValue(record, question)) });
+      rows.push({
+        step: step.title,
+        label: question.label,
+        value: interviewValueLabel(question, interviewValue(record, question)),
+        source: record.interview.sources[question.id] ?? "rep",
+      });
     }
   }
   return rows;
+}
+
+/** Merge a homeowner's submission into the record the way the database RPC does, for optimistic UI and tests. */
+export function applyApplicationSubmission(
+  record: JobPayAtClose,
+  submission: {
+    answers: Record<string, InterviewValue>;
+    fields: Partial<Record<InterviewFieldKey, InterviewValue>>;
+    signatureName: string;
+    signatureImage: string;
+    authorizations: string[];
+    now?: Date;
+  },
+): JobPayAtClose {
+  const now = submission.now ?? new Date();
+  let next: JobPayAtClose = {
+    ...record,
+    interview: { ...record.interview, answers: { ...record.interview.answers }, sources: { ...record.interview.sources } },
+  };
+  for (const question of interviewQuestions()) {
+    if (question.audience === "rep") continue;
+    const raw = question.field ? submission.fields[question.field] : submission.answers[question.id];
+    if (raw === undefined || raw === null || raw === "") continue;
+    next = setInterviewValue(next, question, raw);
+    next.interview.sources[question.id] = "homeowner";
+  }
+  next.application = {
+    ...next.application,
+    submittedAt: now.toISOString(),
+    signatureName: submission.signatureName.trim(),
+    signatureImage: submission.signatureImage,
+    authorizations: [...submission.authorizations],
+  };
+  next.updatedAt = now.toISOString();
+  return next;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1612,6 +2079,24 @@ function interviewFlags(record: JobPayAtClose, property: PropertyRecord | null, 
     });
   }
 
+  const appState = applicationState(record.application);
+  if (appState === "sent") {
+    const sentDays = record.application.sentAt ? Math.floor((today.getTime() - new Date(record.application.sentAt).getTime()) / 86_400_000) : 0;
+    flags.push({
+      code: "application_unsigned",
+      severity: "watch",
+      title: sentDays >= 2 ? `Homeowner application unsigned for ${sentDays} days` : "Homeowner application not signed yet",
+      detail: "The homeowner has the link but has not finished or signed. Their authorizations for the records review and the settlement line are not in hand.",
+    });
+  } else if (appState === "submitted" && a.spouse_not_on_deed === true) {
+    flags.push({
+      code: "spouse_off_title",
+      severity: "watch",
+      title: "Homeowner is married to someone not on the deed",
+      detail: "Community-property and homestead states can require the spouse's signature anyway. Ask the title company whether the spouse joins.",
+    });
+  }
+
   const reported = typeof a.mortgage_balance === "number" ? a.mortgage_balance : 0;
   const verifiedMortgage = record.liens.some((lien) => lien.verified && lien.kind === "mortgage");
   if (reported > 0 && !verifiedMortgage && property?.mortgages.length) {
@@ -1678,6 +2163,8 @@ const FLAG_WEIGHTS: Record<string, number> = {
   lender_required: -5,
   completion_after_close: 25,
   homeowner_balance_differs: 3,
+  application_unsigned: 6,
+  spouse_off_title: 8,
 };
 
 export function riskScore(flags: RiskFlag[]) {
@@ -1980,6 +2467,17 @@ export function payAtCloseActivityNote(before: JobPayAtClose | undefined, after:
   if (after.interview.completedAt && after.interview.completedAt !== before.interview.completedAt) {
     const progress = interviewProgress(after);
     lines.push(`Qualification interview submitted (${progress.answered} of ${progress.total} answered).`);
+  }
+  if (after.application.sentAt && after.application.sentAt !== before.application.sentAt) {
+    const to = after.application.sentTo ? ` to ${after.application.sentTo}` : "";
+    lines.push(`Homeowner application ${before.application.sentAt ? "re-sent" : "sent"}${to}.`);
+  }
+  if (after.application.submittedAt && after.application.submittedAt !== before.application.submittedAt) {
+    const progress = applicationProgress(after);
+    const uploads = after.application.uploads.length;
+    lines.push(
+      `Homeowner application signed by ${after.application.signatureName || "the homeowner"} (${progress.answered} of ${progress.total} answered${uploads ? `, ${uploads} file${uploads === 1 ? "" : "s"}` : ""}).`,
+    );
   }
   const previous = new Set(before.checklist.filter((item) => item.done).map((item) => item.key));
   for (const item of after.checklist) {

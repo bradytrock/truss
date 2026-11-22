@@ -10175,6 +10175,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         checklist: next.checklist as unknown as Json,
         report: next.report as unknown as Json,
         interview: next.interview as unknown as Json,
+        application_uploads: next.application.uploads as unknown as Json,
       };
       let { data, error } = await supabase
         .from("job_pay_at_close")

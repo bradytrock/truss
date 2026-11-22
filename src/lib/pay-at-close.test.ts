@@ -30,6 +30,16 @@ import {
   setInterviewValue,
   signersMatchOwners,
   stateChecklist,
+  APPLICATION_AUTHORIZATIONS,
+  APPLICATION_STEPS,
+  REP_INTERVIEW_STEPS,
+  applicationAuthorizationsComplete,
+  applicationProgress,
+  applicationState,
+  applyApplicationSubmission,
+  authorizationText,
+  parseApplication,
+  sendPayAtCloseApplication,
   type JobPayAtClose,
   type MortgageRecord,
   type PropertyRecord,
@@ -121,7 +131,7 @@ const cleanAnswers = {
 // Waterfall: $615k sale, ~$355k loan, 7% closing costs, $18k contract.
 const record: JobPayAtClose = {
   ...emptyJobPayAtClose("job_1", "pac_1", "CO"),
-  interview: { answers: cleanAnswers, completedAt: null },
+  interview: { answers: cleanAnswers, sources: {}, completedAt: null },
   contractValue: 18_000,
   depositAmount: 0,
   listingStatus: "under_contract",
@@ -367,7 +377,7 @@ assert.ok(interviewSummary(filled).some((row) => row.label === "Deposit" && row.
 assert.equal("deposit_possible" in setInterviewValue(filled, q("deposit_possible"), null).interview.answers, false);
 
 // An unfinished interview cannot reach approve, even on a clean property.
-const unfinished: JobPayAtClose = { ...record, interview: { answers: {}, completedAt: null } };
+const unfinished: JobPayAtClose = { ...record, interview: { answers: {}, sources: {}, completedAt: null } };
 const unfinishedFlags = riskFlags({ record: unfinished, property, waterfall, state: "CO", today });
 assert.ok(unfinishedFlags.some((flag) => flag.code === "interview_incomplete"));
 assert.equal(recommend(waterfall, unfinishedFlags), "review");
@@ -403,7 +413,7 @@ assert.ok(riskScore(riskyFlags) < riskScore(cleanFlags));
 const approvedRisky = riskFlags({ record: { ...risky, status: "approved" }, property, waterfall, state: "CO", today });
 assert.equal(approvedRisky.find((flag) => flag.code === "agent_not_committed")?.severity, "high");
 // A lender-required repair earns a small credit.
-const credited: JobPayAtClose = { ...record, interview: { answers: { ...cleanAnswers, repair_required_by: "buyer_inspection" }, completedAt: null } };
+const credited: JobPayAtClose = { ...record, interview: { answers: { ...cleanAnswers, repair_required_by: "buyer_inspection" }, sources: {}, completedAt: null } };
 const creditedFlags = riskFlags({ record: credited, property, waterfall, state: "CO", today });
 assert.ok(riskScore(creditedFlags) >= riskScore(cleanFlags));
 
@@ -411,8 +421,68 @@ assert.ok(riskScore(creditedFlags) >= riskScore(cleanFlags));
 const parsedInterview = parseInterview({ answers: { a: true, b: "x", c: 12, d: null, e: { nested: 1 } }, completedAt: "2026-11-22T00:00:00Z" });
 assert.deepEqual(parsedInterview.answers, { a: true, b: "x", c: 12, d: null });
 assert.equal(parsedInterview.completedAt, "2026-11-22T00:00:00Z");
-assert.deepEqual(parseInterview(null), { answers: {}, completedAt: null });
+assert.deepEqual(parseInterview(null), { answers: {}, sources: {}, completedAt: null });
 const submitted = { ...filled, interview: { ...filled.interview, completedAt: today.toISOString() } };
 assert.ok(payAtCloseActivityNote(filled, submitted)?.includes("Qualification interview submitted"));
+
+// Homeowner application. Office-only questions stay off the homeowner's form and vice versa.
+const homeownerIds = new Set(APPLICATION_STEPS.flatMap((step) => step.questions.map((question) => question.id)));
+const repIds = new Set(REP_INTERVIEW_STEPS.flatMap((step) => step.questions.map((question) => question.id)));
+assert.ok(!homeownerIds.has("contractValue") && !homeownerIds.has("completion_before_close"));
+assert.ok(repIds.has("contractValue") && !repIds.has("spouse_not_on_deed") && !repIds.has("lender_names"));
+assert.ok(homeownerIds.has("spouse_not_on_deed") && homeownerIds.has("lender_names") && homeownerIds.has("agent_email"));
+for (const step of APPLICATION_STEPS) {
+  for (const question of step.questions) assert.ok(question.prompt.trim().length > 0, `homeowner prompt missing for ${question.id}`);
+}
+// Rep progress ignores homeowner-only questions.
+// (depositAmount is hidden until deposit_possible is answered yes.)
+assert.equal(interviewProgress(record).total, REP_INTERVIEW_STEPS.flatMap((step) => step.questions).length - 1);
+
+assert.equal(applicationState(record.application), "not_sent");
+const sent = sendPayAtCloseApplication(record, "abc123def456abc123def456abc12345", "jane@example.com", today);
+assert.equal(applicationState(sent.application), "sent");
+assert.equal(sent.application.token, "abc123def456abc123def456abc12345");
+assert.ok(payAtCloseActivityNote(record, sent)?.includes("Homeowner application sent to jane@example.com"));
+// Re-sending keeps the same token so the first link still works.
+assert.equal(sendPayAtCloseApplication(sent, "other", "jane@example.com").application.token, sent.application.token);
+const sentFlags = riskFlags({ record: sent, property, waterfall, state: "CO", today });
+assert.ok(sentFlags.some((flag) => flag.code === "application_unsigned"));
+
+assert.ok(!applicationAuthorizationsComplete(["records"]));
+assert.ok(applicationAuthorizationsComplete(APPLICATION_AUTHORIZATIONS.map((item) => item.id)));
+assert.ok(authorizationText(APPLICATION_AUTHORIZATIONS[0], "Acme Roofing").includes("Acme Roofing"));
+assert.ok(!authorizationText(APPLICATION_AUTHORIZATIONS[0], "Acme Roofing").includes("{company}"));
+
+const signed = applyApplicationSubmission(sent, {
+  answers: { mortgage_balance: 340_000, spouse_not_on_deed: true, lender_names: "Wells Fargo", contractValue: 1 },
+  fields: { titleCompany: "Land Title", expectedCloseDate: "2026-12-22", contractValue: 1 },
+  signatureName: "Jane Example",
+  signatureImage: "data:image/png;base64,AAA",
+  authorizations: APPLICATION_AUTHORIZATIONS.map((item) => item.id),
+  now: today,
+});
+assert.equal(applicationState(signed.application), "submitted");
+assert.equal(signed.titleCompany, "Land Title");
+assert.equal(signed.expectedCloseDate, "2026-12-22");
+// Office-only fields never come from the homeowner.
+assert.equal(signed.contractValue, 18_000);
+assert.equal(signed.interview.answers.mortgage_balance, 340_000);
+assert.equal(signed.interview.sources.titleCompany, "homeowner");
+assert.equal(signed.interview.sources.lender_names, "homeowner");
+assert.equal(signed.interview.sources.sale_reason, undefined);
+assert.ok(interviewSummary(signed).some((row) => row.label === "Lender(s)" && row.source === "homeowner"));
+assert.ok(payAtCloseActivityNote(sent, signed)?.includes("signed by Jane Example"));
+const signedFlags = riskFlags({ record: signed, property, waterfall, state: "CO", today });
+assert.ok(!signedFlags.some((flag) => flag.code === "application_unsigned"));
+assert.ok(signedFlags.some((flag) => flag.code === "spouse_off_title"));
+assert.ok(applicationProgress(signed).answered > applicationProgress(sent).answered);
+
+// Application columns round-trip.
+const parsedApplication = parseApplication({ token: "t", sentAt: "2026-11-22T00:00:00Z", sentTo: "x", submittedAt: null, signatureName: "", signatureImage: "", authorizations: ["records", 3], uploads: [{ path: "c/r/f.pdf", size: 10 }, { nope: true }], ip: "", userAgent: "" });
+assert.deepEqual(parsedApplication.authorizations, ["records"]);
+assert.equal(parsedApplication.uploads.length, 1);
+assert.equal(parsedApplication.uploads[0].name, "f.pdf");
+assert.equal(parseApplication(null).token, "");
+assert.equal(jobPayAtClosePayload(signed, "co_1").application_signature_name, "Jane Example");
 
 console.log("pay-at-close.test.ts ok");

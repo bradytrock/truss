@@ -49,6 +49,7 @@ import {
   parseChecklist,
   parseLiens,
   parsePropertyRecord,
+  parseApplication,
   parseInterview,
   parseReport,
   type JobPayAtClose,
@@ -1255,6 +1256,18 @@ export function mapJobPayAtClose(
     decidedAt: row.decided_at,
     decisionNote: row.decision_note ?? "",
     interview: parseInterview(row.interview),
+    application: parseApplication({
+      token: row.application_token,
+      sentAt: row.application_sent_at,
+      sentTo: row.application_sent_to,
+      submittedAt: row.application_submitted_at,
+      signatureName: row.application_signature_name,
+      signatureImage: row.application_signature_image,
+      authorizations: row.application_authorizations,
+      uploads: row.application_uploads,
+      ip: row.application_ip,
+      userAgent: row.application_user_agent,
+    }),
     updatedAt: row.updated_at,
   };
 }

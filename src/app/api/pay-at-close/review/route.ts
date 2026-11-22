@@ -6,6 +6,7 @@ import {
   isListingStatus,
   isPayAtCloseStatus,
   parseChecklist,
+  parseApplication,
   parseInterview,
   parseLiens,
   parsePropertyRecord,
@@ -86,6 +87,7 @@ function recordFromBody(raw: unknown, state: string): JobPayAtClose {
     status: isPayAtCloseStatus(str(row.status)) ? (str(row.status) as JobPayAtClose["status"]) : base.status,
     notes: str(row.notes),
     interview: parseInterview(row.interview),
+    application: parseApplication(isRecord(row.application) ? row.application : null),
   };
 }
 

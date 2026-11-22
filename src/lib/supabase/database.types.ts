@@ -1598,6 +1598,16 @@ export type Database = {
           decided_at: string | null;
           decision_note: string;
           interview: Json;
+          application_token: string | null;
+          application_sent_at: string | null;
+          application_sent_to: string;
+          application_submitted_at: string | null;
+          application_signature_name: string;
+          application_signature_image: string;
+          application_authorizations: Json;
+          application_uploads: Json;
+          application_ip: string;
+          application_user_agent: string;
           updated_at: string;
         };
         Insert: {
@@ -1632,6 +1642,16 @@ export type Database = {
           decided_at?: string | null;
           decision_note?: string;
           interview?: Json;
+          application_token?: string | null;
+          application_sent_at?: string | null;
+          application_sent_to?: string;
+          application_submitted_at?: string | null;
+          application_signature_name?: string;
+          application_signature_image?: string;
+          application_authorizations?: Json;
+          application_uploads?: Json;
+          application_ip?: string;
+          application_user_agent?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["job_pay_at_close"]["Insert"]>;
@@ -4454,6 +4474,23 @@ export type Database = {
       };
       sign_shared_estimate: {
         Args: { p_token: string; p_signer_name: string; p_signature: string };
+        Returns: Json;
+      };
+      shared_pay_at_close_application: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      submit_pay_at_close_application: {
+        Args: {
+          p_token: string;
+          p_answers: Json;
+          p_fields: Json;
+          p_signature_name: string;
+          p_signature_image: string;
+          p_authorizations: Json;
+          p_ip?: string;
+          p_user_agent?: string;
+        };
         Returns: Json;
       };
       record_estimate_share_event: {
