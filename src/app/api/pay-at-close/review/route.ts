@@ -4,6 +4,7 @@ import {
   emptyJobPayAtClose,
   interviewSummary,
   isListingStatus,
+  isSamplePropertyRecord,
   isPayAtCloseStatus,
   parseChecklist,
   parseApplication,
@@ -175,11 +176,15 @@ export async function POST(request: Request) {
   }
 
   const record = recordFromBody(body.record, address.state);
+  const recordsConfigured = propertyRecordsConfigured();
   let property = record.property;
-  let provider = property?.sourceName ? "Saved record" : "";
+  // A sample record saved before the host had a provider key is not worth keeping:
+  // re-scoring it would never call the provider, so pull live records instead.
+  const reused = Boolean(body.reuseProperty && property && !(recordsConfigured && isSamplePropertyRecord(property)));
+  let provider = reused ? "Saved record" : "";
   let live = false;
   let lookupError = "";
-  if (!body.reuseProperty || !property) {
+  if (!reused) {
     try {
       const result = await lookupPropertyRecord(address);
       provider = result.provider;
@@ -208,7 +213,8 @@ export async function POST(request: Request) {
     report,
     provider,
     live,
-    recordsConfigured: propertyRecordsConfigured(),
+    reused,
+    recordsConfigured,
     narrativeFromModel: Boolean(narrative),
     lookupError: lookupError || null,
   });

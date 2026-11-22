@@ -1,4 +1,4 @@
-import type { DistressSignals, LienRecord, MortgageRecord, PropertyRecord } from "@/lib/pay-at-close";
+import { SAMPLE_PROPERTY_SOURCE, type DistressSignals, type LienRecord, type MortgageRecord, type PropertyRecord } from "@/lib/pay-at-close";
 
 /**
  * Public property records for Pay at Close underwriting.
@@ -304,7 +304,7 @@ export function samplePropertyRecord(address: PropertyAddress, ownerHint = ""): 
       taxLien: false,
       preForeclosureDate: distressRoll === 3 ? "2026-08-14" : null,
     },
-    sourceName: "Sample property data (no records provider key set)",
+    sourceName: SAMPLE_PROPERTY_SOURCE,
     fetchedAt: new Date().toISOString(),
   };
 }

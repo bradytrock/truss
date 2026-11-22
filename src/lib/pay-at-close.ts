@@ -161,6 +161,13 @@ export interface PropertyRecord {
   fetchedAt: string;
 }
 
+export const SAMPLE_PROPERTY_SOURCE = "Sample property data (no records provider key set)";
+
+/** True when the saved record came from the demo generator rather than a records provider. */
+export function isSamplePropertyRecord(property: Pick<PropertyRecord, "sourceName"> | null | undefined) {
+  return Boolean(property && property.sourceName.startsWith("Sample property data"));
+}
+
 export const CHECKLIST_KEYS = [
   "agreement_signed",
   "assignment_of_proceeds",

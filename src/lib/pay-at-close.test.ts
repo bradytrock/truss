@@ -33,6 +33,8 @@ import {
   APPLICATION_AUTHORIZATIONS,
   APPLICATION_STEPS,
   REP_INTERVIEW_STEPS,
+  SAMPLE_PROPERTY_SOURCE,
+  isSamplePropertyRecord,
   applicationAuthorizationsComplete,
   applicationProgress,
   applicationState,
@@ -484,5 +486,11 @@ assert.equal(parsedApplication.uploads.length, 1);
 assert.equal(parsedApplication.uploads[0].name, "f.pdf");
 assert.equal(parseApplication(null).token, "");
 assert.equal(jobPayAtClosePayload(signed, "co_1").application_signature_name, "Jane Example");
+
+// A record saved from the demo generator is recognised so a later review with a
+// provider key re-pulls it instead of re-scoring sample data forever.
+assert.equal(isSamplePropertyRecord({ sourceName: SAMPLE_PROPERTY_SOURCE }), true);
+assert.equal(isSamplePropertyRecord({ sourceName: "ATTOM public records for 1 Main St" }), false);
+assert.equal(isSamplePropertyRecord(null), false);
 
 console.log("pay-at-close.test.ts ok");

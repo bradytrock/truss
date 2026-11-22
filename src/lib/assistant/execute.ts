@@ -42,8 +42,12 @@ import {
   setInterviewValue,
   type InterviewValue,
   type JobPayAtClose,
-  type PayAtCloseReport,
 } from "@/lib/pay-at-close";
+import {
+  recordsSourceLabel,
+  reviewOutcome,
+  type PayAtCloseReviewResponse,
+} from "@/lib/pay-at-close-review-client";
 import {
   EVENT_KINDS,
   EXPENSE_ACCOUNTS,
@@ -86,16 +90,6 @@ function matches(hay: string, query: string) {
   if (!tokens.length) return false;
   return tokens.every((token) => hay.includes(token));
 }
-
-type PayAtCloseReviewResponse = {
-  ok?: boolean;
-  error?: string;
-  property?: unknown;
-  report?: PayAtCloseReport;
-  provider?: string;
-  live?: boolean;
-  lookupError?: string | null;
-};
 
 function summarizePayAtClose(job: Job, record: JobPayAtClose) {
   const report = record.report;
@@ -1121,7 +1115,7 @@ async function runTool(
       return ok(
         {
           ...summarizePayAtClose(job, saved),
-          recordsSource: body.live ? body.provider : "Sample records (no ATTOM_API_KEY on the host)",
+          recordsSource: recordsSourceLabel(reviewOutcome(body)),
           lookupError: body.lookupError ?? null,
         },
         { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },

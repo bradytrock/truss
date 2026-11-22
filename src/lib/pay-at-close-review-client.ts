@@ -5,16 +5,22 @@ export type PayAtCloseReviewResult = {
   record: JobPayAtClose;
   live: boolean;
   provider: string;
+  /** The saved property record was re-scored; no provider call was made. */
+  reused: boolean;
+  /** The host has a records provider key. */
+  recordsConfigured: boolean;
   lookupError: string | null;
 };
 
-type ReviewResponse = {
+export type PayAtCloseReviewResponse = {
   ok?: boolean;
   error?: string;
   property?: unknown;
   report?: PayAtCloseReport;
   provider?: string;
   live?: boolean;
+  reused?: boolean;
+  recordsConfigured?: boolean;
   lookupError?: string | null;
 };
 
@@ -41,21 +47,40 @@ export async function requestPayAtCloseReview(input: {
       homeowner: input.homeowner,
     }),
   });
-  const body = (await response.json().catch(() => null)) as ReviewResponse | null;
+  const body = (await response.json().catch(() => null)) as PayAtCloseReviewResponse | null;
   if (!response.ok || !body?.ok || !body.report) {
     throw new Error(body?.error ?? "The property review did not run.");
   }
   const property = (body.property ?? record.property) as PropertyRecord | null;
   return {
     record: { ...record, property, report: body.report },
+    ...reviewOutcome(body),
+  };
+}
+
+export function reviewOutcome(body: Pick<PayAtCloseReviewResponse, "live" | "provider" | "reused" | "recordsConfigured" | "lookupError">) {
+  return {
     live: Boolean(body.live),
     provider: body.provider ?? "",
+    reused: Boolean(body.reused),
+    recordsConfigured: Boolean(body.recordsConfigured),
     lookupError: body.lookupError ?? null,
   };
 }
 
-export function reviewRanToast(result: Pick<PayAtCloseReviewResult, "live" | "provider">) {
-  return result.live
-    ? `Property review ran against ${result.provider}.`
-    : "Property review ran with sample records. Set ATTOM_API_KEY on the host for live public records.";
+/** One line on where the property data came from, for toasts and the assistant. */
+export function recordsSourceLabel(result: ReturnType<typeof reviewOutcome>) {
+  if (result.live) return result.provider;
+  if (result.reused) return "Saved record";
+  if (!result.recordsConfigured) return "Sample records (no ATTOM_API_KEY on the host)";
+  return `${result.provider || "The records provider"} returned no live record`;
+}
+
+export function reviewRanToast(result: ReturnType<typeof reviewOutcome>) {
+  if (result.live) return `Property review ran against ${result.provider}.`;
+  if (result.reused) return "Re-scored from the saved property record.";
+  if (!result.recordsConfigured) {
+    return "Property review ran with sample records. Set ATTOM_API_KEY on the host for live public records.";
+  }
+  return `Property review ran, but ${result.provider || "the records provider"} did not return live records.`;
 }
