@@ -22,7 +22,7 @@ import type { AssistantToolCall, AssistantToolResult } from "@/lib/assistant/typ
 import { toolByName } from "@/lib/assistant/tools";
 import { LEAD_SOURCES, isPickableLeadSource } from "@/lib/lead-sources";
 import { useCrm } from "@/lib/crm-store";
-import { newShareToken } from "@/lib/share";
+import { displayShareLink, newApplicationToken, shareUrl } from "@/lib/share";
 import {
   APPLICATION_STATE_LABELS,
   REP_INTERVIEW_STEPS,
@@ -143,12 +143,13 @@ function applicationSummary(record: JobPayAtClose) {
   const progress = applicationProgress(record);
   return {
     state: APPLICATION_STATE_LABELS[state],
-    link: record.application.token ? `/share/q/${record.application.token}` : "",
+    link: record.application.token ? displayShareLink(shareUrl("q", record.application.token)) : "",
     sentAt: record.application.sentAt,
     sentTo: record.application.sentTo,
     submittedAt: record.application.submittedAt,
-    signedBy: record.application.signatureName,
-    answered: state === "submitted" ? `${progress.answered} of ${progress.total}` : "",
+    contactConsent: state === "submitted" ? record.application.authorizations.includes("contact") : null,
+    answered: state !== "not_sent" ? `${progress.answered} of ${progress.total}` : "",
+    stillOpen: state !== "not_sent" ? progress.open : null,
     files: record.application.uploads.map((upload) => upload.name),
   };
 }
@@ -1033,11 +1034,11 @@ async function runTool(
         });
       if (base.application.submittedAt) {
         return ok(
-          { job: job.code, ...applicationSummary(base), hint: "The homeowner already signed this application. Nothing to send." },
+          { job: job.code, ...applicationSummary(base), hint: "The homeowner already sent their answers. Nothing to send." },
           { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
         );
       }
-      const token = base.application.token || newShareToken();
+      const token = base.application.token || newApplicationToken();
       const saved = await crm.saveJobPayAtClose(sendPayAtCloseApplication(base, token, arg(args, "to")));
       if (!saved) return fail("Could not save the application link.");
       return ok(
@@ -1045,7 +1046,7 @@ async function runTool(
           job: job.code,
           name: job.name,
           ...applicationSummary(saved),
-          hint: "Text or email this link to the homeowner only. They answer and sign from their phone; the answers land on the job's Pay at close tab.",
+          hint: "Text or email this link to the homeowner only. It opens after they confirm the property ZIP and expires in 7 days. They answer four short pages from their phone; the answers land on the job's Pay at close tab as they go.",
         },
         { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
       );

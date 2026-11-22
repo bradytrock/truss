@@ -385,43 +385,28 @@ export async function buildPayAtClosePdf(input: PayAtClosePdfInput) {
 
   const application = record.application;
   const appState = applicationState(application);
-  y = sectionTitle(doc, y, "Homeowner application");
+  y = sectionTitle(doc, y, "Homeowner answers");
   if (appState === "submitted") {
     const appProgress = applicationProgress(record);
     y = paragraph(
       doc,
       y,
-      `Signed by ${application.signatureName || "the homeowner"} on ${dateLabel(application.submittedAt)}. ${appProgress.answered} of ${appProgress.total} questions answered${application.uploads.length ? `; ${application.uploads.length} file${application.uploads.length === 1 ? "" : "s"} uploaded (${application.uploads.map((upload) => upload.name).join(", ")})` : ""}.${application.ip ? ` Signed from ${application.ip}.` : ""}`,
+      `Sent back by the homeowner on ${dateLabel(application.submittedAt)}: ${appProgress.answered} of ${appProgress.total} questions answered${appProgress.open ? `, ${appProgress.open} left blank` : ""}${application.uploads.length ? `; ${application.uploads.length} file${application.uploads.length === 1 ? "" : "s"} added (${application.uploads.map((upload) => upload.name).join(", ")})` : ""}.${application.ip ? ` From ${application.ip}.` : ""}`,
     );
     for (const authorization of APPLICATION_AUTHORIZATIONS) {
       const on = application.authorizations.includes(authorization.id);
-      y = paragraph(doc, y, `${on ? "[x]" : "[ ]"} ${authorization.title}. ${authorizationText(authorization, company.name)}`);
+      y = paragraph(doc, y, `${on ? "[x]" : "[ ]"} ${authorizationText(authorization, company.name)}`);
     }
-    if (application.signatureImage.startsWith("data:image/")) {
-      y = ensure(doc, y, 70);
-      const format = application.signatureImage.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-      try {
-        doc.addImage(application.signatureImage, format, INSET, y, 160, 54);
-      } catch {
-        /* a malformed data URL should not block the report */
-      }
-      stroke(doc, RULE);
-      doc.setLineWidth(0.5);
-      doc.line(INSET, y + 56, INSET + 220, y + 56);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
-      paint(doc, MUTED);
-      doc.text(`${application.signatureName} · ${dateLabel(application.submittedAt)}`, INSET, y + 66);
-      paint(doc, INK);
-      y += 76;
+    if (application.signatureName) {
+      y = paragraph(doc, y, `Signed ${application.signatureName} (earlier version of the link).`);
     }
   } else {
     y = paragraph(
       doc,
       y,
       appState === "sent"
-        ? `Sent ${dateLabel(application.sentAt)}${application.sentTo ? ` to ${application.sentTo}` : ""}; not yet signed.`
-        : "Not sent.",
+        ? `Link sent ${dateLabel(application.sentAt)}${application.sentTo ? ` to ${application.sentTo}` : ""}; ${applicationProgress(record).answered ? `${applicationProgress(record).answered} answered so far, ` : ""}not sent back yet.`
+        : "Link not sent.",
     );
   }
   y += 4;

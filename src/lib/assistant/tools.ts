@@ -348,7 +348,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "send_pay_at_close_application",
     description:
-      "Mint the homeowner's Pay at Close application link on a job and mark it sent. The homeowner answers the qualification questions in their own words, uploads a payoff statement, and signs the authorizations from their phone. Returns the link to text or email. Always confirm first.",
+      "Mint the homeowner's short Pay at Close link on a job and mark it sent. The homeowner answers the sale, title, debt, and closing-contact questions from their phone, may add a mortgage statement, and OKs contacting their agent and title company. Returns the link to text or email. Always confirm first.",
     status: "Preparing the homeowner application…",
     gate: "ops",
     confirm: true,
@@ -362,7 +362,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "get_pay_at_close",
-    description: "Read the saved Pay at Close file on a job: status, amount due at closing, expected closing, coverage, recommendation, flags, checklist, interview, and whether the homeowner application is signed.",
+    description: "Read the saved Pay at Close file on a job: status, amount due at closing, expected closing, coverage, recommendation, flags, checklist, interview, and what the homeowner has answered from their link.",
     status: "Opening the pay-at-close file…",
     gate: "ops",
     parameters: object({ job: str("Job id or job code") }, ["job"]),

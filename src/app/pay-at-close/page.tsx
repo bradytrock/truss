@@ -226,7 +226,7 @@ export default function PayAtClosePage() {
                       <PayAtCloseStatusBadge status={record.status} />
                       {applicationState(record.application) !== "not_sent" ? (
                         <span className={cn("mt-1 block text-xs", applicationState(record.application) === "submitted" ? "text-emerald-700" : "text-muted-foreground")}>
-                          {applicationState(record.application) === "submitted" ? "Homeowner signed" : "Application out"}
+                          {applicationState(record.application) === "submitted" ? "Homeowner answered" : "Link out"}
                         </span>
                       ) : null}
                     </TableCell>
