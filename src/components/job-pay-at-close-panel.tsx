@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Check, Download, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ClipboardList, Download, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,20 +31,22 @@ import {
   buildPayAtCloseReport,
   decidePayAtClose,
   estimateMortgageBalance,
-  newPayAtCloseRequest,
+  interviewProgress,
+  interviewSummary,
   payAtCloseAwaitingApproval,
   payAtCloseStatusChoices,
   type JobPayAtClose,
   type LienKind,
   type LienRecord,
   type ListingStatus,
-  type PayAtCloseReport,
   type PayAtCloseStatus,
   type PropertyRecord,
   type Recommendation,
   type RiskSeverity,
 } from "@/lib/pay-at-close";
 import { downloadPayAtClosePdf } from "@/lib/pay-at-close-pdf";
+import { jobHasReviewableAddress, requestPayAtCloseReview, reviewRanToast } from "@/lib/pay-at-close-review-client";
+import { PayAtCloseInterviewDialog } from "@/components/pay-at-close-interview";
 import { canDecidePayAtClose, canRequestPayAtClose } from "@/lib/visibility";
 import type { Job } from "@/lib/types";
 
@@ -61,38 +63,34 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
 export function JobPayAtClosePanel({ job, readOnly = false }: { job: Job; readOnly?: boolean }) {
   const crm = useCrm();
   const saved = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+  const [interviewOpen, setInterviewOpen] = useState(false);
   return (
-    <PayAtCloseEditor
-      key={`${saved?.id ?? "new"}:${saved?.updatedAt ?? ""}`}
-      job={job}
-      saved={saved}
-      readOnly={readOnly}
-      onSave={crm.saveJobPayAtClose}
-    />
+    <>
+      <PayAtCloseEditor
+        key={`${saved?.id ?? "new"}:${saved?.updatedAt ?? ""}`}
+        job={job}
+        saved={saved}
+        readOnly={readOnly}
+        onSave={crm.saveJobPayAtClose}
+        onOpenInterview={() => setInterviewOpen(true)}
+      />
+      {readOnly ? null : <PayAtCloseInterviewDialog job={job} open={interviewOpen} onOpenChange={setInterviewOpen} />}
+    </>
   );
 }
-
-type ReviewResponse = {
-  ok?: boolean;
-  error?: string;
-  property?: unknown;
-  report?: PayAtCloseReport;
-  provider?: string;
-  live?: boolean;
-  lookupError?: string | null;
-  narrativeFromModel?: boolean;
-};
 
 function PayAtCloseEditor({
   job,
   saved,
   readOnly,
   onSave,
+  onOpenInterview,
 }: {
   job: Job;
   saved: JobPayAtClose | undefined;
   readOnly: boolean;
   onSave: (record: JobPayAtClose) => Promise<JobPayAtClose | null>;
+  onOpenInterview: () => void;
 }) {
   const crm = useCrm();
   const [draft, setDraft] = useState<JobPayAtClose | null>(saved ?? null);
@@ -141,31 +139,10 @@ function PayAtCloseEditor({
     if (!draft || readOnly) return;
     setReviewing(true);
     try {
-      const response = await fetch("/api/pay-at-close/review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: { street: job.street, city: job.city, state: job.state, postalCode: job.postalCode },
-          record: draft,
-          reuseProperty,
-          jobName: job.name,
-          homeowner,
-        }),
-      });
-      const body = (await response.json().catch(() => null)) as ReviewResponse | null;
-      if (!response.ok || !body?.ok || !body.report) {
-        toast.error(body?.error ?? "The property review did not run.");
-        return;
-      }
-      if (body.lookupError) toast.message(body.lookupError);
-      const property = (body.property ?? draft.property) as PropertyRecord | null;
-      const next: JobPayAtClose = { ...draft, property, report: body.report };
-      await persist(next);
-      toast.success(
-        body.live
-          ? `Property review ran against ${body.provider}.`
-          : "Property review ran with sample records. Set ATTOM_API_KEY on the host for live public records.",
-      );
+      const result = await requestPayAtCloseReview({ job, record: draft, homeowner, reuseProperty });
+      if (result.lookupError) toast.message(result.lookupError);
+      await persist(result.record);
+      toast.success(reviewRanToast(result));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "The property review did not run.");
     } finally {
@@ -189,24 +166,12 @@ function PayAtCloseEditor({
     return (
       <EmptyState
         title="No pay-at-close request on this job yet"
-        description="Ask to carry this repair to the homeowner's closing. The request pulls public property records, estimates equity after loans and liens, scores the risk, and waits for a company admin to approve it. You can also start one from New → Pay at Close Request."
+        description="Qualify the homeowner with a short interview: the sale, who is on title, what is owed, the work, and who pays us at the table. The request then pulls public property records, scores the risk, and waits for a company admin to approve it."
         action={
           readOnly || !canRequest ? null : (
-            <Button
-              type="button"
-              onClick={() =>
-                void persist(
-                  newPayAtCloseRequest({
-                    jobId: job.id,
-                    id: crypto.randomUUID(),
-                    state: job.state,
-                    contractValue: job.contractValue || 0,
-                    requester: actor,
-                  }),
-                )
-              }
-            >
-              Request pay at close
+            <Button type="button" onClick={onOpenInterview}>
+              <ClipboardList data-icon="inline-start" />
+              Start qualification interview
             </Button>
           )
         }
@@ -221,7 +186,9 @@ function PayAtCloseEditor({
   const awaitingApproval = payAtCloseAwaitingApproval(draft);
   const decided = Boolean(draft.decidedAt);
   const showDecisionButtons = canDecide && !readOnly && (awaitingApproval || changingDecision);
-  const hasAddress = Boolean(job.street && (job.postalCode || (job.city && job.state)));
+  const hasAddress = jobHasReviewableAddress(job);
+  const interview = interviewProgress(draft);
+  const interviewRows = interviewSummary(draft);
 
   return (
     <div className="space-y-6">
@@ -309,6 +276,44 @@ function PayAtCloseEditor({
               </p>
             )}
           </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3 rounded-[12px] border bg-card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="text-sm font-medium">Qualification interview</h3>
+            <p className="text-xs text-muted-foreground">
+              {interview.submitted
+                ? `Submitted ${formatDate(draft.interview.completedAt)} · ${interview.answered} of ${interview.total} answered${interview.complete ? "" : ` · ${interview.requiredMissing.length} required still open`}.`
+                : interview.answered
+                  ? `${interview.answered} of ${interview.total} answered, not yet submitted${interview.complete ? "" : ` · ${interview.requiredMissing.length} required still open`}.`
+                  : "Not started. The rep's answers about the sale, title, debt, and the agent feed the risk score."}
+            </p>
+          </div>
+          {readOnly ? null : (
+            <Button type="button" size="sm" variant={interview.submitted ? "outline" : "default"} className={interview.submitted ? "bg-card" : undefined} onClick={onOpenInterview}>
+              <ClipboardList data-icon="inline-start" />
+              {interview.submitted ? "Edit answers" : interview.answered ? "Continue interview" : "Start interview"}
+            </Button>
+          )}
+        </div>
+        {interviewRows.length ? (
+          <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            {interviewRows
+              .filter((row) => !["Listing", "List price", "Sale price", "Expected closing", "Signers", "Pay-at-close amount", "Deposit", "Title company", "Escrow officer", "Escrow email", "Escrow phone", "File number", "Listing agent"].includes(row.label))
+              .map((row) => (
+                <div key={`${row.step}:${row.label}`} className="flex justify-between gap-3 border-b border-border/60 pb-1.5">
+                  <dt className="text-muted-foreground">{row.label}</dt>
+                  <dd className="text-right">{row.value}</dd>
+                </div>
+              ))}
+          </dl>
+        ) : null}
+        {interview.requiredMissing.length && (interview.answered || interview.submitted) ? (
+          <p className="text-xs text-amber-700">
+            Still needed: {interview.requiredMissing.map((question) => question.label.toLowerCase()).join(", ")}.
+          </p>
         ) : null}
       </section>
 

@@ -109,8 +109,8 @@ export function JobNewMenu({
       id: "pay-at-close",
       title: "Pay at Close Request",
       detail: payAtCloseStarted
-        ? "Open the request on this job"
-        : "Repairs paid from seller proceeds; needs company admin approval",
+        ? "Continue the qualification or open the request"
+        : "Qualify a repair paid from seller proceeds; needs company admin approval",
       icon: Landmark,
       shortcut: "P",
       onSelect: onPayAtClose,

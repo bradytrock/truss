@@ -49,7 +49,7 @@ import { claimTotals } from "@/lib/insurance";
 import {
   PAY_AT_CLOSE_STATUS_LABELS,
   RECOMMENDATION_LABELS,
-  newPayAtCloseRequest,
+  interviewProgress,
   payAtCloseAwaitingApproval,
 } from "@/lib/pay-at-close";
 import { AutomationRuns } from "@/components/automation-runs";
@@ -147,6 +147,7 @@ import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders
 import { archivedPaper, livePaper } from "@/lib/paper-archive";
 import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
 import { JobNewMenu } from "@/components/job-new-menu";
+import { PayAtCloseInterviewDialog } from "@/components/pay-at-close-interview";
 import { JobRelatedContacts } from "@/components/job-related-contacts";
 import { JobTagField } from "@/components/job-tag-field";
 import { jobTagSuggestions } from "@/lib/job-tags";
@@ -455,6 +456,7 @@ export function JobRecord({
   const [photoViewOpen, setPhotoViewOpen] = useState(false);
   const [headerPhotoId, setHeaderPhotoId] = useState<string | null>(null);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [payAtCloseInterviewOpen, setPayAtCloseInterviewOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [materialTemplateOpen, setMaterialTemplateOpen] = useState(false);
   const [activityFocus, setActivityFocus] = useState(0);
@@ -501,19 +503,13 @@ export function JobRecord({
     if (deleted) return;
     if (kind === "pay-at-close") {
       if (!showPayAtClose || !allowPayAtCloseRequest) return;
-      setJobTab("pay-at-close");
       const existing = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
-      if (existing) return;
-      const requester = crm.effectiveStaff ? { id: crm.effectiveStaff.id, name: crm.effectiveStaff.name } : null;
-      void crm.saveJobPayAtClose(
-        newPayAtCloseRequest({
-          jobId: job.id,
-          id: crypto.randomUUID(),
-          state: job.state,
-          contractValue: job.contractValue || 0,
-          requester,
-        }),
-      );
+      // A submitted interview opens the file; anything else resumes the interview.
+      if (existing && interviewProgress(existing).submitted) {
+        setJobTab("pay-at-close");
+        return;
+      }
+      setPayAtCloseInterviewOpen(true);
       return;
     }
     if (kind === "estimate") {
@@ -2266,6 +2262,15 @@ export function JobRecord({
           </div>
         </div>
       </Tabs>
+
+      {showPayAtClose ? (
+        <PayAtCloseInterviewDialog
+          job={job}
+          open={payAtCloseInterviewOpen}
+          onOpenChange={setPayAtCloseInterviewOpen}
+          onSubmitted={() => setJobTab("pay-at-close")}
+        />
+      ) : null}
 
       <Dialog unsavedGuard={false} open={addressOpen} onOpenChange={setAddressOpen}>
         <DialogContent className="sm:max-w-md">

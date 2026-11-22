@@ -6,6 +6,8 @@ import {
   LIEN_KIND_LABELS,
   LISTING_STATUS_LABELS,
   PAY_AT_CLOSE_STATUS_LABELS,
+  interviewProgress,
+  interviewSummary,
   RECOMMENDATION_LABELS,
   estimateMortgageBalance,
   type JobPayAtClose,
@@ -356,6 +358,23 @@ export async function buildPayAtClosePdf(input: PayAtClosePdfInput) {
     ],
   ]);
   if (record.decisionNote) y = paragraph(doc, y, record.decisionNote);
+  y += 4;
+
+  const interview = interviewProgress(record);
+  const interviewRows = interviewSummary(record).filter(
+    (row) => !["Listing", "List price", "Sale price", "Expected closing", "Signers", "Pay-at-close amount", "Deposit", "Title company", "Escrow officer", "Escrow email", "Escrow phone", "File number", "Listing agent"].includes(row.label),
+  );
+  y = sectionTitle(doc, y, "Qualification interview");
+  y = paragraph(
+    doc,
+    y,
+    interview.submitted
+      ? `Submitted ${dateLabel(record.interview.completedAt)} by ${record.requestedByName || "the rep"}. ${interview.answered} of ${interview.total} questions answered${interview.complete ? "." : `; still open: ${interview.requiredMissing.map((question) => question.label.toLowerCase()).join(", ")}.`}`
+      : interview.answered
+        ? `In progress: ${interview.answered} of ${interview.total} answered, not yet submitted.`
+        : "Not started.",
+  );
+  if (interviewRows.length) y = keyValueGrid(doc, y, interviewRows.map((row) => [row.label, row.value] as [string, string]), 2);
   y += 4;
 
   y = sectionTitle(doc, y, "Deal");
