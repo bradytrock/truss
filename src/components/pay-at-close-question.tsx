@@ -7,29 +7,45 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { InterviewQuestion, InterviewValue } from "@/lib/pay-at-close";
+import type { InterviewQuestion, InterviewSource, InterviewValue } from "@/lib/pay-at-close";
 
-/** One interview question with its input. Shared by the rep's interview dialog and the homeowner application. */
+/**
+ * One interview question with its input, as the office sees it. Label on the left, control on
+ * the right, with where the answer came from and anything the public record says about it.
+ */
 export function QuestionField({
   question,
   value,
   missing,
+  source,
+  note,
   onChange,
 }: {
   question: InterviewQuestion;
   value: InterviewValue;
   missing: boolean;
+  /** Who gave the current answer. Shown as a badge when it was the homeowner. */
+  source?: InterviewSource;
+  /** Public-record comparison or guidance, under the input. */
+  note?: React.ReactNode;
   onChange: (value: InterviewValue) => void;
 }) {
   const id = `interview-${question.id}`;
   return (
-    <div className={cn("space-y-2 rounded-[12px] border p-4", missing ? "border-rose-300 bg-rose-50/40 dark:bg-rose-950/20" : "bg-card")}>
-      <label htmlFor={id} className="block text-sm font-medium">
+    <div className={cn("grid gap-2 border-b py-4 last:border-b-0 md:grid-cols-[14rem_minmax(0,1fr)] md:gap-6", missing ? "bg-rose-50/40 dark:bg-rose-950/20" : undefined)}>
+      <label htmlFor={id} className="text-sm leading-snug font-medium">
         {question.prompt}
-        {question.required ? <span className="ml-1 text-muted-foreground">*</span> : null}
+        {question.required ? <span className="ml-1 text-primary">*</span> : null}
       </label>
-      {question.help ? <p className="text-xs text-muted-foreground">{question.help}</p> : null}
-      <QuestionInput id={id} question={question} value={value} onChange={onChange} />
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <QuestionInput id={id} question={question} value={value} onChange={onChange} />
+          {source === "homeowner" ? (
+            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">From homeowner</span>
+          ) : null}
+        </div>
+        {note ? <div className="text-xs text-muted-foreground">{note}</div> : question.help ? <p className="text-xs text-muted-foreground">{question.help}</p> : null}
+      </div>
     </div>
   );
 }
@@ -48,7 +64,7 @@ export function QuestionInput({
   switch (question.kind) {
     case "yes_no":
       return (
-        <div className="flex gap-2" role="radiogroup" aria-labelledby={id}>
+        <div className="inline-flex rounded-[10px] border p-0.5" role="radiogroup" aria-labelledby={id}>
           {[
             { label: "Yes", choice: true },
             { label: "No", choice: false },
@@ -57,9 +73,10 @@ export function QuestionInput({
               key={option.label}
               type="button"
               role="radio"
+              size="sm"
               aria-checked={value === option.choice}
-              variant={value === option.choice ? "default" : "outline"}
-              className={value === option.choice ? undefined : "bg-card"}
+              variant={value === option.choice ? "default" : "ghost"}
+              className={value === option.choice ? "bg-foreground text-background hover:bg-foreground/90" : undefined}
               onClick={() => onChange(value === option.choice ? null : option.choice)}
             >
               {option.label}
@@ -99,11 +116,11 @@ export function QuestionInput({
       );
     }
     case "long_text":
-      return <Textarea id={id} rows={3} value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value || null)} />;
+      return <Textarea id={id} rows={3} className="w-full" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value || null)} />;
     default:
       if (question.field === "escrowPhone") {
         return <PhoneInput id={id} value={typeof value === "string" ? value : ""} autoComplete="off" onValueChange={(next) => onChange(next || null)} />;
       }
-      return <Input id={id} value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value || null)} />;
+      return <Input id={id} className="w-full" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value || null)} />;
   }
 }
