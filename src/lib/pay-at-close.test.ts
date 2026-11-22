@@ -31,21 +31,28 @@ import {
   signersMatchOwners,
   stateChecklist,
   APPLICATION_AUTHORIZATIONS,
-  APPLICATION_STEPS,
+  HOMEOWNER_SECTIONS,
+  HOMEOWNER_QUESTION_IDS,
   REP_INTERVIEW_STEPS,
   SAMPLE_PROPERTY_SOURCE,
   isSamplePropertyRecord,
   applicationAuthorizationsComplete,
+  applicationLinkExpired,
+  applicationMinutes,
   applicationProgress,
+  applicationSectionsToShow,
   applicationState,
   applyApplicationSubmission,
   authorizationText,
+  homeownerCanAnswer,
   parseApplication,
   sendPayAtCloseApplication,
   type JobPayAtClose,
   type MortgageRecord,
   type PropertyRecord,
 } from "./pay-at-close.ts";
+import { emptyHomeownerAnswers, homeownerAnswersFromRecord, homeownerSubmission, normalizeZip } from "./pay-at-close-homeowner.ts";
+import { displayShareLink, isApplicationToken, messageCarriesLink, newApplicationToken, sharePath, shareUrlAllowed } from "./share-link.ts";
 
 const today = new Date("2026-11-22T12:00:00Z");
 
@@ -427,65 +434,118 @@ assert.deepEqual(parseInterview(null), { answers: {}, sources: {}, completedAt: 
 const submitted = { ...filled, interview: { ...filled.interview, completedAt: today.toISOString() } };
 assert.ok(payAtCloseActivityNote(filled, submitted)?.includes("Qualification interview submitted"));
 
-// Homeowner application. Office-only questions stay off the homeowner's form and vice versa.
-const homeownerIds = new Set(APPLICATION_STEPS.flatMap((step) => step.questions.map((question) => question.id)));
+// Homeowner link. Office-only questions stay off the homeowner's pages and vice versa.
 const repIds = new Set(REP_INTERVIEW_STEPS.flatMap((step) => step.questions.map((question) => question.id)));
-assert.ok(!homeownerIds.has("contractValue") && !homeownerIds.has("completion_before_close"));
-assert.ok(repIds.has("contractValue") && !repIds.has("spouse_not_on_deed") && !repIds.has("lender_names"));
-assert.ok(homeownerIds.has("spouse_not_on_deed") && homeownerIds.has("lender_names") && homeownerIds.has("agent_email"));
-for (const step of APPLICATION_STEPS) {
-  for (const question of step.questions) assert.ok(question.prompt.trim().length > 0, `homeowner prompt missing for ${question.id}`);
-}
+assert.ok(!HOMEOWNER_QUESTION_IDS.has("contractValue") && !HOMEOWNER_QUESTION_IDS.has("completion_before_close") && !HOMEOWNER_QUESTION_IDS.has("agent_committed"));
+assert.ok(repIds.has("contractValue") && repIds.has("agent_committed") && !repIds.has("agent_phone") && !repIds.has("agent_email"));
+assert.ok(HOMEOWNER_QUESTION_IDS.has("agent_phone") && !HOMEOWNER_QUESTION_IDS.has("agent_committed"));
+assert.ok(HOMEOWNER_QUESTION_IDS.has("mortgage_balance") && HOMEOWNER_QUESTION_IDS.has("ownership") && HOMEOWNER_QUESTION_IDS.has("contact_consent"));
+assert.equal(HOMEOWNER_SECTIONS.map((section) => section.id).join(","), "sale,title,owed,contacts");
+assert.ok(!homeownerCanAnswer({ id: "agent_committed", audience: "rep" }));
+assert.ok(homeownerCanAnswer({ id: "mortgage_balance", audience: undefined }));
 // Rep progress ignores homeowner-only questions.
 // (depositAmount is hidden until deposit_possible is answered yes.)
-assert.equal(interviewProgress(record).total, REP_INTERVIEW_STEPS.flatMap((step) => step.questions).length - 1);
+assert.equal(interviewProgress(record).total, REP_INTERVIEW_STEPS.filter(() => true).flatMap((step) => step.questions).filter((question) => question.audience !== "homeowner").length - 1);
+
+// The link: short code, root path, shown without a scheme.
+const code = newApplicationToken();
+assert.equal(code.length, 8);
+assert.ok(isApplicationToken(code) && !isApplicationToken("ab") && !isApplicationToken("has space"));
+assert.equal(sharePath("q", code), `/q/${code}`);
+assert.equal(sharePath("e", "tok"), "/share/e/tok");
+assert.equal(displayShareLink(`https://www.theroofingcrm.com/q/${code}/`), `theroofingcrm.com/q/${code}`);
+assert.ok(shareUrlAllowed(`https://theroofingcrm.com/q/${code}`, "https://theroofingcrm.com"));
+assert.ok(shareUrlAllowed(`https://theroofingcrm.com/share/q/${code}`, "https://theroofingcrm.com"));
+assert.ok(!shareUrlAllowed(`https://evil.example/q/${code}`, "https://theroofingcrm.com"));
+assert.ok(messageCarriesLink(`Answer here: theroofingcrm.com/q/${code}`, `https://theroofingcrm.com/q/${code}`));
+assert.ok(!messageCarriesLink("Answer here", `https://theroofingcrm.com/q/${code}`));
 
 assert.equal(applicationState(record.application), "not_sent");
-const sent = sendPayAtCloseApplication(record, "abc123def456abc123def456abc12345", "jane@example.com", today);
+const sent = sendPayAtCloseApplication(record, "8Fk2QxVm", "(903) 555-0142", today, { askOnlyOpen: true });
 assert.equal(applicationState(sent.application), "sent");
-assert.equal(sent.application.token, "abc123def456abc123def456abc12345");
-assert.ok(payAtCloseActivityNote(record, sent)?.includes("Homeowner application sent to jane@example.com"));
-// Re-sending keeps the same token so the first link still works.
+assert.equal(sent.application.token, "8Fk2QxVm");
+assert.equal(sent.application.askOnlyOpen, true);
+assert.ok(payAtCloseActivityNote(record, sent)?.includes("Homeowner link sent to (903) 555-0142"));
+// Re-sending keeps the same code so the first link still works.
 assert.equal(sendPayAtCloseApplication(sent, "other", "jane@example.com").application.token, sent.application.token);
+// The link lives 7 days unless they already sent their answers.
+assert.equal(applicationLinkExpired(sent.application, today), false);
+assert.equal(applicationLinkExpired(sent.application, new Date("2026-11-30T12:00:00Z")), true);
+assert.equal(applicationLinkExpired({ ...sent.application, submittedAt: today.toISOString() }, new Date("2026-12-30T12:00:00Z")), false);
 const sentFlags = riskFlags({ record: sent, property, waterfall, state: "CO", today });
-assert.ok(sentFlags.some((flag) => flag.code === "application_unsigned"));
+assert.ok(sentFlags.some((flag) => flag.code === "application_open"));
 
-assert.ok(!applicationAuthorizationsComplete(["records"]));
-assert.ok(applicationAuthorizationsComplete(APPLICATION_AUTHORIZATIONS.map((item) => item.id)));
+// Progress counts prompts per page; "only ask what's still unanswered" hides answered pages.
+const emptyProgress = applicationProgress({ ...emptyJobPayAtClose("job_2", "pac_2", "TX"), application: sent.application });
+assert.equal(emptyProgress.sections.length, 4);
+assert.ok(emptyProgress.open > 0 && emptyProgress.answered === 0);
+assert.equal(applicationSectionsToShow({ ...emptyJobPayAtClose("job_2", "pac_2", "TX"), application: sent.application }).length, 4);
+assert.equal(applicationMinutes(8), 4);
+assert.equal(applicationMinutes(1), 1);
+const filledLinkProgress = applicationProgress({ ...filled, application: sent.application });
+assert.ok(filledLinkProgress.answered > emptyProgress.answered);
+assert.ok(applicationSectionsToShow({ ...filled, application: sent.application }).length <= 4);
+
+assert.equal(APPLICATION_AUTHORIZATIONS.length, 1);
+assert.ok(applicationAuthorizationsComplete(["contact"]));
 assert.ok(authorizationText(APPLICATION_AUTHORIZATIONS[0], "Acme Roofing").includes("Acme Roofing"));
 assert.ok(!authorizationText(APPLICATION_AUTHORIZATIONS[0], "Acme Roofing").includes("{company}"));
 
-const signed = applyApplicationSubmission(sent, {
-  answers: { mortgage_balance: 340_000, spouse_not_on_deed: true, lender_names: "Wells Fargo", contractValue: 1 },
-  fields: { titleCompany: "Land Title", expectedCloseDate: "2026-12-22", contractValue: 1 },
-  signatureName: "Jane Example",
-  signatureImage: "data:image/png;base64,AAA",
-  authorizations: APPLICATION_AUTHORIZATIONS.map((item) => item.id),
+// The phone's answers map onto the record, touched keys only.
+const answers = { ...emptyHomeownerAnswers(), listingStatus: "under_contract" as const, closeMonth: "2026-12", noMortgage: true, ownership: "trust" as const, trustee: "Pat Jones", deedNames: "Jones Family Trust", otherOwed: ["hoa", "property_tax"], contactConsent: true, titleCompany: "Land Title" };
+const submission = homeownerSubmission(answers, sent.interview.answers);
+assert.equal(submission.answers.mortgage_balance, 0);
+assert.equal(submission.answers.mortgage_current, true);
+assert.equal(submission.answers.ownership, "trust");
+assert.equal(submission.answers.no_mortgage, true);
+assert.equal(submission.fields.expectedCloseDate, "2026-12-01");
+assert.equal(submission.fields.titleCompany, "Land Title");
+assert.equal(submission.fields.signerNames, "Jones Family Trust");
+assert.equal(submission.fields.listingStatus, "under_contract");
+assert.ok(String(submission.answers.other_liens_kinds).includes("hoa"));
+assert.equal(normalizeZip(" 75001-1234 "), "75001");
+
+const answered = applyApplicationSubmission(sent, {
+  answers: { ...submission.answers, contractValue: 1, agent_committed: false },
+  fields: { ...submission.fields, contractValue: 1 },
+  authorizations: ["contact"],
   now: today,
 });
-assert.equal(applicationState(signed.application), "submitted");
-assert.equal(signed.titleCompany, "Land Title");
-assert.equal(signed.expectedCloseDate, "2026-12-22");
-// Office-only fields never come from the homeowner.
-assert.equal(signed.contractValue, 18_000);
-assert.equal(signed.interview.answers.mortgage_balance, 340_000);
-assert.equal(signed.interview.sources.titleCompany, "homeowner");
-assert.equal(signed.interview.sources.lender_names, "homeowner");
-assert.equal(signed.interview.sources.sale_reason, undefined);
-assert.ok(interviewSummary(signed).some((row) => row.label === "Lender(s)" && row.source === "homeowner"));
-assert.ok(payAtCloseActivityNote(sent, signed)?.includes("signed by Jane Example"));
-const signedFlags = riskFlags({ record: signed, property, waterfall, state: "CO", today });
-assert.ok(!signedFlags.some((flag) => flag.code === "application_unsigned"));
-assert.ok(signedFlags.some((flag) => flag.code === "spouse_off_title"));
-assert.ok(applicationProgress(signed).answered > applicationProgress(sent).answered);
+assert.equal(applicationState(answered.application), "submitted");
+assert.equal(answered.titleCompany, "Land Title");
+assert.equal(answered.expectedCloseDate, "2026-12-01");
+// Office-only answers never come from the homeowner.
+assert.equal(answered.contractValue, 18_000);
+assert.equal(answered.interview.answers.agent_committed, true);
+assert.equal(answered.interview.sources.agent_committed, undefined);
+assert.equal(answered.interview.answers.mortgage_balance, 0);
+assert.equal(answered.interview.sources.titleCompany, "homeowner");
+assert.equal(answered.interview.sources.ownership, "homeowner");
+assert.equal(answered.interview.sources.sale_reason, undefined);
+assert.ok(interviewSummary(answered).some((row) => row.source === "homeowner"));
+assert.ok(payAtCloseActivityNote(sent, answered)?.includes("Homeowner answered"));
+const answeredFlags = riskFlags({ record: answered, property, waterfall, state: "CO", today });
+assert.ok(!answeredFlags.some((flag) => flag.code === "application_open"));
+assert.ok(!answeredFlags.some((flag) => flag.code === "contact_declined"));
+const noConsent = applyApplicationSubmission(sent, { answers: { contact_consent: false }, fields: {}, authorizations: [], now: today });
+assert.ok(riskFlags({ record: noConsent, property, waterfall, state: "CO", today }).some((flag) => flag.code === "contact_declined"));
+assert.ok(applicationProgress(answered).answered > applicationProgress(sent).answered);
+// The phone reloads from the record and sees what it sent.
+const reloaded = homeownerAnswersFromRecord(answered);
+assert.equal(reloaded.ownership, "trust");
+assert.equal(reloaded.noMortgage, true);
+assert.equal(reloaded.closeMonth, "2026-12");
+assert.equal(reloaded.contactConsent, true);
 
 // Application columns round-trip.
-const parsedApplication = parseApplication({ token: "t", sentAt: "2026-11-22T00:00:00Z", sentTo: "x", submittedAt: null, signatureName: "", signatureImage: "", authorizations: ["records", 3], uploads: [{ path: "c/r/f.pdf", size: 10 }, { nope: true }], ip: "", userAgent: "" });
-assert.deepEqual(parsedApplication.authorizations, ["records"]);
+const parsedApplication = parseApplication({ token: "t", sentAt: "2026-11-22T00:00:00Z", sentTo: "x", submittedAt: null, askOnlyOpen: true, signatureName: "", signatureImage: "", authorizations: ["contact", 3], uploads: [{ path: "c/r/f.pdf", size: 10 }, { nope: true }], ip: "", userAgent: "" });
+assert.deepEqual(parsedApplication.authorizations, ["contact"]);
+assert.equal(parsedApplication.askOnlyOpen, true);
 assert.equal(parsedApplication.uploads.length, 1);
 assert.equal(parsedApplication.uploads[0].name, "f.pdf");
 assert.equal(parseApplication(null).token, "");
-assert.equal(jobPayAtClosePayload(signed, "co_1").application_signature_name, "Jane Example");
+assert.equal(jobPayAtClosePayload(answered, "co_1").application_ask_only_open, true);
+assert.equal(jobPayAtClosePayload(sent, "co_1").application_ask_only_open, true);
 
 // A record saved from the demo generator is recognised so a later review with a
 // provider key re-pulls it instead of re-scoring sample data forever.

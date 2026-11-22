@@ -8,28 +8,32 @@ import {
   type JobPayAtClose,
 } from "@/lib/pay-at-close";
 
-/** What `shared_pay_at_close_application` returns, parsed. Safe to send to the homeowner's browser. */
+/**
+ * What `shared_pay_at_close_application` returns, parsed. Safe to send to the homeowner's
+ * browser. Before the ZIP is confirmed (`unlocked` false) the answers, fields, and uploads are
+ * empty and the intro is all the page can show.
+ */
 export interface SharedApplicationPayload {
   token: string;
   company: { name: string; phone: string; email: string; website: string; logoUrl: string };
   rep: { name: string; title: string; phone: string; email: string } | null;
+  /** Street, city, and state only; the ZIP is what the homeowner confirms. */
   job: { name: string; street: string; city: string; state: string; postalCode: string };
   homeowner: string;
   contractValue: number;
+  /** The job has a ZIP on file, so the page asks for it before opening. */
+  zipRequired: boolean;
+  /** The ZIP matched (or none was needed) and the answers are included. */
+  unlocked: boolean;
+  /** The link's seven days ran out before the homeowner sent their answers. */
+  expired: boolean;
+  expiresAt: string | null;
+  askOnlyOpen: boolean;
   fields: Partial<Record<InterviewFieldKey, InterviewValue>>;
   answers: Record<string, InterviewValue>;
   sentAt: string | null;
   submittedAt: string | null;
-  signatureName: string;
   uploads: ApplicationUpload[];
-}
-
-export interface ApplicationSubmission {
-  answers: Record<string, InterviewValue>;
-  fields: Partial<Record<InterviewFieldKey, InterviewValue>>;
-  signatureName: string;
-  signatureImage: string;
-  authorizations: string[];
 }
 
 const FIELD_KEYS: InterviewFieldKey[] = [
@@ -66,8 +70,11 @@ export function parseInterviewValues(raw: unknown): Record<string, InterviewValu
   const out: Record<string, InterviewValue> = {};
   if (!isRecord(raw)) return out;
   for (const [key, value] of Object.entries(raw)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{0,63}$/.test(key)) continue;
     const parsed = scalar(value);
-    if (parsed !== undefined) out[key] = parsed;
+    if (parsed === undefined) continue;
+    if (typeof parsed === "string" && parsed.length > 2000) continue;
+    out[key] = parsed;
   }
   return out;
 }
@@ -79,7 +86,7 @@ export function parseFieldValues(raw: unknown): Partial<Record<InterviewFieldKey
     const value = raw[key];
     if (value === undefined) continue;
     if (/Price|Value|Amount/.test(key)) {
-      // Money keys only ever carry numbers; the submit RPC casts them.
+      // Money keys only ever carry numbers; the RPCs cast them.
       if (typeof value === "number" && Number.isFinite(value) && value >= 0) out[key] = value;
       else if (typeof value === "string" && /^\d+(\.\d+)?$/.test(value)) out[key] = Number(value);
       else if (value === null) out[key] = null;
@@ -110,11 +117,15 @@ export function parseSharedApplication(raw: unknown): SharedApplicationPayload |
     job: { name: str(job.name), street: str(job.street), city: str(job.city), state: str(job.state), postalCode: str(job.postalCode) },
     homeowner: str(raw.homeowner),
     contractValue: Number.isFinite(contractValue) ? contractValue : 0,
+    zipRequired: raw.zipRequired !== false,
+    unlocked: raw.unlocked === true,
+    expired: raw.expired === true,
+    expiresAt: str(raw.expiresAt) || null,
+    askOnlyOpen: raw.askOnlyOpen === true,
     fields: parseFieldValues(raw.fields),
     answers: parseInterviewValues(raw.answers),
     sentAt: str(raw.sentAt) || null,
     submittedAt: str(raw.submittedAt) || null,
-    signatureName: str(raw.signatureName),
     uploads: parseApplicationUploads(raw.uploads),
   };
 }
@@ -141,29 +152,11 @@ export function recordFromSharedApplication(payload: SharedApplicationPayload): 
     ...record.application,
     token: payload.token,
     sentAt: payload.sentAt,
+    askOnlyOpen: payload.askOnlyOpen,
     submittedAt: payload.submittedAt,
-    signatureName: payload.signatureName,
     uploads: payload.uploads,
   };
   return record;
-}
-
-/** The field-bound values the homeowner may change, pulled off the working record for the submit call. */
-export function fieldValuesFromRecord(record: JobPayAtClose): Partial<Record<InterviewFieldKey, InterviewValue>> {
-  return {
-    listingStatus: record.listingStatus || null,
-    listingAgent: record.listingAgent || null,
-    listPrice: record.listPrice || null,
-    contractPrice: record.contractPrice || null,
-    expectedCloseDate: record.expectedCloseDate,
-    signerNames: record.signerNames || null,
-    depositAmount: record.depositAmount || null,
-    titleCompany: record.titleCompany || null,
-    escrowOfficer: record.escrowOfficer || null,
-    escrowEmail: record.escrowEmail || null,
-    escrowPhone: record.escrowPhone || null,
-    escrowFileNumber: record.escrowFileNumber || null,
-  };
 }
 
 export const APPLICATION_UPLOAD_BUCKET = "pay-at-close-applications";

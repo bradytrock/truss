@@ -345,14 +345,16 @@ export interface ApplicationUpload {
 }
 
 export interface PayAtCloseApplication {
-  /** Public link token. Empty until the office sends the application. */
+  /** Short public link code (`/q/<code>`). Empty until the office sends the application. */
   token: string;
   sentAt: string | null;
   /** Who it went to, as typed or picked when sending. */
   sentTo: string;
+  /** Show the homeowner only the sections that still have open answers. */
+  askOnlyOpen: boolean;
   submittedAt: string | null;
+  /** Kept for files signed under the earlier version of the application; the current form has no signature. */
   signatureName: string;
-  /** PNG data URL from the signature pad. */
   signatureImage: string;
   /** Ids of APPLICATION_AUTHORIZATIONS the homeowner checked. */
   authorizations: string[];
@@ -366,6 +368,7 @@ export function emptyApplication(): PayAtCloseApplication {
     token: "",
     sentAt: null,
     sentTo: "",
+    askOnlyOpen: false,
     submittedAt: null,
     signatureName: "",
     signatureImage: "",
@@ -387,8 +390,25 @@ export function applicationState(application: PayAtCloseApplication): Applicatio
 export const APPLICATION_STATE_LABELS: Record<ApplicationState, string> = {
   not_sent: "Not sent",
   sent: "Sent, waiting on homeowner",
-  submitted: "Signed and submitted",
+  submitted: "Homeowner answered",
 };
+
+/** A sent link opens for this many days. Sending again restarts the clock on the same code. */
+export const APPLICATION_LINK_DAYS = 7;
+
+export function applicationExpiresAt(application: Pick<PayAtCloseApplication, "sentAt">): string | null {
+  if (!application.sentAt) return null;
+  const sent = new Date(application.sentAt).getTime();
+  if (!Number.isFinite(sent)) return null;
+  return new Date(sent + APPLICATION_LINK_DAYS * 86_400_000).toISOString();
+}
+
+/** True once an unsent-back link is past its window. Submitted answers stay readable. */
+export function applicationLinkExpired(application: Pick<PayAtCloseApplication, "sentAt" | "submittedAt">, now = new Date()) {
+  if (application.submittedAt) return false;
+  const expires = applicationExpiresAt(application);
+  return Boolean(expires) && new Date(expires as string).getTime() < now.getTime();
+}
 
 export interface ApplicationAuthorization {
   id: string;
@@ -398,33 +418,15 @@ export interface ApplicationAuthorization {
 }
 
 /**
- * What the homeowner agrees to when they sign the application. These are consents and
- * acknowledgments, not the construction contract; that is signed separately on the proposal.
+ * What the homeowner agrees to on the application. One consent: letting us work with their
+ * agent and title company. The construction agreement, signed later by everyone on title,
+ * carries the payment terms.
  */
 export const APPLICATION_AUTHORIZATIONS: ApplicationAuthorization[] = [
   {
-    id: "records",
-    title: "Property and title review",
-    text:
-      "I authorize {company} to review public property records, title information, and recorded liens for the property listed above, and to contact the title or escrow company handling my sale to confirm the closing.",
-  },
-  {
-    id: "proceeds",
-    title: "Payment from sale proceeds",
-    text:
-      "I understand the cost of the work will be paid from my proceeds at closing. I agree to instruct the title or escrow company to pay {company} from those proceeds, and I understand the final construction agreement will carry the exact amount.",
-  },
-  {
-    id: "balance",
-    title: "If the sale does not close",
-    text:
-      "I understand that if the sale is canceled, does not close, or the proceeds are not enough to cover the balance, the balance for completed work is still owed and becomes due as described in the construction agreement.",
-  },
-  {
-    id: "truthful",
-    title: "My answers are accurate",
-    text:
-      "The information I gave in this application is true and complete to the best of my knowledge. I will let {company} know if the closing date, the sale price, or what is owed on the home changes.",
+    id: "contact",
+    title: "OK to contact agent and title company",
+    text: "{company} may contact my agent and title company to add this payment to my closing statement.",
   },
 ];
 
@@ -731,6 +733,7 @@ export function parseApplication(row: Record<string, unknown> | null | undefined
     token: text(row.token),
     sentAt: typeof row.sentAt === "string" && row.sentAt ? row.sentAt : null,
     sentTo: text(row.sentTo),
+    askOnlyOpen: bool(row.askOnlyOpen),
     submittedAt: typeof row.submittedAt === "string" && row.submittedAt ? row.submittedAt : null,
     signatureName: text(row.signatureName),
     signatureImage: text(row.signatureImage),
@@ -852,6 +855,7 @@ export function jobPayAtClosePayload(record: JobPayAtClose, companyId: string) {
     application_token: record.application.token || null,
     application_sent_at: record.application.sentAt || null,
     application_sent_to: record.application.sentTo.trim(),
+    application_ask_only_open: record.application.askOnlyOpen,
     application_submitted_at: record.application.submittedAt || null,
     application_signature_name: record.application.signatureName,
     application_signature_image: record.application.signatureImage,
@@ -863,8 +867,17 @@ export function jobPayAtClosePayload(record: JobPayAtClose, companyId: string) {
   };
 }
 
-/** Stamp a fresh link on the record. Re-sending after a submission keeps the signed copy; send a new request instead. */
-export function sendPayAtCloseApplication(record: JobPayAtClose, token: string, sentTo: string, now = new Date()): JobPayAtClose {
+/**
+ * Stamp the link on the record. The code is minted once and kept; sending again restarts the
+ * seven-day window. Re-sending after the homeowner answered keeps their answers.
+ */
+export function sendPayAtCloseApplication(
+  record: JobPayAtClose,
+  token: string,
+  sentTo: string,
+  now = new Date(),
+  options: { askOnlyOpen?: boolean } = {},
+): JobPayAtClose {
   return {
     ...record,
     application: {
@@ -872,6 +885,7 @@ export function sendPayAtCloseApplication(record: JobPayAtClose, token: string, 
       token: record.application.token || token,
       sentAt: now.toISOString(),
       sentTo: sentTo.trim(),
+      askOnlyOpen: options.askOnlyOpen ?? record.application.askOnlyOpen,
     },
     updatedAt: now.toISOString(),
   };
@@ -919,7 +933,11 @@ export interface InterviewQuestion {
   options?: Array<{ value: string; label: string }>;
   /** Hide the question until the record makes it relevant. */
   showWhen?: (record: JobPayAtClose) => boolean;
-  /** Who sees the question. Default: both the rep interview and the homeowner application. */
+  /**
+   * Who answers. Default: the rep, with the homeowner able to answer the same question on their
+   * application when HOMEOWNER_SECTIONS covers it. `rep` never leaves the office ("PM only");
+   * `homeowner` is asked only on the application and shows up in the office as their answer.
+   */
   audience?: InterviewAudience;
 }
 
@@ -941,6 +959,38 @@ export const LEGAL_SITUATIONS = [
   { value: "divorce", label: "Divorce or separation" },
   { value: "other", label: "Something else" },
 ] as const;
+
+/** How the homeowner says the home is owned. Maps onto `legal_situation` for the risk flags. */
+export const OWNERSHIP_KINDS = [
+  { value: "just_me", label: "Just me" },
+  { value: "spouse", label: "Me and my spouse" },
+  { value: "others", label: "Me and others" },
+  { value: "trust", label: "A trust" },
+  { value: "llc", label: "An LLC or company" },
+  { value: "estate", label: "An estate or probate" },
+] as const;
+
+export type OwnershipKind = (typeof OWNERSHIP_KINDS)[number]["value"];
+
+export function isOwnershipKind(value: unknown): value is OwnershipKind {
+  return typeof value === "string" && OWNERSHIP_KINDS.some((kind) => kind.value === value);
+}
+
+/** What else the homeowner says is owed against the home. */
+export const OTHER_OWED_KINDS = [
+  { value: "property_tax", label: "Back property taxes", lien: "property_tax" },
+  { value: "hoa", label: "HOA dues", lien: "hoa" },
+  { value: "tax_lien", label: "IRS or tax lien", lien: "tax_lien" },
+  { value: "judgment", label: "Court judgment", lien: "judgment" },
+  { value: "contractor", label: "Another contractor", lien: "mechanics" },
+  { value: "none", label: "Nothing else", lien: null },
+] as const;
+
+export type OtherOwedKind = (typeof OTHER_OWED_KINDS)[number]["value"];
+
+export function isOtherOwedKind(value: unknown): value is OtherOwedKind {
+  return typeof value === "string" && OTHER_OWED_KINDS.some((kind) => kind.value === value);
+}
 
 export const REPAIR_REQUIRED_BY = [
   { value: "none", label: "No one; seller's choice" },
@@ -988,7 +1038,7 @@ export const INTERVIEW_STEPS: InterviewStep[] = [
         prompt: "Who is the listing agent, and with which brokerage?",
         homeownerPrompt: "Who is your listing agent, and with which brokerage?",
       },
-      { id: "agent_email", kind: "text", label: "Agent email or phone", prompt: "", homeownerPrompt: "How do we reach your agent?", audience: "homeowner" },
+      { id: "agent_phone", kind: "text", label: "Agent phone", prompt: "Agent's phone?", homeownerPrompt: "Agent phone", audience: "homeowner" },
       {
         id: "listPrice",
         field: "listPrice",
@@ -1060,12 +1110,21 @@ export const INTERVIEW_STEPS: InterviewStep[] = [
         help: "In Texas a homestead needs both spouses before work starts.",
       },
       {
-        id: "spouse_not_on_deed",
-        kind: "yes_no",
-        label: "Married; spouse not on deed",
-        prompt: "",
-        homeownerPrompt: "Are you married to someone who is not on the deed?",
-        homeownerHelp: "In some states a spouse signs even when they are not on the deed.",
+        id: "ownership",
+        kind: "select",
+        label: "How the home is owned",
+        prompt: "How is the home owned?",
+        homeownerPrompt: "How is the home owned?",
+        options: [...OWNERSHIP_KINDS],
+        audience: "homeowner",
+      },
+      {
+        id: "trustee_name",
+        kind: "text",
+        label: "Trustee",
+        prompt: "Who is the trustee?",
+        homeownerPrompt: "Who is the trustee?",
+        showWhen: (record) => record.interview.answers.ownership === "trust",
         audience: "homeowner",
       },
       {
@@ -1093,12 +1152,11 @@ export const INTERVIEW_STEPS: InterviewStep[] = [
     homeownerIntro: "We are paid after your loans and liens at closing, so we need a picture of what is owed. Round numbers are fine.",
     questions: [
       {
-        id: "lender_names",
-        kind: "text",
-        label: "Lender(s)",
-        prompt: "",
-        homeownerPrompt: "Who is your mortgage lender or servicer?",
-        homeownerHelp: "The company you send the payment to.",
+        id: "no_mortgage",
+        kind: "yes_no",
+        label: "No mortgage",
+        prompt: "Is the home owned free and clear?",
+        homeownerPrompt: "No mortgage",
         audience: "homeowner",
       },
       {
@@ -1208,6 +1266,22 @@ export const INTERVIEW_STEPS: InterviewStep[] = [
         prompt: "Which title or escrow company is handling the closing?",
         homeownerPrompt: "Which title or escrow company is handling your closing?",
       },
+      {
+        id: "title_company_pending",
+        kind: "yes_no",
+        label: "Title company not chosen yet",
+        prompt: "Has the seller picked a title company yet?",
+        homeownerPrompt: "Not chosen yet",
+        audience: "homeowner",
+      },
+      {
+        id: "contact_consent",
+        kind: "yes_no",
+        label: "OK to contact agent and title company",
+        prompt: "May we contact the agent and title company about the settlement line?",
+        homeownerPrompt: "We may contact your agent and title company to add this payment to your closing statement.",
+        audience: "homeowner",
+      },
       { id: "escrowOfficer", field: "escrowOfficer", kind: "text", label: "Escrow officer", prompt: "Who is the escrow officer?", homeownerPrompt: "Who is your escrow or closing officer?" },
       { id: "escrowEmail", field: "escrowEmail", kind: "text", label: "Escrow email", prompt: "Escrow officer email?", homeownerPrompt: "Their email" },
       { id: "escrowPhone", field: "escrowPhone", kind: "text", label: "Escrow phone", prompt: "Escrow officer phone?", homeownerPrompt: "Their phone" },
@@ -1219,6 +1293,7 @@ export const INTERVIEW_STEPS: InterviewStep[] = [
         prompt: "Has the seller's agent agreed to put our payment on the settlement statement?",
         homeownerPrompt: "Has your agent agreed to put our payment on the settlement statement?",
         required: true,
+        audience: "rep",
         homeownerHelp: "If you are not sure, answer no and we will reach out to them.",
       },
     ],
@@ -1231,48 +1306,262 @@ export const REP_INTERVIEW_STEPS: InterviewStep[] = INTERVIEW_STEPS.map((step) =
   questions: step.questions.filter((question) => question.audience !== "homeowner"),
 }));
 
-/** Steps as the homeowner sees them on the application: second-person wording, no office-only questions. */
-export const APPLICATION_STEPS: InterviewStep[] = INTERVIEW_STEPS.map((step) => ({
-  ...step,
-  intro: step.homeownerIntro ?? step.intro,
-  questions: step.questions
-    .filter((question) => question.audience !== "rep")
-    .map((question) => ({
-      ...question,
-      prompt: question.homeownerPrompt ?? question.prompt,
-      help: question.homeownerHelp ?? (question.audience === "homeowner" ? question.help : undefined),
-    })),
-}));
+/* ------------------------------------------------------------------ */
+/* Homeowner application                                                */
+/* ------------------------------------------------------------------ */
+
+export type HomeownerSectionId = "sale" | "title" | "owed" | "contacts";
+
+export interface HomeownerPrompt {
+  id: string;
+  /** Row label on the homeowner's review page. */
+  label: string;
+  /** Interview question ids this prompt answers, for the office's "homeowner can answer" lists. */
+  questionIds: string[];
+  /** Hide until the record makes the prompt relevant. */
+  showWhen?: (record: JobPayAtClose) => boolean;
+  /** What the homeowner has said so far, or null when they left it blank. */
+  value: (record: JobPayAtClose) => string | null;
+}
+
+export interface HomeownerSection {
+  id: HomeownerSectionId;
+  /** Page title on the phone. */
+  title: string;
+  /** Line under the title. */
+  intro: string;
+  /** Row label in the office's Send to homeowner dialog. */
+  officeLabel: string;
+  prompts: HomeownerPrompt[];
+}
+
+/** Homeowner wording for where the sale stands. Fewer choices than the office's listing statuses. */
+export const HOMEOWNER_LISTING_CHOICES: Array<{ value: ListingStatus; label: string }> = [
+  { value: "not_listed", label: "Not listed yet" },
+  { value: "coming_soon", label: "Listing soon" },
+  { value: "active", label: "Listed for sale" },
+  { value: "under_contract", label: "Under contract with a buyer" },
+  { value: "pending", label: "Closing date is set" },
+];
+
+export function homeownerListingLabel(status: ListingStatus | "") {
+  if (!status) return null;
+  const match = HOMEOWNER_LISTING_CHOICES.find((choice) => choice.value === status);
+  if (match) return match.label;
+  if (status === "sold") return "Closing date is set";
+  return LISTING_STATUS_LABELS[status];
+}
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** "March 2027" from a date or a `YYYY-MM` month. */
+export function monthLabel(value: string | null | undefined) {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})/.exec(value);
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return `${MONTHS[month - 1]} ${match[1]}`;
+}
+
+export function otherOwedLabel(kinds: readonly string[]) {
+  const labels = kinds
+    .filter(isOtherOwedKind)
+    .filter((kind) => kind !== "none")
+    .map((kind) => OTHER_OWED_KINDS.find((item) => item.value === kind)?.label ?? kind);
+  if (labels.length) return labels.join(", ");
+  return kinds.includes("none") ? "Nothing else" : null;
+}
+
+/** Comma-separated answer key into the kinds the homeowner picked. */
+export function parseOtherOwedKinds(value: InterviewValue | undefined): OtherOwedKind[] {
+  if (typeof value !== "string" || !value) return [];
+  return value.split(",").map((item) => item.trim()).filter(isOtherOwedKind);
+}
+
+const hasMortgage = (record: JobPayAtClose) => record.interview.answers.no_mortgage !== true;
+
+/**
+ * The four pages the homeowner sees. Each prompt is one question on the phone; the office
+ * counts "open" prompts per page and the review page lists them with their answers.
+ */
+export const HOMEOWNER_SECTIONS: HomeownerSection[] = [
+  {
+    id: "sale",
+    title: "Your sale",
+    intro: "So we can line our payment up with your closing.",
+    officeLabel: "Your sale",
+    prompts: [
+      { id: "status", label: "Status", questionIds: ["listingStatus"], value: (record) => homeownerListingLabel(record.listingStatus) },
+      {
+        id: "close",
+        label: "Expected closing",
+        questionIds: ["expectedCloseDate"],
+        value: (record) => (record.interview.answers.close_unknown === true && !record.expectedCloseDate ? "Not sure yet" : monthLabel(record.expectedCloseDate)),
+      },
+      { id: "price", label: "Asking price", questionIds: ["listPrice"], value: (record) => (record.listPrice > 0 ? dollars(record.listPrice) : null) },
+    ],
+  },
+  {
+    id: "title",
+    title: "Who’s on title",
+    intro: "Everyone on the deed signs our agreement, so the title company can pay us.",
+    officeLabel: "Who’s on title",
+    prompts: [
+      {
+        id: "ownership",
+        label: "Owned by",
+        questionIds: ["ownership", "legal_situation"],
+        value: (record) => OWNERSHIP_KINDS.find((kind) => kind.value === record.interview.answers.ownership)?.label ?? null,
+      },
+      {
+        id: "trustee",
+        label: "Trustee",
+        questionIds: ["trustee_name"],
+        showWhen: (record) => record.interview.answers.ownership === "trust",
+        value: (record) => (typeof record.interview.answers.trustee_name === "string" && record.interview.answers.trustee_name.trim() ? record.interview.answers.trustee_name.trim() : null),
+      },
+      { id: "names", label: "Names on the deed", questionIds: ["signerNames"], value: (record) => record.signerNames.trim() || null },
+    ],
+  },
+  {
+    id: "owed",
+    title: "What’s owed on the home",
+    intro: "Loans get paid first at closing. Rough numbers are fine.",
+    officeLabel: "What’s owed + statement upload",
+    prompts: [
+      {
+        id: "mortgage",
+        label: "Mortgage",
+        questionIds: ["mortgage_balance", "no_mortgage", "mortgage_current"],
+        value: (record) => {
+          const a = record.interview.answers;
+          if (a.no_mortgage === true) return "No mortgage";
+          const balance = typeof a.mortgage_balance === "number" && a.mortgage_balance > 0 ? `About ${dollars(a.mortgage_balance)}` : null;
+          const current = a.mortgage_current === true ? "up to date" : a.mortgage_current === false ? "behind on payments" : null;
+          if (!balance && !current) return null;
+          return [balance, current].filter(Boolean).join(" · ");
+        },
+      },
+      {
+        id: "second",
+        label: "Second loan",
+        questionIds: ["heloc_balance"],
+        showWhen: hasMortgage,
+        value: (record) => {
+          const a = record.interview.answers;
+          if (a.has_second_loan === false) return "None";
+          if (typeof a.heloc_balance === "number" && a.heloc_balance > 0) return dollars(a.heloc_balance);
+          return a.has_second_loan === true ? "Yes, amount not given" : null;
+        },
+      },
+      { id: "other", label: "Other", questionIds: ["other_liens"], value: (record) => otherOwedLabel(parseOtherOwedKinds(record.interview.answers.other_liens_kinds)) },
+      {
+        id: "statement",
+        label: "Statement photo",
+        questionIds: ["payoff_statement"],
+        showWhen: hasMortgage,
+        value: (record) => (record.application.uploads.length ? `${record.application.uploads.length} added` : null),
+      },
+    ],
+  },
+  {
+    id: "contacts",
+    title: "Closing contacts",
+    intro: "Who we’ll coordinate with so you don’t have to. Skip anything you don’t know yet.",
+    officeLabel: "Closing contacts (agent, title company)",
+    prompts: [
+      {
+        id: "agent",
+        label: "Agent",
+        questionIds: ["listingAgent", "agent_phone"],
+        value: (record) => {
+          const phone = typeof record.interview.answers.agent_phone === "string" ? record.interview.answers.agent_phone.trim() : "";
+          const name = record.listingAgent.trim();
+          if (!name && !phone) return null;
+          return [name, phone].filter(Boolean).join(" · ");
+        },
+      },
+      {
+        id: "title_company",
+        label: "Title company",
+        questionIds: ["titleCompany", "title_company_pending"],
+        value: (record) => record.titleCompany.trim() || (record.interview.answers.title_company_pending === true ? "Not chosen yet" : null),
+      },
+      {
+        id: "consent",
+        label: "OK to contact them",
+        questionIds: ["contact_consent"],
+        value: (record) => (record.interview.answers.contact_consent === true ? "Yes" : record.interview.answers.contact_consent === false ? "No" : null),
+      },
+    ],
+  },
+];
+
+/** Interview question ids the homeowner can answer from their phone. */
+export const HOMEOWNER_QUESTION_IDS: ReadonlySet<string> = new Set(
+  HOMEOWNER_SECTIONS.flatMap((section) => section.prompts.flatMap((prompt) => prompt.questionIds)),
+);
+
+export function homeownerCanAnswer(question: Pick<InterviewQuestion, "id" | "audience">) {
+  return question.audience !== "rep" && HOMEOWNER_QUESTION_IDS.has(question.id);
+}
+
+export function homeownerPromptVisible(record: JobPayAtClose, prompt: HomeownerPrompt) {
+  return prompt.showWhen ? prompt.showWhen(record) : true;
+}
+
+export interface HomeownerSectionProgress {
+  section: HomeownerSection;
+  open: number;
+  total: number;
+  /** Every visible prompt has an answer. */
+  answered: boolean;
+}
+
+export function homeownerSectionProgress(record: JobPayAtClose, section: HomeownerSection): HomeownerSectionProgress {
+  const prompts = section.prompts.filter((prompt) => homeownerPromptVisible(record, prompt));
+  // The statement upload is optional; it never holds a page open.
+  const counted = prompts.filter((prompt) => prompt.id !== "statement");
+  const open = counted.filter((prompt) => prompt.value(record) === null).length;
+  return { section, open, total: counted.length, answered: open === 0 };
+}
 
 export interface ApplicationProgress {
   answered: number;
   total: number;
-  requiredMissing: InterviewQuestion[];
-  complete: boolean;
-  /** First step with a missing required answer, or the step count when none. */
-  nextStepIndex: number;
+  /** Prompts still blank, across every page. */
+  open: number;
+  sections: HomeownerSectionProgress[];
+  /** Pages the homeowner sees when the office asked only for what is still open. */
+  openSectionIds: HomeownerSectionId[];
 }
 
-/** Progress through the homeowner application, counting only questions the homeowner sees. */
+/** Progress through the homeowner's pages, counting the prompts on the phone rather than office questions. */
 export function applicationProgress(record: JobPayAtClose): ApplicationProgress {
-  let answered = 0;
-  let total = 0;
-  const requiredMissing: InterviewQuestion[] = [];
-  let nextStepIndex = APPLICATION_STEPS.length;
-  APPLICATION_STEPS.forEach((step, index) => {
-    let stepMissing = false;
-    for (const question of step.questions) {
-      if (!interviewQuestionVisible(record, question)) continue;
-      total += 1;
-      if (interviewAnswered(record, question)) answered += 1;
-      else if (question.required) {
-        requiredMissing.push(question);
-        stepMissing = true;
-      }
-    }
-    if (stepMissing && nextStepIndex === APPLICATION_STEPS.length) nextStepIndex = index;
-  });
-  return { answered, total, requiredMissing, complete: requiredMissing.length === 0, nextStepIndex };
+  const sections = HOMEOWNER_SECTIONS.map((section) => homeownerSectionProgress(record, section));
+  const total = sections.reduce((sum, item) => sum + item.total, 0);
+  const open = sections.reduce((sum, item) => sum + item.open, 0);
+  return {
+    answered: total - open,
+    total,
+    open,
+    sections,
+    openSectionIds: sections.filter((item) => !item.answered).map((item) => item.section.id),
+  };
+}
+
+/** Rough time on the phone: about half a minute per open prompt. */
+export function applicationMinutes(openPrompts: number) {
+  return Math.max(1, Math.round(openPrompts * 0.5));
+}
+
+/** Which pages a link shows: all four, or only those with something still open. */
+export function applicationSectionsToShow(record: JobPayAtClose): HomeownerSection[] {
+  if (!record.application.askOnlyOpen) return HOMEOWNER_SECTIONS;
+  const progress = applicationProgress(record);
+  const shown = HOMEOWNER_SECTIONS.filter((section) => progress.openSectionIds.includes(section.id));
+  return shown.length ? shown : HOMEOWNER_SECTIONS;
 }
 
 export function interviewQuestions(): InterviewQuestion[] {
@@ -1417,35 +1706,52 @@ export function interviewSummary(record: JobPayAtClose): InterviewSummaryRow[] {
   return rows;
 }
 
-/** Merge a homeowner's submission into the record the way the database RPC does, for optimistic UI and tests. */
+/**
+ * Merge what the homeowner typed into the record the way the database RPCs do, for the
+ * phone's working copy, optimistic UI, and tests. Field-bound answers land on the record;
+ * every other key lands in `interview.answers`, all marked as the homeowner's.
+ */
+export function applyHomeownerAnswers(
+  record: JobPayAtClose,
+  submission: { answers: Record<string, InterviewValue>; fields: Partial<Record<InterviewFieldKey, InterviewValue>> },
+): JobPayAtClose {
+  let next: JobPayAtClose = {
+    ...record,
+    interview: { ...record.interview, answers: { ...record.interview.answers }, sources: { ...record.interview.sources } },
+  };
+  const byId = new Map(interviewQuestions().map((question) => [question.id, question]));
+  for (const [key, raw] of Object.entries(submission.answers)) {
+    if (raw === undefined || raw === null || raw === "") continue;
+    const question = byId.get(key);
+    if (question?.audience === "rep" || question?.field) continue;
+    next.interview.answers[key] = raw;
+    next.interview.sources[key] = "homeowner";
+  }
+  for (const question of interviewQuestions()) {
+    if (!question.field || question.audience === "rep") continue;
+    const raw = submission.fields[question.field];
+    if (raw === undefined || raw === null || raw === "") continue;
+    next = setInterviewValue(next, question, raw);
+    next.interview.sources[question.id] = "homeowner";
+  }
+  return next;
+}
+
+/** The homeowner tapped Send: answers merge and the application is stamped as submitted. */
 export function applyApplicationSubmission(
   record: JobPayAtClose,
   submission: {
     answers: Record<string, InterviewValue>;
     fields: Partial<Record<InterviewFieldKey, InterviewValue>>;
-    signatureName: string;
-    signatureImage: string;
     authorizations: string[];
     now?: Date;
   },
 ): JobPayAtClose {
   const now = submission.now ?? new Date();
-  let next: JobPayAtClose = {
-    ...record,
-    interview: { ...record.interview, answers: { ...record.interview.answers }, sources: { ...record.interview.sources } },
-  };
-  for (const question of interviewQuestions()) {
-    if (question.audience === "rep") continue;
-    const raw = question.field ? submission.fields[question.field] : submission.answers[question.id];
-    if (raw === undefined || raw === null || raw === "") continue;
-    next = setInterviewValue(next, question, raw);
-    next.interview.sources[question.id] = "homeowner";
-  }
+  const next = applyHomeownerAnswers(record, submission);
   next.application = {
     ...next.application,
     submittedAt: now.toISOString(),
-    signatureName: submission.signatureName.trim(),
-    signatureImage: submission.signatureImage,
     authorizations: [...submission.authorizations],
   };
   next.updatedAt = now.toISOString();
@@ -2089,18 +2395,25 @@ function interviewFlags(record: JobPayAtClose, property: PropertyRecord | null, 
   const appState = applicationState(record.application);
   if (appState === "sent") {
     const sentDays = record.application.sentAt ? Math.floor((today.getTime() - new Date(record.application.sentAt).getTime()) / 86_400_000) : 0;
+    const expired = applicationLinkExpired(record.application, today);
     flags.push({
-      code: "application_unsigned",
+      code: "application_open",
       severity: "watch",
-      title: sentDays >= 2 ? `Homeowner application unsigned for ${sentDays} days` : "Homeowner application not signed yet",
-      detail: "The homeowner has the link but has not finished or signed. Their authorizations for the records review and the settlement line are not in hand.",
+      title: expired
+        ? "Homeowner's link expired before they answered"
+        : sentDays >= 2
+          ? `Homeowner has not sent their answers (${sentDays} days)`
+          : "Waiting on the homeowner's answers",
+      detail: expired
+        ? "The link closed after seven days. Send it again from the Pay at close tab; their saved answers are kept."
+        : "The homeowner has the link but has not tapped Send. Their answers about the sale, title, and what is owed are not in hand.",
     });
-  } else if (appState === "submitted" && a.spouse_not_on_deed === true) {
+  } else if (appState === "submitted" && a.contact_consent === false) {
     flags.push({
-      code: "spouse_off_title",
+      code: "contact_declined",
       severity: "watch",
-      title: "Homeowner is married to someone not on the deed",
-      detail: "Community-property and homestead states can require the spouse's signature anyway. Ask the title company whether the spouse joins.",
+      title: "Homeowner did not OK contacting their agent and title company",
+      detail: "The settlement line is arranged through the agent and the title company. Ask the homeowner to make the introduction or to agree to the contact.",
     });
   }
 
@@ -2170,8 +2483,8 @@ const FLAG_WEIGHTS: Record<string, number> = {
   lender_required: -5,
   completion_after_close: 25,
   homeowner_balance_differs: 3,
-  application_unsigned: 6,
-  spouse_off_title: 8,
+  application_open: 6,
+  contact_declined: 8,
 };
 
 export function riskScore(flags: RiskFlag[]) {
@@ -2477,14 +2790,12 @@ export function payAtCloseActivityNote(before: JobPayAtClose | undefined, after:
   }
   if (after.application.sentAt && after.application.sentAt !== before.application.sentAt) {
     const to = after.application.sentTo ? ` to ${after.application.sentTo}` : "";
-    lines.push(`Homeowner application ${before.application.sentAt ? "re-sent" : "sent"}${to}.`);
+    lines.push(`Homeowner link ${before.application.sentAt ? "re-sent" : "sent"}${to}.`);
   }
   if (after.application.submittedAt && after.application.submittedAt !== before.application.submittedAt) {
     const progress = applicationProgress(after);
     const uploads = after.application.uploads.length;
-    lines.push(
-      `Homeowner application signed by ${after.application.signatureName || "the homeowner"} (${progress.answered} of ${progress.total} answered${uploads ? `, ${uploads} file${uploads === 1 ? "" : "s"}` : ""}).`,
-    );
+    lines.push(`Homeowner answered ${progress.answered} of ${progress.total}${uploads ? ` and added ${uploads} file${uploads === 1 ? "" : "s"}` : ""}.`);
   }
   const previous = new Set(before.checklist.filter((item) => item.done).map((item) => item.key));
   for (const item of after.checklist) {
