@@ -28,6 +28,7 @@ import {
   PAY_AT_CLOSE_STATUS_LABELS,
   PAY_AT_CLOSE_STATUSES,
   RECOMMENDATION_LABELS,
+  applicationState,
   payAtCloseAwaitingApproval,
   payAtCloseExposure,
   type PayAtCloseStatus,
@@ -223,6 +224,11 @@ export default function PayAtClosePage() {
                     </TableCell>
                     <TableCell>
                       <PayAtCloseStatusBadge status={record.status} />
+                      {applicationState(record.application) !== "not_sent" ? (
+                        <span className={cn("mt-1 block text-xs", applicationState(record.application) === "submitted" ? "text-emerald-700" : "text-muted-foreground")}>
+                          {applicationState(record.application) === "submitted" ? "Homeowner signed" : "Application out"}
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       {record.expectedCloseDate ? (
