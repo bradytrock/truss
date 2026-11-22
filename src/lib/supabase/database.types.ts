@@ -1601,6 +1601,7 @@ export type Database = {
           application_token: string | null;
           application_sent_at: string | null;
           application_sent_to: string;
+          application_ask_only_open: boolean;
           application_submitted_at: string | null;
           application_signature_name: string;
           application_signature_image: string;
@@ -1645,6 +1646,7 @@ export type Database = {
           application_token?: string | null;
           application_sent_at?: string | null;
           application_sent_to?: string;
+          application_ask_only_open?: boolean;
           application_submitted_at?: string | null;
           application_signature_name?: string;
           application_signature_image?: string;
@@ -4477,16 +4479,19 @@ export type Database = {
         Returns: Json;
       };
       shared_pay_at_close_application: {
-        Args: { p_token: string };
+        Args: { p_token: string; p_zip?: string | null };
+        Returns: Json;
+      };
+      save_pay_at_close_application: {
+        Args: { p_token: string; p_zip: string; p_answers: Json; p_fields: Json };
         Returns: Json;
       };
       submit_pay_at_close_application: {
         Args: {
           p_token: string;
+          p_zip: string;
           p_answers: Json;
           p_fields: Json;
-          p_signature_name: string;
-          p_signature_image: string;
           p_authorizations: Json;
           p_ip?: string;
           p_user_agent?: string;

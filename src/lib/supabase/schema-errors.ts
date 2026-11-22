@@ -291,6 +291,7 @@ export function missingJobInsuranceMessage() {
 }
 
 export const JOB_PAY_AT_CLOSE_SQL = "supabase/migrations/20261122120000_job_pay_at_close.sql";
+export const JOB_PAY_AT_CLOSE_HOMEOWNER_SQL = "supabase/migrations/20261123090000_pay_at_close_homeowner_link.sql";
 
 export function isMissingJobPayAtClose(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -305,7 +306,7 @@ export function isMissingJobPayAtClose(error: { message?: string; code?: string 
 }
 
 export function missingJobPayAtCloseMessage() {
-  return `Saved in this browser. Run ${JOB_PAY_AT_CLOSE_SQL} in the SQL editor so the pay-at-close file stays on the job.`;
+  return `Saved in this browser. Run ${JOB_PAY_AT_CLOSE_SQL}, then ${JOB_PAY_AT_CLOSE_HOMEOWNER_SQL}, in the SQL editor so the pay-at-close file stays on the job.`;
 }
 
 export const COMMISSION_CLOSEOUT_SQL = "supabase/migrations/20261012120000_commission_closeouts.sql";

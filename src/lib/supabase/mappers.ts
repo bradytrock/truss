@@ -1260,6 +1260,7 @@ export function mapJobPayAtClose(
       token: row.application_token,
       sentAt: row.application_sent_at,
       sentTo: row.application_sent_to,
+      askOnlyOpen: row.application_ask_only_open,
       submittedAt: row.application_submitted_at,
       signatureName: row.application_signature_name,
       signatureImage: row.application_signature_image,
