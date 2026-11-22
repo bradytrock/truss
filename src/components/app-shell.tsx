@@ -49,6 +49,7 @@ import {
   canManageAutomations,
   canViewAccounting,
   canViewInsurance,
+  canViewPayAtClose,
   canViewProjectFinancials,
   canViewTraining,
   canCreateEstimates,
@@ -144,6 +145,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
         { href: "/invoices", label: "Invoices" },
         { href: "/commissions", label: "Commissions" },
         { href: "/insurance", label: "Insurance" },
+        { href: "/pay-at-close", label: "Pay at close" },
       ],
     },
     {
@@ -184,6 +186,7 @@ function itemIsActive(pathname: string, href: string) {
   if (href === "/accounting") return pathname === "/accounting" || pathname.startsWith("/accounting/");
   if (href === "/jobs") return pathname.startsWith("/jobs") || pathname.startsWith("/material-orders");
   if (href === "/insurance") return pathname === "/insurance" || pathname.startsWith("/insurance/");
+  if (href === "/pay-at-close") return pathname === "/pay-at-close" || pathname.startsWith("/pay-at-close/");
   if (href === "/map") return pathname === "/map" || pathname.startsWith("/map?") || pathname === "/storm" || pathname.startsWith("/storm/");
   if (href === "/messages") return isInboxPath(pathname);
   if (href === "/settings") return pathname.startsWith("/settings");
@@ -232,6 +235,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       "/invoices",
       "/commissions",
       "/insurance",
+      "/pay-at-close",
       "/training",
       "/photos",
       "/accounting",
@@ -673,10 +677,11 @@ export function SearchTrigger() {
   const pathname = usePathname();
   const onSettings = pathname.startsWith("/settings") && !isAutomationBuilderPath(pathname);
   const router = useRouter();
-  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, effectiveStaff, tasks, jobInsurance } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, effectiveStaff, tasks, jobInsurance, jobPayAtClose } = useCrm();
   const seatRole = effectiveStaff?.role ?? viewer?.role;
   const showFinancials = canViewProjectFinancials(seatRole);
   const showInsurance = canViewInsurance(seatRole);
+  const showPayAtClose = canViewPayAtClose(seatRole);
   const showEstimates = canCreateEstimates(seatRole);
   const showTraining = canViewTraining(seatRole);
 
@@ -878,6 +883,38 @@ export function SearchTrigger() {
                       {claim.claimNumber ? ` · ${claim.claimNumber}` : ""}
                     </span>
                     <span className="ml-auto truncate text-[10px] text-muted-foreground">{job?.name}</span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+            ) : null}
+            {showPayAtClose ? (
+            <CommandGroup heading="Pay at close">
+              <CommandItem
+                value="pay at close desk equity risk closing title escrow"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/pay-at-close");
+                }}
+              >
+                Pay at close desk
+              </CommandItem>
+              {(jobPayAtClose ?? []).map((record) => {
+                const job = jobs.find((item) => item.id === record.jobId);
+                return (
+                  <CommandItem
+                    key={record.id}
+                    value={`${record.titleCompany} ${record.escrowOfficer} ${record.escrowFileNumber} ${record.listingAgent} ${record.signerNames} ${job?.name ?? ""} ${job?.code ?? ""} pay at close`}
+                    onSelect={() => {
+                      setOpen(false);
+                      router.push(jobRecordHref(record.jobId, { tab: "pay-at-close" }));
+                    }}
+                  >
+                    <span className="min-w-0 truncate">
+                      {job?.name ?? "Pay at close"}
+                      {record.titleCompany ? ` · ${record.titleCompany}` : ""}
+                    </span>
+                    <span className="ml-auto truncate text-[10px] text-muted-foreground">{job?.code}</span>
                   </CommandItem>
                 );
               })}
