@@ -23,10 +23,19 @@ import { toolByName } from "@/lib/assistant/tools";
 import { LEAD_SOURCES, isPickableLeadSource } from "@/lib/lead-sources";
 import { useCrm } from "@/lib/crm-store";
 import {
+  INTERVIEW_STEPS,
   PAY_AT_CLOSE_STATUS_LABELS,
   RECOMMENDATION_LABELS,
+  buildPayAtCloseReport,
+  findInterviewQuestion,
+  interviewAnswered,
+  interviewProgress,
+  interviewQuestionVisible,
+  interviewSummary,
   newPayAtCloseRequest,
   isListingStatus,
+  setInterviewValue,
+  type InterviewValue,
   type JobPayAtClose,
   type PayAtCloseReport,
 } from "@/lib/pay-at-close";
@@ -125,6 +134,33 @@ function summarizePayAtClose(job: Job, record: JobPayAtClose) {
         }
       : null,
     checklist: record.checklist.map((item) => `${item.done ? "done" : "open"}: ${item.label}`),
+    interview: interviewState(record),
+  };
+}
+
+/** Where the qualification interview stands, in a shape the model can ask the next question from. */
+function interviewState(record: JobPayAtClose) {
+  const progress = interviewProgress(record);
+  const next = INTERVIEW_STEPS.flatMap((step) =>
+    step.questions
+      .filter((question) => interviewQuestionVisible(record, question) && !interviewAnswered(record, question))
+      .map((question) => ({
+        id: question.id,
+        step: step.title,
+        prompt: question.prompt,
+        kind: question.kind,
+        required: Boolean(question.required),
+        options: question.options?.map((option) => option.value),
+      })),
+  );
+  return {
+    submitted: progress.submitted,
+    submittedAt: record.interview.completedAt,
+    answered: progress.answered,
+    total: progress.total,
+    requiredMissing: progress.requiredMissing.map((question) => question.id),
+    answers: interviewSummary(record).map((row) => `${row.label}: ${row.value}`),
+    nextQuestions: next.slice(0, 4),
   };
 }
 
@@ -891,6 +927,78 @@ async function runTool(
       return ok(
         { id: invoice.id, number: invoice.number },
         { href: `/invoices/${invoice.id}`, label: `Open ${invoice.number}` },
+      );
+    }
+    case "answer_pay_at_close_interview": {
+      const job = resolveJob(crm, arg(args, "job"));
+      if (!job) return fail("No job in this book matches that.");
+      const existing = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+      let draft =
+        existing ??
+        newPayAtCloseRequest({
+          jobId: job.id,
+          id: crypto.randomUUID(),
+          state: job.state,
+          contractValue: job.contractValue || 0,
+          requester: crm.effectiveStaff ? { id: crm.effectiveStaff.id, name: crm.effectiveStaff.name } : null,
+        });
+      const answers = args.answers;
+      const rejected: string[] = [];
+      let recorded = 0;
+      if (answers && typeof answers === "object" && !Array.isArray(answers)) {
+        for (const [id, raw] of Object.entries(answers as Record<string, unknown>)) {
+          const question = findInterviewQuestion(id);
+          if (!question) {
+            rejected.push(`${id}: not a question`);
+            continue;
+          }
+          let value: InterviewValue;
+          if (raw === null || raw === undefined || raw === "") value = null;
+          else if (question.kind === "yes_no") value = asBoolean(raw) ?? null;
+          else if (question.kind === "money") value = asNumber(raw);
+          else if (question.kind === "select") {
+            const text = asString(raw);
+            if (!question.options?.some((option) => option.value === text)) {
+              rejected.push(`${id}: use one of ${question.options?.map((option) => option.value).join(", ")}`);
+              continue;
+            }
+            value = text;
+          } else value = asString(raw);
+          draft = setInterviewValue(draft, question, value);
+          recorded += 1;
+        }
+      }
+      const submit = asBoolean(args.submit);
+      const changed = recorded > 0 || submit || !existing;
+      if (submit) {
+        const now = new Date().toISOString();
+        const report = draft.property || draft.report
+          ? buildPayAtCloseReport({ record: draft, property: draft.property, state: job.state, narrative: draft.report?.narrative ?? "" })
+          : draft.report;
+        draft = {
+          ...draft,
+          report,
+          requestedAt: draft.requestedAt ?? now,
+          interview: { ...draft.interview, completedAt: now },
+        };
+      }
+      const saved = changed ? await crm.saveJobPayAtClose(draft) : draft;
+      if (!saved) return fail("Could not save the interview answers.");
+      const state = interviewState(saved);
+      return ok(
+        {
+          job: job.code,
+          name: job.name,
+          recorded,
+          rejected,
+          ...state,
+          hint: submit
+            ? "Submitted. A company admin approves or declines from the job's Pay at close tab."
+            : state.requiredMissing.length
+              ? "Ask the next question in plain language, then call again with the answer."
+              : "All required questions answered. Call review_pay_at_close to pull records, then call again with submit true.",
+        },
+        { href: jobRecordHref(job.id, { tab: "pay-at-close" }), label: job.name },
       );
     }
     case "get_pay_at_close": {

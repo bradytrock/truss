@@ -326,6 +326,26 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
     ),
   },
   {
+    name: "answer_pay_at_close_interview",
+    description:
+      "Work through the Pay at Close qualification interview on a job. Call with no answers to get the next unanswered questions (id, prompt, kind, options). Call with answers to record them; the tool saves them on the job and returns what is still required. Ask the user one or two questions at a time in plain language, then record their answers. Set submit true once the required questions are answered to submit the request to a company admin.",
+    status: "Working through the qualification…",
+    gate: "ops",
+    parameters: object(
+      {
+        job: str("Job id or job code"),
+        answers: {
+          type: "object",
+          description:
+            "Question id to answer. yes_no questions take true/false, money and amounts take a number of dollars, dates take YYYY-MM-DD, select questions take the option value, text takes a string. Use null to clear.",
+          additionalProperties: true,
+        },
+        submit: bool("True to submit the interview for company admin approval after recording the answers."),
+      },
+      ["job"],
+    ),
+  },
+  {
     name: "get_pay_at_close",
     description: "Read the saved Pay at Close file on a job: status, amount due at closing, expected closing, coverage, recommendation, flags, and checklist.",
     status: "Opening the pay-at-close file…",
