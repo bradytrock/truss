@@ -25,7 +25,7 @@ import { useCrm } from "@/lib/crm-store";
 import {
   PAY_AT_CLOSE_STATUS_LABELS,
   RECOMMENDATION_LABELS,
-  emptyJobPayAtClose,
+  newPayAtCloseRequest,
   isListingStatus,
   type JobPayAtClose,
   type PayAtCloseReport,
@@ -912,7 +912,14 @@ async function runTool(
         return fail(`${job.name} needs a street address with a city and state or ZIP before a property review can run.`);
       }
       const existing = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
-      const base = existing ?? emptyJobPayAtClose(job.id, crypto.randomUUID(), job.state);
+      const base =
+        existing ??
+        newPayAtCloseRequest({
+          jobId: job.id,
+          id: crypto.randomUUID(),
+          state: job.state,
+          requester: crm.effectiveStaff ? { id: crm.effectiveStaff.id, name: crm.effectiveStaff.name } : null,
+        });
       const listing = arg(args, "listingStatus");
       const draft: JobPayAtClose = {
         ...base,

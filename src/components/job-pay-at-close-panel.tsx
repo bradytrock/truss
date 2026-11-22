@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Download, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Check, Download, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,11 +27,13 @@ import {
   LISTING_STATUS_LABELS,
   LISTING_STATUSES,
   PAY_AT_CLOSE_STATUS_LABELS,
-  PAY_AT_CLOSE_STATUSES,
   RECOMMENDATION_LABELS,
   buildPayAtCloseReport,
-  emptyJobPayAtClose,
+  decidePayAtClose,
   estimateMortgageBalance,
+  newPayAtCloseRequest,
+  payAtCloseAwaitingApproval,
+  payAtCloseStatusChoices,
   type JobPayAtClose,
   type LienKind,
   type LienRecord,
@@ -43,7 +45,7 @@ import {
   type RiskSeverity,
 } from "@/lib/pay-at-close";
 import { downloadPayAtClosePdf } from "@/lib/pay-at-close-pdf";
-import { canDecidePayAtClose } from "@/lib/visibility";
+import { canDecidePayAtClose, canRequestPayAtClose } from "@/lib/visibility";
 import type { Job } from "@/lib/types";
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
@@ -98,7 +100,18 @@ function PayAtCloseEditor({
   const [reviewing, setReviewing] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const canDecide = canDecidePayAtClose(crm.effectiveStaff?.role);
+  const canRequest = canRequestPayAtClose(crm.effectiveStaff?.role);
+  const actor = crm.effectiveStaff ? { id: crm.effectiveStaff.id, name: crm.effectiveStaff.name } : null;
+  const [decisionNote, setDecisionNote] = useState("");
+  const [changingDecision, setChangingDecision] = useState(false);
   const homeowner = crm.getContact(job.primaryContactId)?.name ?? crm.customerName(job);
+
+  async function decide(decision: "approved" | "declined") {
+    if (!draft || readOnly || !canDecide || !actor) return;
+    await persist(decidePayAtClose(draft, decision, actor, decisionNote));
+    setDecisionNote("");
+    setChangingDecision(false);
+  }
 
   async function persist(next: JobPayAtClose) {
     if (readOnly) return;
@@ -175,19 +188,25 @@ function PayAtCloseEditor({
   if (!draft) {
     return (
       <EmptyState
-        title="No pay-at-close file on this job yet"
-        description="Underwrite a repair paid from seller proceeds: pull public property records, estimate equity after loans and liens, score the risk, and track the title company paperwork."
+        title="No pay-at-close request on this job yet"
+        description="Ask to carry this repair to the homeowner's closing. The request pulls public property records, estimates equity after loans and liens, scores the risk, and waits for a company admin to approve it. You can also start one from New → Pay at Close Request."
         action={
-          readOnly ? null : (
+          readOnly || !canRequest ? null : (
             <Button
               type="button"
-              onClick={() => {
-                const next = emptyJobPayAtClose(job.id, crypto.randomUUID(), job.state);
-                next.contractValue = job.contractValue || 0;
-                void persist(next);
-              }}
+              onClick={() =>
+                void persist(
+                  newPayAtCloseRequest({
+                    jobId: job.id,
+                    id: crypto.randomUUID(),
+                    state: job.state,
+                    contractValue: job.contractValue || 0,
+                    requester: actor,
+                  }),
+                )
+              }
             >
-              Start pay-at-close review
+              Request pay at close
             </Button>
           )
         }
@@ -198,9 +217,10 @@ function PayAtCloseEditor({
   const report = draft.report;
   const waterfall = report?.waterfall ?? null;
   const property = draft.property;
-  const statusOptions = PAY_AT_CLOSE_STATUSES.filter(
-    (status) => canDecide || draft.status === status || (status !== "approved" && status !== "declined"),
-  );
+  const statusOptions = payAtCloseStatusChoices(draft);
+  const awaitingApproval = payAtCloseAwaitingApproval(draft);
+  const decided = Boolean(draft.decidedAt);
+  const showDecisionButtons = canDecide && !readOnly && (awaitingApproval || changingDecision);
   const hasAddress = Boolean(job.street && (job.postalCode || (job.city && job.state)));
 
   return (
@@ -229,13 +249,76 @@ function PayAtCloseEditor({
         />
       </div>
 
+      <section
+        className={cn(
+          "space-y-3 rounded-[12px] border p-4",
+          awaitingApproval ? "border-primary/40 bg-primary/5" : "bg-card",
+        )}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <h3 className="text-sm font-medium">Approval</h3>
+            <p className="text-xs text-muted-foreground">
+              {draft.requestedAt
+                ? `Requested${draft.requestedByName ? ` by ${draft.requestedByName}` : ""} on ${formatDate(draft.requestedAt)}.`
+                : "Opened without a formal request."}{" "}
+              {decided
+                ? `${draft.status === "declined" ? "Declined" : "Approved"}${draft.decidedByName ? ` by ${draft.decidedByName}` : ""} on ${formatDate(draft.decidedAt)}.`
+                : awaitingApproval
+                  ? canDecide
+                    ? "Waiting on your decision. Run the property review first if it has not been run."
+                    : "Waiting on a company admin. Only a company admin can approve or decline."
+                  : "Not yet decided."}
+            </p>
+            {decided && draft.decisionNote ? (
+              <p className="text-sm">{draft.decisionNote}</p>
+            ) : null}
+          </div>
+          {decided && canDecide && !readOnly && !changingDecision ? (
+            <Button type="button" size="sm" variant="outline" className="bg-card" onClick={() => setChangingDecision(true)}>
+              Change decision
+            </Button>
+          ) : null}
+        </div>
+        {showDecisionButtons ? (
+          <div className="space-y-2">
+            <Textarea
+              value={decisionNote}
+              rows={2}
+              placeholder="Optional note for the file: conditions, deposit required, why declined."
+              onChange={(event) => setDecisionNote(event.target.value)}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" disabled={saving} onClick={() => void decide("approved")}>
+                <Check data-icon="inline-start" />
+                Approve request
+              </Button>
+              <Button type="button" variant="outline" className="bg-card" disabled={saving} onClick={() => void decide("declined")}>
+                <X data-icon="inline-start" />
+                Decline
+              </Button>
+              {changingDecision ? (
+                <Button type="button" variant="ghost" disabled={saving} onClick={() => setChangingDecision(false)}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+            {report ? null : (
+              <p className="text-xs text-muted-foreground">
+                No property review has run yet. Run it above before deciding so the equity math is on the file.
+              </p>
+            )}
+          </div>
+        ) : null}
+      </section>
+
       <section className="space-y-4 rounded-[12px] border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-medium">Deal</h3>
           <PayAtCloseStatusBadge status={draft.status} />
         </div>
         <div className="grid gap-4 md:grid-cols-4">
-          <Field label="Status">
+          <Field label="Status" hint={decided ? undefined : "Work statuses unlock once a company admin approves."}>
             <Select
               value={draft.status}
               disabled={readOnly}

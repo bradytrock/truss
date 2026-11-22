@@ -345,6 +345,19 @@ export async function buildPayAtClosePdf(input: PayAtClosePdfInput) {
   y = paragraph(doc, y, report.narrative);
   y += 6;
 
+  y = sectionTitle(doc, y, "Approval");
+  y = keyValueGrid(doc, y, [
+    ["Requested by", record.requestedAt ? [record.requestedByName, dateLabel(record.requestedAt)].filter(Boolean).join(" · ") : "—"],
+    [
+      "Decision",
+      record.decidedAt
+        ? `${record.status === "declined" ? "Declined" : "Approved"} · ${[record.decidedByName, dateLabel(record.decidedAt)].filter(Boolean).join(" · ")}`
+        : "Awaiting company admin",
+    ],
+  ]);
+  if (record.decisionNote) y = paragraph(doc, y, record.decisionNote);
+  y += 4;
+
   y = sectionTitle(doc, y, "Deal");
   y = keyValueGrid(doc, y, [
     ["Pay-at-close amount", usd(record.contractValue)],

@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ChevronDown,
   FileText,
+  Landmark,
   Phone,
   Plus,
   ReceiptText,
@@ -53,24 +54,31 @@ export function JobNewMenu({
   showInvoice,
   showMaterialOrder,
   showExpense,
+  showPayAtClose = false,
+  payAtCloseStarted = false,
   onEstimate,
   onInvoice,
   onMaterialOrder,
   onMaterialTemplate,
   onInteraction,
   onExpense,
+  onPayAtClose,
 }: {
   pending?: boolean;
   showEstimate: boolean;
   showInvoice: boolean;
   showMaterialOrder: boolean;
   showExpense: boolean;
+  showPayAtClose?: boolean;
+  /** A request already exists on this job, so the row opens it instead of starting another. */
+  payAtCloseStarted?: boolean;
   onEstimate: () => void;
   onInvoice: () => void;
   onMaterialOrder: () => void;
   onMaterialTemplate: () => void;
   onInteraction: () => void;
   onExpense: () => void;
+  onPayAtClose?: () => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -93,6 +101,19 @@ export function JobNewMenu({
       icon: ReceiptText,
       shortcut: "I",
       onSelect: onInvoice,
+    });
+  }
+
+  if (showPayAtClose && onPayAtClose) {
+    sales.push({
+      id: "pay-at-close",
+      title: "Pay at Close Request",
+      detail: payAtCloseStarted
+        ? "Open the request on this job"
+        : "Repairs paid from seller proceeds; needs company admin approval",
+      icon: Landmark,
+      shortcut: "P",
+      onSelect: onPayAtClose,
     });
   }
 

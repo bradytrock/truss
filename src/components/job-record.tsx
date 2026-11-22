@@ -46,7 +46,12 @@ import { JobInsurancePanel } from "@/components/job-insurance-panel";
 import { JobPayAtClosePanel } from "@/components/job-pay-at-close-panel";
 import { JobStormChip } from "@/components/job-storm-chip";
 import { claimTotals } from "@/lib/insurance";
-import { PAY_AT_CLOSE_STATUS_LABELS, RECOMMENDATION_LABELS } from "@/lib/pay-at-close";
+import {
+  PAY_AT_CLOSE_STATUS_LABELS,
+  RECOMMENDATION_LABELS,
+  newPayAtCloseRequest,
+  payAtCloseAwaitingApproval,
+} from "@/lib/pay-at-close";
 import { AutomationRuns } from "@/components/automation-runs";
 import { PaperArchiveButton } from "@/components/paper-archive-button";
 import { Badge } from "@/components/ui/badge";
@@ -129,6 +134,7 @@ import {
   canEditPages,
   canManageCompanyCamMapping,
   canManageJobPhotos,
+  canRequestPayAtClose,
   canViewInsurance,
   canViewPayAtClose,
   canViewJobPaper,
@@ -426,6 +432,7 @@ export function JobRecord({
   const showPaper = canViewJobPaper(seatRole);
   const showInsurance = canViewInsurance(seatRole);
   const showPayAtClose = canViewPayAtClose(seatRole);
+  const allowPayAtCloseRequest = canRequestPayAtClose(seatRole);
   const allowEstimates = canCreateEstimates(seatRole);
   const allowPages = canCreatePages(seatRole);
   const editPages = canEditPages(seatRole);
@@ -490,8 +497,25 @@ export function JobRecord({
     });
   }
 
-  function openNew(kind: "estimate" | "invoice" | "interaction" | "expense" | "materials") {
+  function openNew(kind: "estimate" | "invoice" | "interaction" | "expense" | "materials" | "pay-at-close") {
     if (deleted) return;
+    if (kind === "pay-at-close") {
+      if (!showPayAtClose || !allowPayAtCloseRequest) return;
+      setJobTab("pay-at-close");
+      const existing = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+      if (existing) return;
+      const requester = crm.effectiveStaff ? { id: crm.effectiveStaff.id, name: crm.effectiveStaff.name } : null;
+      void crm.saveJobPayAtClose(
+        newPayAtCloseRequest({
+          jobId: job.id,
+          id: crypto.randomUUID(),
+          state: job.state,
+          contractValue: job.contractValue || 0,
+          requester,
+        }),
+      );
+      return;
+    }
     if (kind === "estimate") {
       if (!allowEstimates) return;
       if (showPaper) setJobTab("paper");
@@ -811,6 +835,9 @@ export function JobRecord({
       onMaterialTemplate={() => setMaterialTemplateOpen(true)}
       onInteraction={() => openNew("interaction")}
       onExpense={() => openNew("expense")}
+      showPayAtClose={showPayAtClose && allowPayAtCloseRequest}
+      payAtCloseStarted={Boolean(payAtClose)}
+      onPayAtClose={() => openNew("pay-at-close")}
     />
   ) : null;
 
@@ -1053,7 +1080,9 @@ export function JobRecord({
             {showPayAtClose ? (
               <TabsTrigger value="pay-at-close" className="flex-none px-0 after:bg-primary">
                 Pay at close
-                {payAtCloseHighFlags ? (
+                {payAtClose && payAtCloseAwaitingApproval(payAtClose) ? (
+                  <span className="text-primary">Approval</span>
+                ) : payAtCloseHighFlags ? (
                   <span className="text-primary tabular-nums">{payAtCloseHighFlags}</span>
                 ) : null}
               </TabsTrigger>

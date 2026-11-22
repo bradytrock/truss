@@ -28,13 +28,14 @@ import {
   PAY_AT_CLOSE_STATUS_LABELS,
   PAY_AT_CLOSE_STATUSES,
   RECOMMENDATION_LABELS,
+  payAtCloseAwaitingApproval,
   payAtCloseExposure,
   type PayAtCloseStatus,
 } from "@/lib/pay-at-close";
-import { canViewPayAtClose } from "@/lib/visibility";
+import { canDecidePayAtClose, canViewPayAtClose } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
-type Filter = PayAtCloseStatus | "all" | "open" | "flagged";
+type Filter = PayAtCloseStatus | "all" | "open" | "flagged" | "awaiting_approval";
 
 function monthLabel(month: string) {
   if (month === "unscheduled") return "No date";
@@ -52,6 +53,8 @@ export default function PayAtClosePage() {
 
   const all = useMemo(() => crm.jobPayAtClose ?? [], [crm.jobPayAtClose]);
   const exposure = useMemo(() => payAtCloseExposure(all), [all]);
+  const awaitingCount = useMemo(() => all.filter(payAtCloseAwaitingApproval).length, [all]);
+  const canDecide = canDecidePayAtClose(crm.effectiveStaff?.role);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -60,7 +63,15 @@ export default function PayAtClosePage() {
       .filter((row) => {
         if (filter === "open" && !PAY_AT_CLOSE_OPEN_STATUSES.includes(row.record.status)) return false;
         if (filter === "flagged" && !(row.record.report?.flags ?? []).some((flag) => flag.severity === "high")) return false;
-        if (filter !== "all" && filter !== "open" && filter !== "flagged" && row.record.status !== filter) return false;
+        if (filter === "awaiting_approval" && !payAtCloseAwaitingApproval(row.record)) return false;
+        if (
+          filter !== "all" &&
+          filter !== "open" &&
+          filter !== "flagged" &&
+          filter !== "awaiting_approval" &&
+          row.record.status !== filter
+        )
+          return false;
         if (!needle) return true;
         const haystack = [
           row.job?.name,
@@ -118,6 +129,7 @@ export default function PayAtClosePage() {
               onValueChange={(value) => setFilter((value as Filter) ?? "open")}
               items={[
                 { value: "open", label: "Open deals" },
+                { value: "awaiting_approval", label: "Awaiting approval" },
                 { value: "flagged", label: "High-risk flags" },
                 { value: "all", label: "All" },
                 ...PAY_AT_CLOSE_STATUSES.map((item) => ({ value: item, label: PAY_AT_CLOSE_STATUS_LABELS[item] })),
@@ -128,6 +140,7 @@ export default function PayAtClosePage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="open">Open deals</SelectItem>
+                <SelectItem value="awaiting_approval">Awaiting approval</SelectItem>
                 <SelectItem value="flagged">High-risk flags</SelectItem>
                 <SelectItem value="all">All</SelectItem>
                 {PAY_AT_CLOSE_STATUSES.map((item) => (
@@ -145,7 +158,12 @@ export default function PayAtClosePage() {
         <Stat label="Carried to closing" value={formatCurrencyFull(exposure.openAmount)} detail={`${exposure.openCount} open deal${exposure.openCount === 1 ? "" : "s"}`} />
         <Stat label="Awaiting closing" value={formatCurrencyFull(exposure.awaitingCloseAmount)} detail="Work done, waiting on the table" />
         <Stat label="High-risk open" value={String(exposure.highFlagCount)} detail="Open deals with a high flag" tone={exposure.highFlagCount ? "text-rose-700" : undefined} />
-        <Stat label="Screening" value={String(exposure.screeningCount)} detail="Not yet approved" />
+        <Stat
+          label="Awaiting approval"
+          value={String(awaitingCount)}
+          detail={canDecide ? "Requests waiting on you" : "Requests waiting on a company admin"}
+          tone={awaitingCount ? "text-primary" : undefined}
+        />
         <Stat label="Collected · fell through" value={`${formatCurrencyFull(exposure.paidAmount)} · ${formatCurrencyFull(exposure.fellThroughAmount)}`} detail="All time" />
       </div>
 
