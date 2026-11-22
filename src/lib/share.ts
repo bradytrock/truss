@@ -71,11 +71,14 @@ export function seedShareToken(kind: "e" | "i", number: string) {
   return digits ? `nl-${kind}-${digits}` : newShareToken();
 }
 
-export function sharePath(kind: "e" | "i" | "p" | "f", token: string) {
+/** e = estimate, i = invoice, p = page, f = file, q = pay-at-close qualification application. */
+export type ShareKind = "e" | "i" | "p" | "f" | "q";
+
+export function sharePath(kind: ShareKind, token: string) {
   return `/share/${kind}/${token}`;
 }
 
-export function shareUrl(kind: "e" | "i" | "p" | "f", token: string, origin = "") {
+export function shareUrl(kind: ShareKind, token: string, origin = "") {
   const path = sharePath(kind, token);
   if (origin) return `${origin.replace(/\/+$/, "")}${path}`;
   if (typeof window !== "undefined") return `${window.location.origin}${path}`;
