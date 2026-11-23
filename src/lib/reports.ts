@@ -17,7 +17,7 @@ import {
   type StaffMember,
 } from "@/lib/types";
 import { isJobWon, isOpportunityWon, jobWonAt } from "@/lib/won";
-import { accessScope, staffForReports, type AccessScope } from "@/lib/visibility";
+import { accessScope, narrowestScope, staffForReports, type AccessScope } from "@/lib/visibility";
 
 export function yearOf(value: string | null | undefined) {
   if (!value) return null;
@@ -27,14 +27,15 @@ export function yearOf(value: string | null | undefined) {
 
 export type DatePreset = "7" | "mtd" | "30" | "90" | "ytd" | "all";
 export type ReportTab =
+  | "overview"
   | "jobs"
   | "leads"
-  | "team"
-  | "lost"
-  | "overview"
   | "workflow"
   | "pipeline"
-  | "cards";
+  | "team"
+  | "lost"
+  | "cards"
+  | "bd";
 
 export const DATE_PRESETS: { id: DatePreset; label: string }[] = [
   { id: "7", label: "Last 7 days" },
@@ -45,16 +46,32 @@ export const DATE_PRESETS: { id: DatePreset; label: string }[] = [
   { id: "all", label: "All time" },
 ];
 
-export const REPORT_TABS: { id: ReportTab; label: string; teamOnly?: boolean }[] = [
-  { id: "jobs", label: "Job report" },
-  { id: "leads", label: "Lead performance" },
-  { id: "team", label: "Team performance", teamOnly: true },
-  { id: "lost", label: "Lost jobs" },
+/**
+ * Tabs in display order. `teamOnly` needs a seat that sees other people's
+ * numbers; `bdOnly` is the BD / ROI report for business development seats
+ * and company-wide seats.
+ */
+export const REPORT_TABS: { id: ReportTab; label: string; teamOnly?: boolean; bdOnly?: boolean }[] = [
   { id: "overview", label: "Overview" },
+  { id: "jobs", label: "Jobs" },
+  { id: "leads", label: "Lead performance" },
   { id: "workflow", label: "Workflow" },
   { id: "pipeline", label: "Pipeline" },
+  { id: "team", label: "Team", teamOnly: true },
+  { id: "lost", label: "Lost jobs" },
   { id: "cards", label: "Card activity" },
+  { id: "bd", label: "BD / ROI", bdOnly: true },
 ];
+
+/** Tabs that ignore the shared date range and say so in the header. */
+export const UNDATED_REPORT_TABS: ReadonlySet<ReportTab> = new Set(["pipeline", "cards", "bd"]);
+
+export const REPORT_SCOPE_LABELS: Record<AccessScope, string> = {
+  own: "My jobs",
+  bd: "My book",
+  team: "My team",
+  company: "Company",
+};
 
 const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
   "estimating",
@@ -123,6 +140,8 @@ export type PipelineRow = {
   value: number;
 };
 
+export type MonthlyRow = { key: string; label: string; count: number; value: number };
+
 export type LostJobRow = {
   id: string;
   name: string;
@@ -147,10 +166,16 @@ export type PerformanceReport = {
     lostAvg: number;
     lostTotal: number;
     highestLost: number;
+    highestLostJob: { name: string; reason: string } | null;
     topLostReason: string;
+    topLostReasonCount: number;
     daysToLoss: number;
     incoming: number;
     unqualified: number;
+    /** Leads that moved past Lead in this range. */
+    qualified: number;
+    /** Leads opened in this range that went on to sign. Drives close rates. */
+    wonLeads: number;
     daysToSold: number;
     newToQualified: number;
     qualifiedClose: number;
@@ -159,9 +184,11 @@ export type PerformanceReport = {
     wonValue: number;
     daysToComplete: number;
   };
-  monthlyWon: { key: string; label: string; count: number; value: number }[];
-  monthlyOpened: { key: string; label: string; count: number; value: number }[];
-  monthlyCash: { key: string; label: string; count: number; value: number }[];
+  /** Month key (YYYY-MM) of the range end, so charts can mark the month still in progress. */
+  currentMonthKey: string;
+  monthlyWon: MonthlyRow[];
+  monthlyOpened: MonthlyRow[];
+  monthlyCash: MonthlyRow[];
   bySource: SourceRow[];
   byTeam: TeamRow[];
   lostReasons: LostReasonRow[];
@@ -228,16 +255,17 @@ function monthKeysInRange(start: string | null, end: string, earliest?: string |
   return keys;
 }
 
-function emptyMonth(key: string) {
-  return { key, label: monthLabel(key), opened: 0, won: 0, wonValue: 0, cash: 0, spend: 0 };
+function emptyMonth(key: string, withYear: boolean) {
+  return { key, label: monthLabel(key, withYear), opened: 0, won: 0, wonValue: 0, cash: 0, spend: 0 };
 }
 
-function monthLabel(key: string) {
+/** "Jan" inside a single year; "Jan 26" once the chart spans a year boundary. */
+export function monthLabel(key: string, withYear: boolean) {
   const [year, month] = key.split("-");
-  return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-US", {
-    month: "short",
-    year: "2-digit",
-  });
+  return new Date(Number(year), Number(month) - 1, 1).toLocaleDateString(
+    "en-US",
+    withYear ? { month: "short", year: "2-digit" } : { month: "short" },
+  );
 }
 
 function daysBetween(from: string | null | undefined, to: string | null | undefined) {
@@ -322,13 +350,14 @@ export function buildPerformance(
   book: ReportBook,
   viewer: StaffMember,
   preset: DatePreset,
-  now = new Date()
+  now = new Date(),
+  viewScope?: AccessScope,
 ): PerformanceReport {
   const range = rangeForPreset(preset, now);
-  const scope = accessScope(viewer.role);
+  const scope = narrowestScope(accessScope(viewer.role), viewScope);
   // Jobs and leads are already limited by scopeBook in the CRM store.
   // Re-filter only by date here so superintendent-assigned work still counts.
-  const roster = staffForReports(viewer, book.staff);
+  const roster = staffForReports(viewer, book.staff, viewScope);
 
   const liveJobs = book.jobs.filter((job) => !isDeletedJob(job));
   const estimates = book.estimates ?? [];
@@ -399,7 +428,8 @@ export function buildPerformance(
       .filter(Boolean)
       .sort()[0] ?? null;
   const monthKeys = monthKeysInRange(range.start, range.end, earliest);
-  const monthBuckets = new Map(monthKeys.map((key) => [key, emptyMonth(key)]));
+  const spansYears = new Set(monthKeys.map((key) => key.slice(0, 4))).size > 1;
+  const monthBuckets = new Map(monthKeys.map((key) => [key, emptyMonth(key, spansYears)]));
   function intoMonth(iso: string | null | undefined) {
     if (!iso) return undefined;
     return monthBuckets.get(monthKey(iso));
@@ -617,6 +647,8 @@ export function buildPerformance(
     (sum, job) => sum + wonAmount(job, estimates, estimateLines, book.opportunities),
     0,
   );
+  const highestLostLead = [...lost].sort((a, b) => b.value - a.value)[0];
+  const topReason = [...lostReasons].sort((a, b) => b.count - a.count || b.value - a.value)[0];
 
   return {
     year: now.getFullYear(),
@@ -629,11 +661,17 @@ export function buildPerformance(
       lostCount: lost.length,
       lostAvg: avg(lostValues),
       lostTotal,
-      highestLost: lostValues.length ? Math.max(...lostValues) : 0,
-      topLostReason: lostReasons[0]?.reason ?? "—",
+      highestLost: highestLostLead?.value ?? 0,
+      highestLostJob: highestLostLead
+        ? { name: highestLostLead.name, reason: highestLostLead.lostReason?.trim() || "No reason recorded" }
+        : null,
+      topLostReason: topReason?.reason ?? "—",
+      topLostReasonCount: topReason?.count ?? 0,
       daysToLoss: avg(lossDays),
       incoming: opportunities.length,
       unqualified: unqualified.length,
+      qualified: qualified.length,
+      wonLeads: countedWins.length,
       daysToSold: avg(soldDays),
       newToQualified: opportunities.length ? qualified.length / opportunities.length : 0,
       qualifiedClose: qualified.length ? countedWins.length / qualified.length : 0,
@@ -642,6 +680,7 @@ export function buildPerformance(
       wonValue: soldValue,
       daysToComplete: avg(completeDays),
     },
+    currentMonthKey: monthKey(range.end),
     monthlyWon,
     monthlyOpened,
     monthlyCash,
@@ -670,6 +709,7 @@ export function formatShare(value: number) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+/** "Jan 1 – Nov 23, 2026" inside one year; "Nov 1, 2025 – Jan 15, 2026" across years. */
 export function rangeLabel(range: { start: string | null; end: string }) {
   const end = new Date(`${range.end}T12:00:00`).toLocaleDateString("en-US", {
     month: "short",
@@ -677,10 +717,31 @@ export function rangeLabel(range: { start: string | null; end: string }) {
     year: "numeric",
   });
   if (!range.start) return `Through ${end}`;
-  const start = new Date(`${range.start}T12:00:00`).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  const sameYear = range.start.slice(0, 4) === range.end.slice(0, 4);
+  const start = new Date(`${range.start}T12:00:00`).toLocaleDateString(
+    "en-US",
+    sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" },
+  );
   return `${start} – ${end}`;
+}
+
+/** Lost-job rows narrowed by a reason and a free-text needle over job name and address. */
+export function filterLostJobs(rows: LostJobRow[], reason: string | null, query: string) {
+  const needle = query.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (reason && row.reason !== reason) return false;
+    if (!needle) return true;
+    return row.name.toLowerCase().includes(needle) || row.location.toLowerCase().includes(needle);
+  });
+}
+
+export type TeamSortKey = "wonValue" | "won" | "closeRate" | "qualifiedClose" | "avgJob";
+
+export function sortTeamRows(rows: TeamRow[], key: TeamSortKey, direction: "asc" | "desc" = "desc") {
+  const sign = direction === "desc" ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const diff = a[key] - b[key];
+    if (diff !== 0) return diff * sign;
+    return b.wonValue - a.wonValue || a.staff.name.localeCompare(b.staff.name);
+  });
 }

@@ -56,13 +56,29 @@ export function canSeeTeamPerformance(role: SeatRole) {
   return scope === "company" || scope === "team";
 }
 
-export function staffForReports(viewer: StaffMember, staff: StaffMember[]) {
-  const scope = accessScope(viewer.role);
+export function staffForReports(viewer: StaffMember, staff: StaffMember[], scopeOverride?: AccessScope) {
+  const scope = narrowestScope(accessScope(viewer.role), scopeOverride);
   if (scope === "company") return staff;
   if (scope === "team") {
     return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
   }
   return staff.filter((member) => member.id === viewer.id);
+}
+
+const SCOPE_RANK: Record<AccessScope, number> = { own: 0, bd: 1, team: 2, company: 3 };
+
+/** A requested scope can only narrow what the seat already sees, never widen it. */
+export function narrowestScope(granted: AccessScope, requested?: AccessScope): AccessScope {
+  if (!requested) return granted;
+  return SCOPE_RANK[requested] < SCOPE_RANK[granted] ? requested : granted;
+}
+
+/** Report scopes a seat may switch between: its own book, its team, and the company. */
+export function reportScopeOptions(viewer: StaffMember): AccessScope[] {
+  const granted = accessScope(viewer.role, viewer.restricted);
+  if (granted === "company") return viewer.teamId ? ["own", "team", "company"] : ["own", "company"];
+  if (granted === "team") return ["own", "team"];
+  return [granted];
 }
 
 /** Jobs board people filter — company admin, accounting, and team leads/admins. Restricted seats stay on their own book. */
@@ -388,8 +404,7 @@ export function teamMemberNames(teamId: string | null, staff: StaffMember[]) {
   return new Set(staff.filter((member) => member.teamId === teamId).map((member) => member.name));
 }
 
-function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[]) {
-  const scope = accessScope(effective.role, effective.restricted);
+function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[], scope: AccessScope) {
   if (scope === "company") {
     return new Set(staff.map((member) => member.id));
   }
@@ -399,13 +414,14 @@ function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[]) {
 
 export function scopeBook(
   state: CrmState,
-  effective: StaffMember | undefined
+  effective: StaffMember | undefined,
+  scopeOverride?: AccessScope,
 ): CrmState {
   if (!effective) return state;
-  const scope = accessScope(effective.role, effective.restricted);
+  const scope = narrowestScope(accessScope(effective.role, effective.restricted), scopeOverride);
   if (scope === "company") return state;
 
-  const staffIds = visibleStaffIdsForScope(effective, state.staff);
+  const staffIds = visibleStaffIdsForScope(effective, state.staff, scope);
   const names = new Set(
     state.staff.filter((member) => staffIds.has(member.id)).map((member) => member.name)
   );

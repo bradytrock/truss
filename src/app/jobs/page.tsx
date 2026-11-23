@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { JobsBoard } from "@/components/jobs-board";
+import { JOBS_COLUMN_PARAM, JobsBoard } from "@/components/jobs-board";
 import { JobsOwnerFilter } from "@/components/jobs-owner-filter";
 import { JobRecordWindow } from "@/components/job-window";
 import { RecordErrorBoundary } from "@/components/record-error-boundary";
@@ -13,7 +13,7 @@ import { CreateOpportunityDialog } from "@/components/create-records";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { unweightedContractValue } from "@/lib/pipeline-path";
-import { isShelvedWorkColumn, workColumnFor } from "@/lib/work-board";
+import { canonicalizeWorkColumn, isShelvedWorkColumn, workColumnFor } from "@/lib/work-board";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import {
   JOBS_OWNERS_PARAM,
@@ -40,7 +40,8 @@ function JobsBoardPage() {
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [create, setCreate] = useState(false);
-  const [showClosed, setShowClosed] = useState(false);
+  const focusColumn = canonicalizeWorkColumn(searchParams.get(JOBS_COLUMN_PARAM) ?? "");
+  const [showClosed, setShowClosed] = useState(() => Boolean(focusColumn && isShelvedWorkColumn(focusColumn)));
   const jobId = searchParams.get("job");
   const openJob = jobId
     ? crm.getJob(jobId) ?? crm.book.jobs.find((job) => job.id === jobId)
@@ -186,6 +187,7 @@ function JobsBoardPage() {
             query={query}
             ownerIds={ownerIds}
             showClosed={showClosed}
+            focusColumn={focusColumn}
             onSelectJob={selectJob}
           />
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -82,15 +82,24 @@ function ownerDot(key: string) {
   return OWNER_DOTS[hash % OWNER_DOTS.length] ?? OWNER_DOTS[0];
 }
 
+export const JOBS_COLUMN_PARAM = "column";
+
+export function jobsBoardColumnHref(column: WorkColumn) {
+  return `/jobs?${JOBS_COLUMN_PARAM}=${column}`;
+}
+
 export function JobsBoard({
   query,
   ownerIds,
   showClosed = false,
+  focusColumn = null,
   onSelectJob,
 }: {
   query: string;
   ownerIds?: Set<string> | null;
   showClosed?: boolean;
+  /** Column to scroll into view once, e.g. when a report row deep-links here. */
+  focusColumn?: WorkColumn | null;
   onSelectJob: (jobId: string) => void;
 }) {
   const crm = useCrm();
@@ -99,6 +108,12 @@ export function JobsBoard({
   const [openColumns, setOpenColumns] = useState<Set<WorkColumn>>(() => new Set());
   const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
   const columns = canTrash ? WORK_COLUMNS : WORK_COLUMNS.filter((column) => column !== "deleted");
+
+  useEffect(() => {
+    if (!focusColumn) return;
+    const node = document.getElementById(`jobs-column-${focusColumn}`);
+    node?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [focusColumn, crm.hydrated]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -304,6 +319,7 @@ function JobColumn({
   return (
     <div
       ref={setNodeRef}
+      id={`jobs-column-${column}`}
       className={cn(
         "flex w-[15rem] shrink-0 flex-col rounded-xl border border-black/8 bg-[#f6f6f6] p-2",
         isOver && "border-primary/40 bg-primary/5",
