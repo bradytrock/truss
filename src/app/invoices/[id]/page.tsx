@@ -27,6 +27,7 @@ import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, shareEmailOwnerFromBook } from "@/lib/document-owner";
 import { cardHeaderLogo } from "@/lib/card";
 import { formatJobSite } from "@/lib/leads";
+import { homeownersOnJob } from "@/lib/parties";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { jobPaperHref, jobRecordHref } from "@/lib/job-record";
 import { canViewProjectFinancials } from "@/lib/visibility";
@@ -138,6 +139,7 @@ export default function InvoiceDetailPage() {
       payments,
       company: letterhead,
       customer,
+      homeowners: homeownersOnJob(job, crm.contacts),
       projectManager,
       jobCode: job?.code,
       site: job

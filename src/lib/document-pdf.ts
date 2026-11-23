@@ -37,6 +37,13 @@ import {
   type InlineRun,
 } from "@/lib/line-format";
 import {
+  INVOICE_BODY,
+  INVOICE_INK,
+  INVOICE_LINE,
+  INVOICE_MUTED,
+  INVOICE_PILL_SUB,
+  INVOICE_RED,
+  INVOICE_SOFT,
   PAPER_CARD,
   PAPER_INK,
   PAPER_INSET,
@@ -44,10 +51,16 @@ import {
   PAPER_MUTED,
   PAPER_RED,
   paperAuthorizationCopy,
+  paperBalanceDueNote,
   paperCompanyLines,
   paperEstimateMeta,
   paperFooterLeft,
-  paperInvoiceMeta,
+  paperInvoiceBand,
+  paperInvoiceBillTo,
+  paperInvoiceFooterRight,
+  paperInvoicePaymentCopy,
+  paperInvoiceQuestionsCopy,
+  paperInvoiceThanks,
   paperIssuedAt,
   paperKindLabel,
   paperManagerLines,
@@ -58,16 +71,20 @@ import {
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
+  type PaperInvoiceHomeowner,
   type PaperKind,
   type PaperMetaItem,
 } from "@/lib/document-paper";
+
+type PdfTextOptions = { align?: "left" | "right" | "center"; charSpace?: number };
 
 type Doc = {
   setFont: (face: string, style?: string) => void;
   setFontSize: (size: number) => void;
   setTextColor: (r: number, g?: number, b?: number) => void;
   setFillColor: (r: number, g?: number, b?: number) => void;
-  text: (text: string | string[], x: number, y: number, options?: { align?: "left" | "right" | "center" }) => void;
+  text: (text: string | string[], x: number, y: number, options?: PdfTextOptions) => void;
+  setCharSpace: (space: number) => void;
   splitTextToSize: (text: string, width: number) => string[];
   getTextWidth: (text: string) => number;
   line: (x1: number, y1: number, x2: number, y2: number) => void;
@@ -115,12 +132,15 @@ async function createDoc() {
   const rawText = doc.text.bind(doc);
   const rawWidth = doc.getTextWidth.bind(doc);
   const rawSplit = doc.splitTextToSize.bind(doc);
-  doc.text = ((text: string | string[], x: number, y: number, options?: { align?: "left" | "right" | "center" }) => {
+  doc.text = ((text: string | string[], x: number, y: number, options?: PdfTextOptions) => {
     if (Array.isArray(text)) return rawText(text.map((line) => pdfSafe(line)), x, y, options);
     return rawText(pdfSafe(text), x, y, options);
   }) as typeof doc.text;
   doc.getTextWidth = ((text: string) => rawWidth(pdfSafe(text))) as typeof doc.getTextWidth;
   doc.splitTextToSize = ((text: string, size: number) => rawSplit(pdfSafe(text), size)) as typeof doc.splitTextToSize;
+  // Character spacing is page state in PDF. Pin the default to 0 so a tracked
+  // label does not spread the text drawn after it.
+  doc.setCharSpace(0);
   return doc as unknown as Doc;
 }
 
@@ -301,15 +321,19 @@ function writeFormattedText(
     lineHeight?: number;
     firstParagraphBold?: boolean;
     color?: { r: number; g: number; b: number };
+    /** Size and color for every block after the first, e.g. a muted note under an item title. */
+    noteStyle?: { fontSize: number; lineHeight: number; color: { r: number; g: number; b: number } };
     ensure?: EnsureFn;
   },
 ) {
   const blocks = parseLineFormat(text);
   if (!blocks.length) return y;
-  const fontSize = options?.fontSize ?? 9;
-  const lineHeight = options?.lineHeight ?? (fontSize <= 9 ? 11 : 12);
+  const baseFontSize = options?.fontSize ?? 9;
+  const baseLineHeight = options?.lineHeight ?? (baseFontSize <= 9 ? 11 : 12);
   const baseEnsure = options?.ensure ?? ((next: number) => next);
-  const color = options?.color;
+  let fontSize = baseFontSize;
+  let lineHeight = baseLineHeight;
+  let color = options?.color;
   const ensure: EnsureFn = (next, needed) => {
     const yAfter = baseEnsure(next, needed);
     if (color) ink(doc, color);
@@ -320,6 +344,14 @@ function writeFormattedText(
   doc.setFontSize(fontSize);
   for (let index = 0; index < blocks.length; index++) {
     const block = blocks[index] as FormatBlock;
+    if (index === 1 && options?.noteStyle) {
+      fontSize = options.noteStyle.fontSize;
+      lineHeight = options.noteStyle.lineHeight;
+      color = options.noteStyle.color;
+      ink(doc, color);
+      doc.setFontSize(fontSize);
+      y += 1;
+    }
     y = ensure(y, lineHeight + 2);
     if (block.type === "li") {
       if (block.ordered) ordered += 1;
@@ -1359,12 +1391,382 @@ export async function downloadSignatureCertificatePdf(input: {
   downloadBlob(doc.output("blob"), `${input.estimate.number}-signature-certificate.pdf`);
 }
 
+// ---------------------------------------------------------------------------
+// Invoice sheet. Follows the invoice template: red rule, brand + INVOICE,
+// summary band, three party columns, item table, totals with a balance pill,
+// payment / questions info pinned to the foot of the page, and a thanks footer.
+// ---------------------------------------------------------------------------
+
+const INVOICE_LABEL_SIZE = 7.5;
+const INVOICE_LABEL_SPACE = 0.7;
+const INVOICE_TOTALS_WIDTH = 223;
+const INVOICE_FOOTER_BASELINE = 34;
+
+function invoiceContentBottom(doc: Doc) {
+  return pageHeight(doc) - 64;
+}
+
+function writeInvoiceRule(doc: Doc) {
+  fill(doc, INVOICE_RED);
+  doc.rect(0, 0, pageWidth(doc), 6, "F");
+}
+
+/** Small tracked uppercase caption, like the template's `.label`. */
+function writeInvoiceLabel(
+  doc: Doc,
+  text: string,
+  x: number,
+  y: number,
+  options?: { align?: "left" | "right"; color?: { r: number; g: number; b: number }; size?: number },
+) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(options?.size ?? INVOICE_LABEL_SIZE);
+  ink(doc, options?.color ?? INVOICE_MUTED);
+  doc.text(text.toUpperCase(), x, y, { align: options?.align ?? "left", charSpace: INVOICE_LABEL_SPACE });
+}
+
+function writeInvoiceSlimHeader(doc: Doc, number: string, title: string) {
+  writeInvoiceRule(doc);
+  const right = contentRight(doc);
+  writeInvoiceLabel(doc, `Invoice ${number}`, PAPER_INSET, 30, { color: INVOICE_RED, size: 8 });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  ink(doc, INVOICE_MUTED);
+  doc.text(title, right, 30, { align: "right" });
+  draw(doc, INVOICE_LINE);
+  doc.setLineWidth(0.8);
+  doc.line(PAPER_INSET, 38, right, 38);
+  return 58;
+}
+
+function createInvoicePager(doc: Doc, number: string, title: string) {
+  const startContinue = () => writeInvoiceSlimHeader(doc, number, title);
+  const ensure: EnsureFn = (y, needed) => {
+    if (y + needed < invoiceContentBottom(doc)) return y;
+    doc.addPage();
+    return startContinue();
+  };
+  return {
+    ensure,
+    addPage() {
+      doc.addPage();
+      return startContinue();
+    },
+  };
+}
+
+async function writeInvoiceCoverHeader(doc: Doc, company: CompanySettings, number: string) {
+  writeInvoiceRule(doc);
+  const right = contentRight(doc);
+  const top = 44;
+  const logo = company.logoUrl?.trim() ? await loadLogoForPdf(company.logoUrl) : null;
+  let textX = PAPER_INSET;
+  let bottom = top + 30;
+  if (logo) {
+    const box = 40;
+    const scale = Math.min(box / logo.width, box / logo.height);
+    const w = logo.width * scale;
+    const h = logo.height * scale;
+    doc.addImage(logo.data, logo.format, PAPER_INSET, top + (box - h) / 2, w, h);
+    textX = PAPER_INSET + w + 11;
+    bottom = Math.max(bottom, top + box);
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(26);
+  const titleW = doc.getTextWidth("INVOICE") + 24;
+  const nameMax = Math.max(160, right - titleW - textX);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  ink(doc, INVOICE_INK);
+  const name = doc.splitTextToSize(company.name.trim() || "Company", nameMax);
+  const nameLines = Array.isArray(name) ? name : [name];
+  let baseline = top + 17;
+  for (const line of nameLines) {
+    doc.text(line, textX, baseline);
+    baseline += 16;
+  }
+  const site = company.website?.trim() || company.email?.trim() || "";
+  if (site) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    ink(doc, INVOICE_MUTED);
+    doc.text(site, textX, baseline - 3);
+    baseline += 10;
+  }
+  bottom = Math.max(bottom, baseline - 6);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(26);
+  ink(doc, INVOICE_INK);
+  doc.text("INVOICE", right, top + 22, { align: "right", charSpace: 1 });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10.5);
+  ink(doc, INVOICE_RED);
+  doc.text(number, right, top + 38, { align: "right" });
+  return Math.max(bottom, top + 40);
+}
+
+function writeInvoiceBand(doc: Doc, items: PaperMetaItem[], y: number) {
+  const right = contentRight(doc);
+  const height = 46;
+  const padX = 14;
+  fill(doc, INVOICE_SOFT);
+  doc.roundedRect(PAPER_INSET, y, right - PAPER_INSET, height, 6, 6, "F");
+  const col = (right - PAPER_INSET) / Math.max(items.length, 1);
+  items.forEach((item, index) => {
+    const x = PAPER_INSET + index * col;
+    if (index > 0) {
+      draw(doc, INVOICE_LINE);
+      doc.setLineWidth(0.8);
+      doc.line(x, y + 10, x, y + height - 10);
+    }
+    const textX = x + (index > 0 ? 12 : padX);
+    writeInvoiceLabel(doc, item.label, textX, y + 18);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    ink(doc, item.label.toLowerCase().startsWith("due") ? INVOICE_RED : INVOICE_INK);
+    doc.text(item.value, textX, y + 34);
+  });
+  return y + height;
+}
+
+type InvoicePerson = { name: string; lines: string[] };
+type InvoiceParty = { label: string; people: InvoicePerson[]; lines: string[] };
+
+function invoiceParty(label: string, name: string, lines: string[]): InvoiceParty {
+  return { label, people: [{ name, lines: [] }], lines };
+}
+
+function writeInvoiceParties(doc: Doc, cards: InvoiceParty[], y: number) {
+  const right = contentRight(doc);
+  const gap = 18;
+  const count = Math.max(cards.length, 1);
+  const colW = (right - PAPER_INSET - gap * (count - 1)) / count;
+  let bottom = y;
+  const writeBodyLines = (lines: string[], x: number, cy: number) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    ink(doc, INVOICE_BODY);
+    for (const line of lines.filter(Boolean)) {
+      const wrapped = doc.splitTextToSize(line, colW);
+      const pieces = Array.isArray(wrapped) ? wrapped : [wrapped];
+      for (const piece of pieces) {
+        doc.text(piece, x, cy);
+        cy += 14;
+      }
+    }
+    return cy;
+  };
+  cards.forEach((card, index) => {
+    const x = PAPER_INSET + index * (colW + gap);
+    writeInvoiceLabel(doc, card.label, x, y);
+    let cy = y + 15;
+    for (const person of card.people) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      ink(doc, INVOICE_INK);
+      const name = doc.splitTextToSize(person.name || "—", colW);
+      const nameLines = Array.isArray(name) ? name : [name];
+      for (const line of nameLines) {
+        doc.text(line, x, cy);
+        cy += 13;
+      }
+      cy = writeBodyLines(person.lines, x, cy);
+      if (card.people.length > 1) cy += 2;
+    }
+    cy = writeBodyLines(card.lines.slice(0, 4), x, cy);
+    bottom = Math.max(bottom, cy - 14);
+  });
+  return bottom;
+}
+
+type InvoiceCols = { descX: number; descW: number; qtyX: number; rateX: number; amountX: number };
+
+function invoiceCols(doc: Doc): InvoiceCols {
+  const right = contentRight(doc);
+  const width = right - PAPER_INSET;
+  const amountW = width * 0.14;
+  const rateW = width * 0.14;
+  const qtyW = width * 0.08;
+  return {
+    descX: PAPER_INSET,
+    descW: width - amountW - rateW - qtyW - 10,
+    qtyX: right - amountW - rateW,
+    rateX: right - amountW,
+    amountX: right,
+  };
+}
+
+function writeInvoiceTableHeader(doc: Doc, cols: InvoiceCols, y: number) {
+  const right = contentRight(doc);
+  writeInvoiceLabel(doc, "Description", cols.descX, y);
+  writeInvoiceLabel(doc, "Qty", cols.qtyX, y, { align: "right" });
+  writeInvoiceLabel(doc, "Rate", cols.rateX, y, { align: "right" });
+  writeInvoiceLabel(doc, "Amount", cols.amountX, y, { align: "right" });
+  draw(doc, INVOICE_INK);
+  doc.setLineWidth(1.4);
+  doc.line(PAPER_INSET, y + 7, right, y + 7);
+  return y + 7 + 11 + 10;
+}
+
+function repeatingInvoiceTableEnsure(doc: Doc, ensure: EnsureFn, cols: InvoiceCols): EnsureFn {
+  return (y, needed) => {
+    const before = doc.getNumberOfPages();
+    const next = ensure(y, needed);
+    if (doc.getNumberOfPages() === before) return next;
+    return writeInvoiceTableHeader(doc, cols, next);
+  };
+}
+
+function writeInvoiceMoneyCols(doc: Doc, cols: InvoiceCols, y: number, qty: string, rate: string, amount: string) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  ink(doc, INVOICE_BODY);
+  doc.text(qty, cols.qtyX, y, { align: "right" });
+  doc.text(rate, cols.rateX, y, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  ink(doc, INVOICE_INK);
+  doc.text(amount, cols.amountX, y, { align: "right" });
+}
+
+function writeInvoiceTotals(
+  doc: Doc,
+  rows: Array<[string, string]>,
+  pill: { label: string; note: string; amount: string },
+  y: number,
+  ensure: EnsureFn,
+) {
+  const right = contentRight(doc);
+  const left = right - INVOICE_TOTALS_WIDTH;
+  const rowH = 17;
+  const pillH = 42;
+  y = ensure(y, rows.length * rowH + pillH + 14);
+  doc.setFontSize(10);
+  for (const [label, value] of rows) {
+    doc.setFont("helvetica", "normal");
+    ink(doc, INVOICE_MUTED);
+    doc.text(label, left, y);
+    doc.setFont("helvetica", "bold");
+    ink(doc, INVOICE_INK);
+    doc.text(value, right, y, { align: "right" });
+    y += rowH;
+  }
+  y += 2;
+  fill(doc, INVOICE_INK);
+  doc.roundedRect(left, y - 6, INVOICE_TOTALS_WIDTH, pillH, 6, 6, "F");
+  const textLeft = left + 13;
+  const hasNote = Boolean(pill.note);
+  writeInvoiceLabel(doc, pill.label, textLeft, y + (hasNote ? 12 : 19), {
+    color: { r: 255, g: 255, b: 255 },
+    size: 8,
+  });
+  if (hasNote) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    ink(doc, INVOICE_PILL_SUB);
+    doc.text(pill.note, textLeft, y + 24);
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(17);
+  doc.setTextColor(255, 255, 255);
+  doc.text(pill.amount, right - 13, y + 21, { align: "right" });
+  return y - 6 + pillH;
+}
+
+function invoiceInfoLines(doc: Doc, lines: string[], width: number) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  return lines.flatMap((line) => {
+    const wrapped = doc.splitTextToSize(line, width);
+    return Array.isArray(wrapped) ? wrapped : [wrapped];
+  });
+}
+
+/**
+ * Payment and Questions columns above the footer. Sits at the foot of the page
+ * when the content above leaves room, like the template's flex spacer.
+ */
+function writeInvoiceInfo(
+  doc: Doc,
+  left: { label: string; lines: string[] },
+  right: { label: string; lines: string[] },
+  y: number,
+  ensure: EnsureFn,
+) {
+  const rightEdge = contentRight(doc);
+  const gap = 21;
+  const colW = (rightEdge - PAPER_INSET - gap) / 2;
+  const leftLines = invoiceInfoLines(doc, left.lines, colW);
+  const rightLines = invoiceInfoLines(doc, right.lines, colW);
+  const lineH = 13;
+  const bodyH = Math.max(leftLines.length, rightLines.length) * lineH;
+  const blockH = 14 + 8 + 4 + bodyH;
+  y = ensure(y + 18, blockH);
+  const top = Math.max(y, invoiceContentBottom(doc) - blockH);
+  draw(doc, INVOICE_LINE);
+  doc.setLineWidth(0.8);
+  doc.line(PAPER_INSET, top, rightEdge, top);
+  const labelY = top + 14 + 8;
+  const cols: Array<[number, { label: string }, string[]]> = [
+    [PAPER_INSET, left, leftLines],
+    [PAPER_INSET + colW + gap, right, rightLines],
+  ];
+  for (const [x, col, lines] of cols) {
+    writeInvoiceLabel(doc, col.label, x, labelY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    ink(doc, INVOICE_BODY);
+    let cy = labelY + 4 + 10;
+    for (const line of lines) {
+      doc.text(line, x, cy);
+      cy += lineH;
+    }
+  }
+  return top + blockH;
+}
+
+function stampInvoiceFooters(doc: Doc, company: CompanySettings) {
+  const thanks = paperInvoiceThanks(company.name);
+  const address = paperInvoiceFooterRight(company);
+  const pages = doc.getNumberOfPages();
+  const y = pageHeight(doc) - INVOICE_FOOTER_BASELINE;
+  const right = contentRight(doc);
+  for (let page = 1; page <= pages; page++) {
+    doc.setPage(page);
+    const tail = pages > 1 ? `Page ${page} of ${pages}` : "";
+    const rightText = [address, tail].filter(Boolean).join(" · ");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    const thanksW = doc.getTextWidth(thanks);
+    doc.setFont("helvetica", "normal");
+    const rightW = doc.getTextWidth(rightText);
+    const stacked = thanksW + rightW + 16 > right - PAPER_INSET;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    ink(doc, INVOICE_INK);
+    doc.text(thanks, PAPER_INSET, stacked ? y - 12 : y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    ink(doc, INVOICE_MUTED);
+    if (rightText) doc.text(rightText, stacked ? PAPER_INSET : right, y, { align: stacked ? "left" : "right" });
+  }
+}
+
+function invoiceManagerLines(manager: ProjectManagerContact | null | undefined, companyPhone?: string) {
+  return paperManagerLines(manager, companyPhone).filter(
+    (line) => line !== (manager?.title?.trim() || "Project Manager"),
+  );
+}
+
 export async function buildInvoicePdf(input: {
   invoice: Invoice;
   lines: InvoiceLine[];
   payments: Payment[];
   company: CompanySettings;
   customer: string;
+  /** Homeowners on the job. Each prints under Bill to with their phone. */
+  homeowners?: PaperInvoiceHomeowner[] | null;
   projectManager?: ProjectManagerContact | null;
   jobCode?: string | null;
   site?: {
@@ -1376,94 +1778,120 @@ export async function buildInvoicePdf(input: {
   };
 }) {
   const doc = await createDoc();
+  const street = input.site?.street?.trim() || "";
   const site = paperSiteTitle({
-    street: input.site?.street,
+    street,
     city: input.site?.city,
     state: input.site?.state,
     postalCode: input.site?.postalCode,
     name: input.site?.name || input.invoice.name,
     kindTitle: "Invoice",
   });
-  const header: PaperHeader = { kind: "invoice", number: input.invoice.number, title: site.title };
-  const pager = createPager(doc, header);
+  const pager = createInvoicePager(doc, input.invoice.number, site.title);
   const total = invoiceTotal(input.invoice.id, input.lines);
   const paid = paidOnInvoice(input.invoice.id, input.payments);
   const balance = invoiceBalance(input.invoice.id, input.lines, input.payments);
-  const cols = tableCols(doc, false);
+  const cols = invoiceCols(doc);
 
-  let y = await writeCoverHeader(
+  let y = await writeInvoiceCoverHeader(doc, input.company, input.invoice.number);
+  y = writeInvoiceBand(
     doc,
-    input.company,
-    "invoice",
-    input.invoice.number,
-    input.projectManager?.phone,
-  );
-  y = writeSiteBlock(doc, site, y);
-  y = writeMetaRow(
-    doc,
-    paperInvoiceMeta({
-      number: input.invoice.number,
+    paperInvoiceBand({
       issuedAt: input.invoice.issuedAt,
       dueAt: input.invoice.dueAt,
       jobCode: input.jobCode,
+      amountDue: formatMoney(balance),
     }),
-    y,
-  );
-  y = writePartyCards(
-    doc,
-    { label: "Bill to", name: input.customer, lines: [site.locality].filter(Boolean) },
-    managerCard(input.projectManager, input.company.phone),
-    y,
+    y + 26,
   );
 
-  y = pager.ensure(y, 36);
-  y = writeTableHeader(doc, cols, y);
-  const ensureRow = repeatingTableEnsure(doc, pager.ensure, cols);
+  const addressLines = [street, site.locality].filter(Boolean);
+  const parties: InvoiceParty[] = [
+    paperInvoiceBillTo({ customer: input.customer, homeowners: input.homeowners, addressLines }),
+  ];
+  if (addressLines.length) {
+    parties.push(
+      invoiceParty(
+        "Project address",
+        street || site.title,
+        street ? [site.locality].filter(Boolean) : addressLines,
+      ),
+    );
+  }
+  const managerName = input.projectManager?.name.trim() || "";
+  if (managerName) {
+    parties.push(
+      invoiceParty("Project manager", managerName, invoiceManagerLines(input.projectManager, input.company.phone)),
+    );
+  }
+  y = writeInvoiceParties(doc, parties, y + 25);
+
+  y = pager.ensure(y + 29, 60);
+  y = writeInvoiceTableHeader(doc, cols, y);
+  const ensureRow = repeatingInvoiceTableEnsure(doc, pager.ensure, cols);
   const lines = [...input.lines].sort((a, b) => a.sortOrder - b.sortOrder);
   for (const line of lines) {
-    y = ensureRow(y, 28);
-    const amountY = y;
-    ink(doc, PAPER_INK);
-    writeMoneyCols(
+    y = ensureRow(y, 30);
+    const unit = customerUnitLabel(line.unit || "");
+    writeInvoiceMoneyCols(
       doc,
       cols,
-      amountY,
-      paperQtyLabel(line.quantity),
-      line.unit || "",
+      y,
+      [paperQtyLabel(line.quantity), unit].filter(Boolean).join(" "),
       formatMoney(line.unitCost),
       formatMoney(invoiceLineAmount(line)),
     );
     y = writeFormattedText(doc, line.description, cols.descX, y, cols.descW, {
-      fontSize: 9,
-      lineHeight: 12,
+      fontSize: 10,
+      lineHeight: 13,
       firstParagraphBold: true,
-      color: PAPER_INK,
+      color: INVOICE_INK,
+      noteStyle: { fontSize: 9, lineHeight: 12, color: INVOICE_MUTED },
       ensure: ensureRow,
     });
-    y += 10;
+    y -= 2;
+    draw(doc, INVOICE_LINE);
+    doc.setLineWidth(0.8);
+    doc.line(PAPER_INSET, y, contentRight(doc), y);
+    y += 20;
   }
 
-  y = writeTotalsStack(
+  y = writeInvoiceTotals(
     doc,
     [
-      ["Total", formatMoney(total)],
-      ["Paid", formatMoney(paid)],
+      ["Subtotal", formatMoney(total)],
+      ["Payments received", formatMoney(paid)],
     ],
-    { label: "BALANCE", amount: formatMoney(balance) },
-    y + 4,
+    {
+      label: "Balance due",
+      note: paperBalanceDueNote({ balance, total, dueAt: input.invoice.dueAt }),
+      amount: formatMoney(balance),
+    },
+    y - 2,
     pager.ensure,
   );
 
   if (input.invoice.notes?.trim()) {
-    y += 8;
-    y = pager.ensure(y, 24);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    ink(doc, PAPER_MUTED);
-    doc.text("NOTES", PAPER_INSET, y);
-    y += 12;
+    y = pager.ensure(y + 20, 30);
+    writeInvoiceLabel(doc, "Notes", PAPER_INSET, y);
+    y += 14;
     y = writeParagraph(doc, input.invoice.notes, y, contentRight(doc) - PAPER_INSET, 9, pager.ensure);
   }
+
+  y = writeInvoiceInfo(
+    doc,
+    {
+      label: "Payment",
+      lines: paperInvoicePaymentCopy({
+        number: input.invoice.number,
+        companyName: input.company.name,
+        paymentNote: input.company.paymentNote,
+      }),
+    },
+    { label: "Questions?", lines: paperInvoiceQuestionsCopy(input.projectManager, input.company) },
+    y,
+    pager.ensure,
+  );
 
   const invoiceTerms = liveInvoiceTerms({
     invoice: input.invoice,
@@ -1481,13 +1909,13 @@ export async function buildInvoicePdf(input: {
     y = pager.addPage();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
-    ink(doc, PAPER_INK);
+    ink(doc, INVOICE_INK);
     doc.text("PAYMENT TERMS", PAPER_INSET, y);
     y += 18;
     writeTermsSections(doc, paymentTerms, y, pager);
   }
 
-  stampFooters(doc, input.company);
+  stampInvoiceFooters(doc, input.company);
   return doc.output("blob");
 }
 
