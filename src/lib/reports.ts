@@ -25,7 +25,7 @@ export function yearOf(value: string | null | undefined) {
   return Number.isFinite(year) ? year : null;
 }
 
-export type DatePreset = "mtd" | "30" | "90" | "ytd" | "all";
+export type DatePreset = "7" | "mtd" | "30" | "90" | "ytd" | "all";
 export type ReportTab =
   | "jobs"
   | "leads"
@@ -37,6 +37,7 @@ export type ReportTab =
   | "cards";
 
 export const DATE_PRESETS: { id: DatePreset; label: string }[] = [
+  { id: "7", label: "Last 7 days" },
   { id: "mtd", label: "Month to date" },
   { id: "30", label: "Last 30 days" },
   { id: "90", label: "Last 90 days" },
@@ -182,7 +183,8 @@ export function rangeForPreset(preset: DatePreset, now = new Date()) {
     return { start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, end };
   }
   if (preset === "ytd") return { start: `${now.getFullYear()}-01-01`, end };
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (preset === "30" ? 30 : 90));
+  const days = preset === "7" ? 7 : preset === "30" ? 30 : 90;
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
   return { start: localYmd(start), end };
 }
 
