@@ -213,11 +213,11 @@ export function HomeDesk({
             <p className="mt-2 text-[12.5px] text-muted-foreground">
               {desk.signed.quota > 0 ? (
                 <>
-                  {desk.signed.percent}% of {formatCurrency(desk.signed.quota)} quota · {desk.signed.daysLeft} days left
+                  {desk.signed.percent}% of {formatCurrency(desk.signed.quota)} goal · {desk.signed.daysLeft} days left
                 </>
               ) : (
                 <Link href="/settings" className="font-medium text-primary hover:underline">
-                  Set a monthly quota
+                  Set a monthly goal
                 </Link>
               )}
             </p>

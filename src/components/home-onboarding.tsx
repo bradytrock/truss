@@ -13,7 +13,7 @@ function onboardingCopy(role: SeatRole | undefined) {
       return {
         title: "Get started with your first leads",
         description:
-          "Your home shows pipeline, quota pacing, and today’s work once records exist. Import a list or create the first lead to populate this page.",
+          "Your home shows pipeline, goal pacing, and today’s work once records exist. Import a list or create the first lead to populate this page.",
         action: "Import leads" as const,
       };
     case "team_lead":
@@ -21,7 +21,7 @@ function onboardingCopy(role: SeatRole | undefined) {
       return {
         title: "No leads in your team yet",
         description:
-          "Team pipeline, quota, and desk lists appear here after the first lead is created. Add one to start tracking the book.",
+          "Team pipeline, goal, and desk lists appear here after the first lead is created. Add one to start tracking the book.",
         action: "Add your first lead" as const,
       };
     case "business_development":
