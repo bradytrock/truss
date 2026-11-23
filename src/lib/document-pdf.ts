@@ -1765,7 +1765,7 @@ export async function buildInvoicePdf(input: {
   payments: Payment[];
   company: CompanySettings;
   customer: string;
-  /** Homeowners on the job. Each prints under Bill to with their phone. */
+  /** Homeowners on the job. Each prints under Bill to with their phone and email. */
   homeowners?: PaperInvoiceHomeowner[] | null;
   projectManager?: ProjectManagerContact | null;
   jobCode?: string | null;

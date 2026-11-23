@@ -150,11 +150,11 @@ export function paperInvoiceBand(input: {
   ];
 }
 
-export type PaperInvoiceHomeowner = { name: string; phone?: string | null };
+export type PaperInvoiceHomeowner = { name: string; phone?: string | null; email?: string | null };
 
 /**
- * Bill to card on an invoice: every homeowner on the job with their phone,
- * then the property address. Falls back to the customer label when the job
+ * Bill to card on an invoice: every homeowner on the job with their phone and
+ * email, then the property address. Falls back to the customer label when the job
  * has no homeowner contacts.
  */
 export function paperInvoiceBillTo(input: {
@@ -164,7 +164,10 @@ export function paperInvoiceBillTo(input: {
 }) {
   const seen = new Set<string>();
   const people = (input.homeowners ?? [])
-    .map((person) => ({ name: person.name.trim(), lines: [paperPhone(person.phone)].filter(Boolean) }))
+    .map((person) => ({
+      name: person.name.trim(),
+      lines: [paperPhone(person.phone), person.email?.trim() ?? ""].filter(Boolean),
+    }))
     .filter((person) => {
       const key = person.name.toLowerCase();
       if (!person.name || seen.has(key)) return false;

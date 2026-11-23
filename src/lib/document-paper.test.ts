@@ -163,17 +163,19 @@ assert.equal(paperInvoiceBand({ amountDue: "$0.00" })[2]?.value, "—");
 const billTo = paperInvoiceBillTo({
   customer: "Leonardo — 1825 Brook Lane",
   homeowners: [
-    { name: "Anthony Leonardo", phone: "4695550142" },
-    { name: "Maria Leonardo", phone: "" },
+    { name: "Anthony Leonardo", phone: "4695550142", email: " anthony@example.com " },
+    { name: "Maria Leonardo", phone: "", email: "maria@example.com" },
     { name: " anthony leonardo ", phone: "4695550142" },
     { name: "  ", phone: "2145550000" },
+    { name: "Chris Leonardo", phone: "", email: "" },
   ],
   addressLines: ["1825 Brook Lane", "", "Flower Mound, TX 75028"],
 });
 assert.equal(billTo.label, "Bill to");
 assert.deepEqual(billTo.people, [
-  { name: "Anthony Leonardo", lines: ["(469) 555-0142"] },
-  { name: "Maria Leonardo", lines: [] },
+  { name: "Anthony Leonardo", lines: ["(469) 555-0142", "anthony@example.com"] },
+  { name: "Maria Leonardo", lines: ["maria@example.com"] },
+  { name: "Chris Leonardo", lines: [] },
 ]);
 assert.deepEqual(billTo.lines, ["1825 Brook Lane", "Flower Mound, TX 75028"]);
 assert.deepEqual(paperInvoiceBillTo({ customer: "Shawn Gregory" }).people, [{ name: "Shawn Gregory", lines: [] }]);

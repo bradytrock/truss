@@ -310,7 +310,7 @@ export type SharedInvoicePayload = {
     estimateId?: string | null;
   }>;
   /** Homeowners on the job, primary first. Printed under Bill to. */
-  homeowners?: Array<{ name: string; phone: string }>;
+  homeowners?: Array<{ name: string; phone: string; email: string }>;
   projectManager?: ProjectManagerContact | null;
 };
 
@@ -318,7 +318,11 @@ function parseSharedHomeowners(raw: unknown): SharedInvoicePayload["homeowners"]
   if (!Array.isArray(raw)) return undefined;
   const people = raw
     .filter(isRecord)
-    .map((person) => ({ name: asString(person.name), phone: asString(person.phone) }))
+    .map((person) => ({
+      name: asString(person.name),
+      phone: asString(person.phone),
+      email: asString(person.email),
+    }))
     .filter((person) => person.name.trim());
   return people.length ? people : undefined;
 }
