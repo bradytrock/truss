@@ -25,7 +25,9 @@ import {
 import { ErrorBanner } from "@/components/page-chrome";
 import { BdRoiPanel, bdRoiCsvHeaders, bdRoiCsvRows } from "@/components/bd-roi";
 import { CardAnalyticsReport } from "@/components/card-analytics-report";
+import { PersonReportPanel } from "@/components/person-report-panel";
 import { buildBdRoi, isBusinessDevelopment } from "@/lib/bd";
+import { buildPersonDetail, personWonCsv } from "@/lib/person-report";
 import type { CardPersonRow, CardRange } from "@/lib/card-analytics";
 import {
   DATE_PRESETS,
@@ -74,31 +76,48 @@ export function ReportsDashboard({
   });
   const [viewScope, setViewScope] = useState<AccessScope | null>(null);
   const [cardRows, setCardRows] = useState<{ rows: CardPersonRow[]; range: CardRange } | null>(null);
+  const personId = searchParams.get("person");
+  const [personPreset, setPersonPreset] = useState<DatePreset>(preset);
+  const [trackedPerson, setTrackedPerson] = useState<string | null>(null);
+  if (personId !== trackedPerson) {
+    const opening = Boolean(personId) && !trackedPerson;
+    setTrackedPerson(personId);
+    if (opening) setPersonPreset(preset);
+  }
 
   const scopeOptions = useMemo(() => reportScopeOptions(viewer), [viewer]);
   const effectiveScope: AccessScope | undefined =
     viewScope && scopeOptions.includes(viewScope) ? viewScope : scopeOptions[scopeOptions.length - 1];
 
   const book = useMemo(() => scopeBook(roleBook, viewer, effectiveScope), [roleBook, viewer, effectiveScope]);
+  const reportBook = useMemo(
+    () => ({
+      staff: book.staff,
+      jobs: book.jobs,
+      opportunities: book.opportunities,
+      contacts: book.contacts,
+      estimates: book.estimates,
+      estimateLines: book.estimateLines,
+      payments: book.payments,
+      expenses: book.expenses,
+    }),
+    [book],
+  );
 
   const report = useMemo(() => {
-    return buildPerformance(
-      {
-        staff: book.staff,
-        jobs: book.jobs,
-        opportunities: book.opportunities,
-        contacts: book.contacts,
-        estimates: book.estimates,
-        estimateLines: book.estimateLines,
-        payments: book.payments,
-        expenses: book.expenses,
-      },
-      viewer,
-      preset,
-      new Date(),
-      effectiveScope,
-    );
-  }, [book, viewer, preset, effectiveScope]);
+    return buildPerformance(reportBook, viewer, preset, new Date(), effectiveScope);
+  }, [reportBook, viewer, preset, effectiveScope]);
+
+  const personPerformance = useMemo(() => {
+    if (!personId) return null;
+    if (personPreset === preset) return report;
+    return buildPerformance(reportBook, viewer, personPreset, new Date(), effectiveScope);
+  }, [personId, personPreset, preset, report, reportBook, viewer, effectiveScope]);
+
+  const personDetail = useMemo(() => {
+    if (!personId || !personPerformance) return null;
+    return buildPersonDetail(reportBook, personId, personPerformance.range);
+  }, [personId, personPerformance, reportBook]);
 
   const onCardRows = useCallback((rows: CardPersonRow[], range: CardRange) => {
     setCardRows({ rows, range });
@@ -119,10 +138,29 @@ export function ReportsDashboard({
     setRequestedTab(next);
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", next);
+    params.delete("person");
+    router.replace(`/reports?${params.toString()}`, { scroll: false });
+  }
+
+  function showPerson(id: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("person", id);
+    if (!params.get("tab")) params.set("tab", activeTab);
+    router.replace(`/reports?${params.toString()}`, { scroll: false });
+  }
+
+  function closePerson() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("person");
     router.replace(`/reports?${params.toString()}`, { scroll: false });
   }
 
   function exportCurrent() {
+    if (personDetail) {
+      const csv = personWonCsv(personDetail);
+      downloadCsv(csv.filename, csv.headers, csv.rows);
+      return;
+    }
     const stamp = data.range.end;
     switch (activeTab) {
       case "leads":
@@ -243,7 +281,7 @@ export function ReportsDashboard({
                 options={scopeOptions.map((scope) => ({ value: scope, label: REPORT_SCOPE_LABELS[scope] }))}
               />
             ) : null}
-            {activeTab === "pipeline" ? (
+            {personId ? null : activeTab === "pipeline" ? (
               <HeaderNote dot>Live board · date range does not apply</HeaderNote>
             ) : activeTab === "cards" ? (
               <HeaderNote>This report uses its own range below</HeaderNote>
@@ -285,6 +323,7 @@ export function ReportsDashboard({
           </div>
         </div>
 
+        {personId ? null : (
         <Tabs value={activeTab} onValueChange={(value) => selectTab(value as ReportTab)} className="mt-4">
           <TabsList
             variant="line"
@@ -301,20 +340,45 @@ export function ReportsDashboard({
             ))}
           </TabsList>
         </Tabs>
+        )}
       </div>
 
       <div className="flex-1 space-y-4 bg-[#f5f6f8] px-5 py-5 sm:px-7">
-        {activeTab === "overview" ? (
-          <OverviewTab report={report} financials={financials} showTeam={showTeam} onViewTeam={() => selectTab("team")} />
+        {personId && personDetail && personPerformance ? (
+          <PersonReportPanel
+            detail={personDetail}
+            report={personPerformance}
+            preset={personPreset}
+            onPreset={setPersonPreset}
+            onBack={closePerson}
+            onSwitch={showPerson}
+          />
         ) : null}
-        {activeTab === "jobs" ? <JobsTab report={report} financials={financials} /> : null}
-        {activeTab === "leads" ? <LeadsTab report={report} /> : null}
-        {activeTab === "workflow" ? <WorkflowTab report={report} /> : null}
-        {activeTab === "pipeline" ? <PipelineTab report={report} /> : null}
-        {activeTab === "team" && showTeam ? <TeamTab report={report} /> : null}
-        {activeTab === "lost" ? <LostTab report={report} /> : null}
-        {activeTab === "cards" ? <CardAnalyticsReport onRows={onCardRows} /> : null}
-        {activeTab === "bd" && showBd ? <BdRoiPanel state={roleBook} viewer={viewer} /> : null}
+        {personId && !personDetail ? (
+          <p className="text-sm" style={{ color: REPORT_COLORS.muted }}>
+            That person is not in this view.{" "}
+            <button type="button" className="font-medium hover:underline" style={{ color: REPORT_COLORS.blue }} onClick={closePerson}>
+              Back to the leaderboard
+            </button>
+          </p>
+        ) : null}
+        {!personId && activeTab === "overview" ? (
+          <OverviewTab
+            report={report}
+            financials={financials}
+            showTeam={showTeam}
+            onViewTeam={() => selectTab("team")}
+            onSelectPerson={showTeam ? showPerson : undefined}
+          />
+        ) : null}
+        {!personId && activeTab === "jobs" ? <JobsTab report={report} financials={financials} /> : null}
+        {!personId && activeTab === "leads" ? <LeadsTab report={report} /> : null}
+        {!personId && activeTab === "workflow" ? <WorkflowTab report={report} /> : null}
+        {!personId && activeTab === "pipeline" ? <PipelineTab report={report} /> : null}
+        {!personId && activeTab === "team" && showTeam ? <TeamTab report={report} onSelectPerson={showPerson} /> : null}
+        {!personId && activeTab === "lost" ? <LostTab report={report} /> : null}
+        {!personId && activeTab === "cards" ? <CardAnalyticsReport onRows={onCardRows} /> : null}
+        {!personId && activeTab === "bd" && showBd ? <BdRoiPanel state={roleBook} viewer={viewer} /> : null}
       </div>
     </div>
   );

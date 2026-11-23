@@ -25,7 +25,7 @@ export function yearOf(value: string | null | undefined) {
   return Number.isFinite(year) ? year : null;
 }
 
-export type DatePreset = "7" | "mtd" | "30" | "90" | "ytd" | "all";
+export type DatePreset = "7" | "mtd" | "30" | "90" | "quarter" | "ytd" | "all";
 export type ReportTab =
   | "overview"
   | "jobs"
@@ -73,7 +73,7 @@ export const REPORT_SCOPE_LABELS: Record<AccessScope, string> = {
   company: "Company",
 };
 
-const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
+export const REPORT_QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
   "estimating",
   "bid_submitted",
   "interview",
@@ -210,6 +210,10 @@ export function rangeForPreset(preset: DatePreset, now = new Date()) {
     return { start: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`, end };
   }
   if (preset === "ytd") return { start: `${now.getFullYear()}-01-01`, end };
+  if (preset === "quarter") {
+    const startMonth = Math.floor(now.getMonth() / 3) * 3;
+    return { start: `${now.getFullYear()}-${String(startMonth + 1).padStart(2, "0")}-01`, end };
+  }
   const days = preset === "7" ? 7 : preset === "30" ? 30 : 90;
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
   return { start: localYmd(start), end };
@@ -224,6 +228,10 @@ function inRange(iso: string | null | undefined, start: string | null, end: stri
   if (!value) return false;
   if (start && value < start) return false;
   return value <= end;
+}
+
+export function isInReportRange(iso: string | null | undefined, range: { start: string | null; end: string }) {
+  return inRange(iso, range.start, range.end);
 }
 
 function monthKey(iso: string) {
@@ -306,7 +314,7 @@ function opportunityOwner(opportunity: Opportunity, staff: StaffMember[]) {
 }
 
 /** Team leaderboard credits the production seat once. Business development is reported on BD / ROI, so a BD owner falls through to the estimator. */
-function leaderboardOwner(opportunity: Opportunity, staff: StaffMember[]) {
+export function leaderboardOwner(opportunity: Opportunity, staff: StaffMember[]) {
   const owner = staff.find((member) => member.id === opportunity.ownerStaffId);
   const estimator = staff.find((member) => member.name === opportunity.estimator);
   return [owner, estimator].find((member) => member && member.role !== "business_development");
@@ -335,7 +343,7 @@ function wonAmount(
   return opportunities.find((item) => item.id === job.opportunityId)?.value ?? 0;
 }
 
-function wonAmountForOpportunity(
+export function wonAmountForOpportunity(
   opportunity: Opportunity,
   jobs: Job[],
   estimates: Estimate[],
@@ -381,7 +389,7 @@ export function buildPerformance(
   const soldIds = new Set(soldJobs.map((job) => job.id));
   const lost = opportunities.filter((item) => item.stage === "lost");
   const unqualified = opportunities.filter((item) => item.stage === "unqualified");
-  const qualified = opportunities.filter((item) => QUALIFIED_STAGES.has(item.stage));
+  const qualified = opportunities.filter((item) => REPORT_QUALIFIED_STAGES.has(item.stage));
   const wonOpps = opportunities.filter((item) => isOpportunityWon(item, estimates, liveJobs));
 
   const lostValues = lost.map((item) => item.value);
@@ -493,7 +501,7 @@ export function buildPerformance(
       qualifiedClose: 0,
     };
     row.incoming += 1;
-    if (QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
+    if (REPORT_QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
     if (opportunity.stage !== "unqualified" && isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;
       row.wonValue += wonAmountForOpportunity(opportunity, liveJobs, estimates, estimateLines);
@@ -529,7 +537,7 @@ export function buildPerformance(
     if (!owner || !teamMap.has(owner.id)) continue;
     const row = teamMap.get(owner.id)!;
     row.assigned += 1;
-    if (opportunity.stage !== "unqualified" && QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
+    if (opportunity.stage !== "unqualified" && REPORT_QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
     if (opportunity.stage === "lost") row.lost += 1;
     if (opportunity.stage !== "unqualified" && isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;

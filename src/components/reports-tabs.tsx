@@ -62,11 +62,13 @@ export function OverviewTab({
   financials,
   showTeam,
   onViewTeam,
+  onSelectPerson,
 }: {
   report: PerformanceReport;
   financials: boolean;
   showTeam: boolean;
   onViewTeam: () => void;
+  onSelectPerson?: (staffId: string) => void;
 }) {
   const compact = (value: number) => formatCurrency(value);
   return (
@@ -118,7 +120,7 @@ export function OverviewTab({
           }
           bodyClassName="px-0 pb-0"
         >
-          <LeaderboardTable rows={report.byTeam.slice(0, 8)} rankStyle="plain" />
+          <LeaderboardTable rows={report.byTeam.slice(0, 8)} rankStyle="plain" onSelect={onSelectPerson} />
         </ReportPanel>
       ) : null}
     </>
@@ -652,7 +654,7 @@ export function PipelineTab({ report }: { report: PerformanceReport }) {
  * Team
  * -------------------------------------------------------------------------- */
 
-export function TeamTab({ report }: { report: PerformanceReport }) {
+export function TeamTab({ report, onSelectPerson }: { report: PerformanceReport; onSelectPerson?: (staffId: string) => void }) {
   const [role, setRole] = useState<string>("all");
   const [sortKey, setSortKey] = useState<TeamSortKey>("wonValue");
   const [direction, setDirection] = useState<"asc" | "desc">("desc");
@@ -735,7 +737,7 @@ export function TeamTab({ report }: { report: PerformanceReport }) {
         }
         bodyClassName="px-0 pb-0"
       >
-        <LeaderboardTable rows={rows} rankStyle="badge" sort={{ key: sortKey, direction, onSort: toggleSort }} />
+        <LeaderboardTable rows={rows} rankStyle="badge" sort={{ key: sortKey, direction, onSort: toggleSort }} onSelect={onSelectPerson} />
       </ReportPanel>
     </>
   );
@@ -786,10 +788,12 @@ function LeaderboardTable({
   rows,
   rankStyle,
   sort,
+  onSelect,
 }: {
   rows: TeamRow[];
   rankStyle: "plain" | "badge";
   sort?: { key: TeamSortKey; direction: "asc" | "desc"; onSort: (key: TeamSortKey) => void };
+  onSelect?: (staffId: string) => void;
 }) {
   const maxWon = Math.max(...rows.map((row) => row.wonValue), 1);
   const head = (label: string, key: TeamSortKey, className?: string) => {
@@ -828,7 +832,22 @@ function LeaderboardTable({
       <TableBody>
         {rows.length === 0 ? <EmptyRow cols={7} /> : null}
         {rows.map((row, index) => (
-          <TableRow key={row.staff.id}>
+          <TableRow
+            key={row.staff.id}
+            className={onSelect ? "cursor-pointer" : undefined}
+            tabIndex={onSelect ? 0 : undefined}
+            onClick={onSelect ? () => onSelect(row.staff.id) : undefined}
+            onKeyDown={
+              onSelect
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelect(row.staff.id);
+                    }
+                  }
+                : undefined
+            }
+          >
             <TableCell className="pl-4">
               {rankStyle === "badge" ? (
                 <RankBadge rank={index + 1} />
