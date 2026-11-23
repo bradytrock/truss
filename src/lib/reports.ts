@@ -305,6 +305,13 @@ function opportunityOwner(opportunity: Opportunity, staff: StaffMember[]) {
   );
 }
 
+/** Team leaderboard credits the production seat once. Business development is reported on BD / ROI, so a BD owner falls through to the estimator. */
+function leaderboardOwner(opportunity: Opportunity, staff: StaffMember[]) {
+  const owner = staff.find((member) => member.id === opportunity.ownerStaffId);
+  const estimator = staff.find((member) => member.name === opportunity.estimator);
+  return [owner, estimator].find((member) => member && member.role !== "business_development");
+}
+
 function jobBookValue(
   job: Job,
   estimates: Estimate[],
@@ -504,6 +511,7 @@ export function buildPerformance(
 
   const teamMap = new Map<string, TeamRow>();
   for (const member of roster) {
+    if (member.role === "business_development") continue;
     teamMap.set(member.id, {
       staff: member,
       won: 0,
@@ -517,7 +525,7 @@ export function buildPerformance(
     });
   }
   for (const opportunity of opportunities) {
-    const owner = opportunityOwner(opportunity, book.staff);
+    const owner = leaderboardOwner(opportunity, book.staff);
     if (!owner || !teamMap.has(owner.id)) continue;
     const row = teamMap.get(owner.id)!;
     row.assigned += 1;

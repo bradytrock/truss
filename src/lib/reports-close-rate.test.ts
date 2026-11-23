@@ -72,4 +72,54 @@ assert.equal(report.kpis.closeRate, 0.5, "unqualified does not lower close rate"
 assert.equal(report.byTeam[0]?.closeRate, 0.5, "team close rate ignores unqualified");
 assert.equal(report.byTeam[0]?.lost, 1, "team lost count stays on lost");
 
+const closer = {
+  ...viewer,
+  id: "maya",
+  name: "Maya",
+  title: "Project manager",
+  role: "project_manager",
+  initials: "M",
+  email: "maya@example.com",
+  cardSlug: "maya",
+} satisfies StaffMember;
+
+const bd = {
+  ...viewer,
+  id: "priya",
+  name: "Priya",
+  title: "Director of Business Development",
+  role: "business_development",
+  initials: "P",
+  email: "priya@example.com",
+  cardSlug: "priya",
+} satisfies StaffMember;
+
+const withBd = buildPerformance(
+  {
+    staff: [viewer, closer, bd],
+    jobs: [],
+    opportunities: [
+      lead({ id: "bd-owned", stage: "awarded", ownerStaffId: "priya", estimator: "Maya" }),
+      lead({ id: "bd-only", stage: "awarded", ownerStaffId: "priya", estimator: "Priya" }),
+      lead({ id: "closer-owned", stage: "awarded", ownerStaffId: "maya", estimator: "Priya" }),
+    ],
+    contacts: [],
+    estimates: [],
+    estimateLines: [],
+    payments: [],
+    expenses: [],
+  },
+  viewer,
+  "all",
+  new Date("2026-10-10T15:00:00.000Z"),
+);
+
+assert.equal(
+  withBd.byTeam.some((row) => row.staff.role === "business_development"),
+  false,
+  "business development stays off the team leaderboard",
+);
+assert.equal(withBd.byTeam.find((row) => row.staff.id === "maya")?.won, 2, "the closer keeps one copy of BD-owned work");
+assert.equal(withBd.highlights.topCloser?.staff.role === "business_development", false);
+
 console.log("close rate tests passed");
