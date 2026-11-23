@@ -85,8 +85,8 @@ assert(
   "dragging to supplementing writes precon + supplementing",
 );
 assert(
-  WORK_COLUMNS.indexOf("supplementing") === WORK_COLUMNS.indexOf("in_progress") + 1,
-  "supplementing sits immediately behind in progress",
+  WORK_COLUMNS.indexOf("in_progress") === WORK_COLUMNS.indexOf("supplementing") + 1,
+  "in progress sits immediately after supplementing",
 );
 assert(!(WORK_COLUMNS as readonly string[]).includes("estimating"), "estimating is no longer its own column");
 assert(canonicalizeWorkColumn("estimating") === "supplementing", "old estimating column name maps to supplementing");

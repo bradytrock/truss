@@ -3842,8 +3842,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const opportunity = job.opportunityId
         ? state.opportunities.find((item) => item.id === job.opportunityId)
         : undefined;
-      if (workColumnFor({ ...job, deletedAt: null }, opportunity) === column) return;
       const next = patchForWorkColumn(column);
+      const displayed = workColumnFor({ ...job, deletedAt: null }, opportunity);
+      const stageMatches = !next.stage || !opportunity || opportunity.stage === next.stage;
+      // A sold job still in precon already sits in In progress. Starting production
+      // still has to write the status, so a matching column is not enough to stop.
+      if (displayed === column && stageMatches && job.status === next.status) return;
       if (opportunity && next.stage && opportunity.stage !== next.stage) {
         await moveOpportunity(opportunity.id, next.stage);
       }

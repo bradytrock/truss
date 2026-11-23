@@ -103,7 +103,7 @@ assert.equal(formatInboxDay("2026-10-20T15:00:00.000Z", new Date("2026-10-20T18:
 
 assert.deepEqual(inboxStage({ inspected: true, hasSentEstimate: false, opportunity: { stage: "pursuing", nextStep: "" } }), {
   current: "Inspected",
-  next: "Estimate next",
+  next: "Draft a reroof estimate from the price book",
   detail: "",
 });
 assert.equal(
@@ -111,7 +111,7 @@ assert.equal(
     job: { status: "in_progress" },
     opportunity: { stage: "won", nextStep: "Cabinets land Thursday. Keep Nora off the old layout." },
   }).next,
-  "Punch next",
+  "Start punch",
 );
 assert.equal(inboxStage({ job: { status: "in_progress" } }).current, "In progress");
 assert.equal(inboxRoleLabel({ title: "", market: "residential" }), "Homeowner");
@@ -199,10 +199,11 @@ assert.equal(notesOnly.length, 1);
 assert.equal(notesOnly[0]?.kind, "note");
 
 assert.deepEqual(inboxNextAction({ job: { status: "precon", contractValue: 618 }, opportunity: { stage: "awarded" } }), {
-  title: "Job sold → start precon",
-  stage: "Preconstruction",
-  action: "Start precon",
-  column: null,
+  title: "Start production",
+  stage: "Job Sold",
+  action: "Start production",
+  column: "in_progress",
+  stageMove: null,
 });
 assert.equal(inboxNextAction({ job: { status: "in_progress" } })?.column, "punch");
 assert.equal(inboxMoney(2611.04), "$2,611.04");

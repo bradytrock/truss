@@ -5,8 +5,8 @@ import type { Job, JobStatus, Opportunity, PipelineStage } from "./types";
 export const WORK_COLUMNS = [
   "lead",
   "proposal_sent",
-  "in_progress",
   "supplementing",
+  "in_progress",
   "punch",
   "complete",
   "on_hold",

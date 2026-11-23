@@ -6,16 +6,16 @@ import { boardValue, workColumnFor, WORK_COLUMN_LABELS, type WorkColumn } from "
 import { estimatesForJob } from "@/lib/won";
 
 /**
- * Working columns on the jobs board, in board order.
- * Complete, lost, unqualified, and deleted are outcomes, not the path.
+ * Working columns on the jobs board, in the order a job actually moves.
+ * Lead, then the proposal, then the supplement, then production.
+ * Complete, on hold, lost, unqualified, and deleted sit off this path.
  */
 export const PIPELINE_PATH_COLUMNS = [
   "lead",
   "proposal_sent",
-  "in_progress",
   "supplementing",
+  "in_progress",
   "punch",
-  "on_hold",
 ] as const satisfies readonly WorkColumn[];
 
 export type PipelinePathColumn = (typeof PIPELINE_PATH_COLUMNS)[number];

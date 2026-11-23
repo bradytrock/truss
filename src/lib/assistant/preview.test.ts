@@ -101,9 +101,14 @@ assert.equal(applied.arguments.street, "412 Maple Ave");
 assert.equal(applied.arguments.postalCode, "75057");
 
 const steps = leadNextSteps({ firstName: "Jane", address: "412 Maple St, Flower Mound 75028", code: "BJ111026-A" });
-assert.equal(steps[0]?.label, "Schedule a roof inspection");
+assert.deepEqual(
+  steps.map((step) => step.id),
+  ["call", "text", "schedule"],
+);
+assert.equal(steps[0]?.label, "Call Jane back within 5 minutes");
 assert.match(steps[1]?.prompt ?? "", /Text Jane/);
-assert.match(steps[2]?.prompt ?? "", /BJ111026-A/);
+assert.match(steps[2]?.prompt ?? "", /412 Maple St/);
+assert.equal(steps.some((step) => step.id === "estimate"), false);
 
 const known = leadPreview(call, {
   ownerName: "Blake Jones",

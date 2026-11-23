@@ -208,7 +208,7 @@ const valueOf = (column: string) => rows.find((row) => row.column === column)?.v
 
 assert.deepEqual(
   rows.map((row) => row.column),
-  ["lead", "proposal_sent", "in_progress", "supplementing", "punch", "on_hold"],
+  ["lead", "proposal_sent", "supplementing", "in_progress", "punch"],
 );
 assert.equal(valueOf("lead"), 12664.29, "lead uses the priced draft, not win probability or a zero opportunity value");
 assert.equal(valueOf("proposal_sent"), 7380, "proposal sent uses the viewed proposal and folds follow-up into that column");
@@ -216,7 +216,7 @@ assert.equal(valueOf("supplementing"), 4660.28, "estimating sits with supplement
 assert.equal(valueOf("in_progress"), 34894.94, "in-progress work stays in progress even when the lead stage is still supplementing");
 assert.equal(valueOf("lead"), 12664.29, "a deleted card is not added back from its lead");
 assert.equal(valueOf("punch"), 0);
-assert.equal(valueOf("on_hold"), 0);
+assert.equal(valueOf("on_hold"), -1, "on hold is off the working path");
 assert.ok(!rows.some((row) => row.label === "Follow-up"));
 
 assert.equal(

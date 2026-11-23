@@ -1,4 +1,5 @@
 import type { SuggestedAddress } from "../address-suggest.ts";
+import { openNextSteps, type NextStepId } from "../next-steps.ts";
 import type { AssistantToolCall } from "./types.ts";
 import { asString } from "./files.ts";
 import { nextJobCode } from "../job-code.ts";
@@ -42,7 +43,7 @@ export type LeadPreview = {
 
 export type CassioSuggestion = { title: string; meta: string; prompt: string };
 
-export type LeadNextStep = { id: "inspect" | "text" | "estimate"; label: string; prompt: string };
+export type LeadNextStep = { id: NextStepId; label: string; prompt: string };
 
 const STREET_SUFFIX =
   /\s+(street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|court|ct|way|place|pl|trail|trl|circle|cir)\.?$/i;
@@ -301,24 +302,20 @@ export function cassioSuggestions(
 }
 
 export function leadNextSteps(input: { firstName: string; address: string; code: string }): LeadNextStep[] {
-  const who = input.firstName.trim() || "them";
-  const where = input.address.trim();
-  const code = input.code.trim();
-  return [
-    {
-      id: "inspect",
-      label: "Schedule a roof inspection",
-      prompt: `Schedule a roof inspection${where ? ` at ${where}` : ""} for ${who}${code ? ` on ${code}` : ""}`,
-    },
-    {
-      id: "text",
-      label: `Text ${who} that we got the request`,
-      prompt: `Text ${who} that we got the request${code ? ` about ${code}` : ""}`,
-    },
-    {
-      id: "estimate",
-      label: "Draft a reroof estimate from the price book",
-      prompt: `Draft a reroof estimate from the price book${code ? ` on ${code}` : ""}`,
-    },
-  ];
+  return openNextSteps({
+    status: "precon",
+    stage: "pursuing",
+    contractValue: 0,
+    contacted: false,
+    texted: false,
+    hasAppointment: false,
+    inspected: false,
+    hasDraft: false,
+    hasSent: false,
+    hasSigned: false,
+    claimOpen: false,
+    firstName: input.firstName,
+    address: input.address,
+    code: input.code,
+  }).map((step) => ({ id: step.id, label: step.title, prompt: step.prompt }));
 }
