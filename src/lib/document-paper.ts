@@ -9,6 +9,15 @@ export const PAPER_LINE = { r: 28, g: 28, b: 28 };
 export const PAPER_CARD = { r: 245, g: 245, b: 245 };
 export const PAPER_INSET = 48;
 
+/** Invoice sheet palette. Matches the invoice template (red, ink, body, muted, line, soft). */
+export const INVOICE_RED = { r: 208, g: 32, b: 46 };
+export const INVOICE_INK = { r: 17, g: 20, b: 24 };
+export const INVOICE_BODY = { r: 43, g: 48, b: 54 };
+export const INVOICE_MUTED = { r: 107, g: 114, b: 123 };
+export const INVOICE_LINE = { r: 227, g: 230, b: 234 };
+export const INVOICE_SOFT = { r: 246, g: 247, b: 249 };
+export const INVOICE_PILL_SUB = { r: 185, g: 190, b: 197 };
+
 export const PAPER_RED_HEX = "#c4121c";
 export const PAPER_INK_HEX = "#141414";
 export const PAPER_MUTED_HEX = "#6e6e6e";
@@ -124,6 +133,74 @@ export function paperInvoiceMeta(input: {
     { label: "Due", value: input.dueAt ? formatDate(input.dueAt) : "—" },
     { label: "Job", value: paperMetaBlank(input.jobCode) },
   ];
+}
+
+/** Summary band across the top of an invoice: date, due date, job, amount due. */
+export function paperInvoiceBand(input: {
+  issuedAt?: string | null;
+  dueAt?: string | null;
+  jobCode?: string | null;
+  amountDue: string;
+}): PaperMetaItem[] {
+  return [
+    { label: "Invoice date", value: input.issuedAt ? formatDate(input.issuedAt) : "—" },
+    { label: "Due date", value: input.dueAt ? formatDate(input.dueAt) : "—" },
+    { label: "Job", value: paperMetaBlank(input.jobCode) },
+    { label: "Amount due", value: input.amountDue },
+  ];
+}
+
+/** Small line under BALANCE DUE in the invoice pill. */
+export function paperBalanceDueNote(input: { balance: number; total: number; dueAt?: string | null }) {
+  if (input.total > 0 && input.balance <= 0.005) return "Paid in full";
+  if (input.dueAt) return `by ${formatDate(input.dueAt)}`;
+  return "";
+}
+
+/** Lines under the Payment label at the foot of an invoice. */
+export function paperInvoicePaymentCopy(input: {
+  number: string;
+  companyName: string;
+  paymentNote?: string | null;
+}) {
+  const name = input.companyName.trim() || "the contractor";
+  const payable = input.paymentNote?.trim() || `Checks payable to ${name}.`;
+  return [`Please reference ${input.number.trim()} with your payment.`, payable];
+}
+
+/** Lines under the Questions? label: who to reach, phone, then email. */
+export function paperInvoiceQuestionsCopy(
+  manager: { name?: string | null; phone?: string | null; email?: string | null } | null | undefined,
+  company: { name: string; phone?: string | null; email?: string | null },
+) {
+  const who = manager?.name?.trim() || company.name.trim() || "us";
+  const phone = paperPhone(manager?.phone) || paperPhone(company.phone);
+  const email = manager?.email?.trim() || company.email?.trim() || "";
+  const first = phone ? `Contact ${who} at ${phone}` : `Contact ${who}`;
+  if (!email) return [first];
+  return [first, phone ? `or ${email}` : `at ${email}`];
+}
+
+export function paperInvoiceThanks(companyName: string) {
+  const name = companyName.trim() || "us";
+  return `Thank you for trusting ${name} with your home.`;
+}
+
+/** Street · City, ST ZIP · phone along the bottom of an invoice. */
+export function paperInvoiceFooterRight(company: {
+  street?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  phone?: string;
+}) {
+  const address = formatCompanyAddressLines({
+    street: company.street ?? "",
+    city: company.city ?? "",
+    state: company.state ?? "",
+    postalCode: company.postalCode ?? "",
+  });
+  return [...address, paperPhone(company.phone)].filter(Boolean).join(" · ");
 }
 
 export function paperOptionChoiceCopy() {

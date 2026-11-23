@@ -253,11 +253,88 @@ async function main() {
   );
   assert.match(invoiceText, /INVOICE/);
   assert.match(invoiceText, /BILL TO/i);
-  assert.match(invoiceText, /BALANCE/);
+  assert.match(invoiceText, /BALANCE DUE/);
   assert.match(invoiceText, /Roofing System/);
   assert.match(invoiceText, /TAMKO Heritage/);
   assert.match(invoiceText, /Tear-off to the decking/);
   assert.doesNotMatch(invoiceText, /\bLS\b/);
+  assert.doesNotMatch(invoiceText, /PROJECT MANAGER/, "no manager column without a manager");
+  assert.doesNotMatch(invoiceText, /PROJECT ADDRESS/, "no project address column without a site");
+
+  const templatePages = await itemsFromPdf(
+    await buildInvoicePdf({
+      invoice: { ...invoice, number: "INV-1026", issuedAt: "2026-11-23", dueAt: "2026-12-23" },
+      lines: [
+        {
+          ...invoiceLines[0]!,
+          description: "Contract amount\n\nPer signed contract · Job BJ091426-A",
+          unitCost: 22428.55,
+        },
+        { ...invoiceLines[0]!, id: "iline_2", description: "Additional siding repairs", unitCost: 350.45, sortOrder: 1 },
+      ],
+      payments: [],
+      company: {
+        ...company,
+        name: "T Rock Roofing & Contracting",
+        website: "DallasRoofer.com",
+        street: "3001 Long Prairie Road, Suite 100",
+        city: "Flower Mound",
+        state: "TX",
+        postalCode: "75022",
+        phone: "4697947701",
+      },
+      customer: "Anthony Leonardo",
+      projectManager: {
+        name: "Brady Jones",
+        title: "Project Manager",
+        phone: "4697947701",
+        email: "bjones@trockcontracting.com",
+      },
+      jobCode: "BJ091426-A",
+      site: { street: "1825 Brook Lane", city: "Flower Mound", state: "TX", postalCode: "75028" },
+    }),
+  );
+  const templateFront = pageText(templatePages[0]!);
+  for (const label of ["INVOICE DATE", "DUE DATE", "JOB", "AMOUNT DUE", "BILL TO", "PROJECT ADDRESS", "PROJECT MANAGER", "DESCRIPTION", "QTY", "RATE", "AMOUNT", "BALANCE DUE", "PAYMENT", "QUESTIONS?"]) {
+    assert.ok(templateFront.includes(label), `invoice front page carries the ${label} label`);
+  }
+  assert.match(templateFront, /INV-1026/);
+  assert.match(templateFront, /Nov 23, 2026/);
+  assert.match(templateFront, /Dec 23, 2026/);
+  assert.match(templateFront, /by Dec 23, 2026/);
+  assert.match(templateFront, /BJ091426-A/);
+  assert.match(templateFront, /Anthony Leonardo/);
+  assert.match(templateFront, /1825 Brook Lane/);
+  assert.match(templateFront, /Flower Mound, TX 75028/);
+  assert.match(templateFront, /Brady Jones/);
+  assert.match(templateFront, /\(469\) 794-7701/);
+  assert.match(templateFront, /bjones@trockcontracting.com/);
+  assert.match(templateFront, /Contract amount/);
+  assert.match(templateFront, /Per signed contract/);
+  assert.match(templateFront, /Additional siding repairs/);
+  assert.match(templateFront, /\$22,428\.55/);
+  assert.match(templateFront, /\$350\.45/);
+  assert.match(templateFront, /Subtotal/);
+  assert.match(templateFront, /Payments received/);
+  assert.match(templateFront, /\$22,779\.00/);
+  assert.match(templateFront, /Please reference INV-1026 with your payment\./);
+  assert.match(templateFront, /Checks payable to T Rock Roofing & Contracting\./);
+  assert.match(templateFront, /Contact Brady Jones at \(469\) 794-7701/);
+  assert.match(templateFront, /Thank you for trusting T Rock Roofing & Contracting with your home\./);
+  assert.match(templateFront, /3001 Long Prairie Road, Suite 100 · Flower Mound, TX 75022/);
+  assert.doesNotMatch(templateFront, /Project Manager/, "the manager card drops the title line");
+  const templateHeaders = templatePages[0]!.filter((item) => /^(DESCRIPTION|QTY|RATE|AMOUNT)$/.test(item.str));
+  assert.equal(templateHeaders.length, 4, "table header labels are whole words, not spaced letters");
+  const headerY = templateHeaders[0]!.y;
+  assert.ok(templateHeaders.every((item) => Math.abs(item.y - headerY) < 1), "table header labels share a baseline");
+  const balancePill = templatePages[0]!.find((item) => item.str === "BALANCE DUE");
+  const balanceAmounts = templatePages[0]!.filter((item) => item.str === "$22,779.00");
+  assert.ok(balancePill, "balance pill label is printed");
+  assert.ok(
+    balanceAmounts.some((item) => item.height > 14 && Math.abs(item.y - balancePill!.y) < 12),
+    "balance pill carries the large amount beside its label",
+  );
+  assertClearOfFooter(templatePages);
 
   const legalTerms = [
     "1. Contract price",

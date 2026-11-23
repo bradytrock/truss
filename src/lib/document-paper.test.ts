@@ -4,7 +4,13 @@ import {
   paperCompanyLines,
   paperEstimateMeta,
   paperFooterLeft,
+  paperInvoiceBand,
+  paperInvoiceFooterRight,
   paperInvoiceMeta,
+  paperInvoicePaymentCopy,
+  paperInvoiceQuestionsCopy,
+  paperInvoiceThanks,
+  paperBalanceDueNote,
   paperIssuedAt,
   paperKindLabel,
   paperMetaBlank,
@@ -135,6 +141,71 @@ const invoiceMeta = paperInvoiceMeta({
 });
 assert.equal(invoiceMeta[0]?.label, "Invoice no.");
 assert.equal(invoiceMeta[3]?.value, "—");
+
+const band = paperInvoiceBand({
+  issuedAt: "2026-11-23",
+  dueAt: "2026-12-23",
+  jobCode: "BJ091426-A",
+  amountDue: "$22,779.00",
+});
+assert.deepEqual(
+  band.map((item) => item.label),
+  ["Invoice date", "Due date", "Job", "Amount due"],
+);
+assert.equal(band[0]?.value, "Nov 23, 2026");
+assert.equal(band[1]?.value, "Dec 23, 2026");
+assert.equal(band[2]?.value, "BJ091426-A");
+assert.equal(band[3]?.value, "$22,779.00");
+assert.equal(paperInvoiceBand({ amountDue: "$0.00" })[1]?.value, "—");
+assert.equal(paperInvoiceBand({ amountDue: "$0.00" })[2]?.value, "—");
+
+assert.equal(paperBalanceDueNote({ balance: 22779, total: 22779, dueAt: "2026-12-23" }), "by Dec 23, 2026");
+assert.equal(paperBalanceDueNote({ balance: 0, total: 22779, dueAt: "2026-12-23" }), "Paid in full");
+assert.equal(paperBalanceDueNote({ balance: 100, total: 100, dueAt: null }), "");
+
+assert.deepEqual(
+  paperInvoicePaymentCopy({ number: "INV-1026", companyName: "T Rock Roofing & Contracting" }),
+  ["Please reference INV-1026 with your payment.", "Checks payable to T Rock Roofing & Contracting."],
+);
+assert.deepEqual(
+  paperInvoicePaymentCopy({ number: "INV-1026", companyName: "T Rock", paymentNote: "Zelle to office@trock.com" }),
+  ["Please reference INV-1026 with your payment.", "Zelle to office@trock.com"],
+);
+
+const trock = { name: "T Rock Roofing & Contracting", phone: "4697940000", email: "office@trockcontracting.com" };
+assert.deepEqual(
+  paperInvoiceQuestionsCopy(
+    { name: "Brady Jones", phone: "4697947701", email: "bjones@trockcontracting.com" },
+    trock,
+  ),
+  ["Contact Brady Jones at (469) 794-7701", "or bjones@trockcontracting.com"],
+);
+assert.deepEqual(paperInvoiceQuestionsCopy(null, trock), [
+  "Contact T Rock Roofing & Contracting at (469) 794-0000",
+  "or office@trockcontracting.com",
+]);
+assert.deepEqual(paperInvoiceQuestionsCopy({ name: "Brady Jones", email: "b@trock.com" }, { name: "T Rock" }), [
+  "Contact Brady Jones",
+  "at b@trock.com",
+]);
+assert.deepEqual(paperInvoiceQuestionsCopy({ name: "Brady Jones" }, { name: "T Rock" }), ["Contact Brady Jones"]);
+
+assert.equal(
+  paperInvoiceThanks("T Rock Roofing & Contracting"),
+  "Thank you for trusting T Rock Roofing & Contracting with your home.",
+);
+assert.equal(
+  paperInvoiceFooterRight({
+    street: "3001 Long Prairie Road, Suite 100",
+    city: "Flower Mound",
+    state: "TX",
+    postalCode: "75022",
+    phone: "4697947701",
+  }),
+  "3001 Long Prairie Road, Suite 100 · Flower Mound, TX 75022 · (469) 794-7701",
+);
+assert.equal(paperInvoiceFooterRight({ phone: "4697947701" }), "(469) 794-7701");
+assert.equal(paperInvoiceFooterRight({}), "");
 
 const [left, right] = paperSplitColumns([1, 2, 3, 4, 5]);
 assert.deepEqual(left, [1, 2, 3]);
