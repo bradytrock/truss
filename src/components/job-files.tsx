@@ -20,6 +20,7 @@ import { LaborWarrantyDialog } from "@/components/labor-warranty-dialog";
 import { toast } from "sonner";
 import { CompanyFilePickerList } from "@/components/company-files";
 import { FileDropZone } from "@/components/file-drop-zone";
+import { FilePreviewDialog } from "@/components/file-preview-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -50,6 +51,7 @@ export function JobFilesPanel({
   const [certificateOpen, setCertificateOpen] = useState(false);
   const [warrantyOpen, setWarrantyOpen] = useState(false);
   const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
+  const [previewFile, setPreviewFile] = useState<JobFile | null>(null);
   const files = (crm.jobFiles ?? []).filter((file) => file.jobId === jobId);
   const job = crm.getJob(jobId);
   const openedPicker = useRef(0);
@@ -106,6 +108,18 @@ export function JobFilesPanel({
     if (!window.confirm(`Remove ${file.name} from this job?`)) return;
     const ok = await crm.deleteJobFile(file.id);
     if (ok) toast.success(`${file.name} removed.`);
+  }
+
+  function openPreview(file: JobFile) {
+    setPreviewFile(file);
+    void crm.logAudit({
+      entityType: "job_file",
+      entityId: file.id,
+      action: "opened",
+      after: { name: file.name, url: file.url },
+      label: file.name,
+      relatedJobId: file.jobId,
+    });
   }
 
   async function copyShareLink(file: JobFile) {
@@ -211,6 +225,12 @@ export function JobFilesPanel({
           />
         </DialogContent>
       </Dialog>
+      <FilePreviewDialog
+        file={previewFile}
+        onOpenChange={(open) => {
+          if (!open) setPreviewFile(null);
+        }}
+      />
       <FileDropZone
         disabled={disabled || uploading || attachingFromDirectory}
         onFiles={(dropped) => void attach(dropped)}
@@ -249,23 +269,13 @@ export function JobFilesPanel({
                       className="flex items-center gap-2 rounded-md border px-3 py-2"
                     >
                       <FileThumb file={file} />
-                      <a
-                        href={file.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="min-w-0 flex-1 text-left"
-                        onClick={() => {
-                          void crm.logAudit({
-                            entityType: "job_file",
-                            entityId: file.id,
-                            action: "opened",
-                            after: { name: file.name, url: file.url },
-                            label: file.name,
-                            relatedJobId: file.jobId,
-                          });
-                        }}
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                        onClick={() => openPreview(file)}
+                        aria-label={`Preview ${file.name}`}
                       >
-                        <span className="block truncate text-sm font-medium">
+                        <span className="block truncate text-sm font-medium hover:underline">
                           {file.name}
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -278,7 +288,7 @@ export function JobFilesPanel({
                             .filter(Boolean)
                             .join(" · ")}
                         </span>
-                      </a>
+                      </button>
                       <Button
                         type="button"
                         size="icon-sm"

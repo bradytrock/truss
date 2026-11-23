@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { CompanyFilePickerList } from "@/components/company-files";
 import { FileDropZone } from "@/components/file-drop-zone";
+import { FilePreviewDialog } from "@/components/file-preview-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,6 +64,7 @@ export function DocumentFilesPanel({
   const [uploading, setUploading] = useState(false);
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
+  const [previewFile, setPreviewFile] = useState<DocumentAttachFile | null>(null);
 
   async function attach(list: FileList | File[] | null) {
     const incoming = list ? Array.from(list) : [];
@@ -167,6 +169,12 @@ export function DocumentFilesPanel({
           />
         </DialogContent>
       </Dialog>
+      <FilePreviewDialog
+        file={previewFile}
+        onOpenChange={(open) => {
+          if (!open) setPreviewFile(null);
+        }}
+      />
       <FileDropZone
         disabled={disabled || busy}
         onFiles={(dropped) => void attach(dropped)}
@@ -199,14 +207,16 @@ export function DocumentFilesPanel({
                     className="flex items-center gap-2 rounded-md border px-3 py-2"
                   >
                     <FileThumb file={file} />
-                    <a
-                      href={file.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="min-w-0 flex-1 text-left"
-                      onClick={() => onOpened?.(file)}
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                      onClick={() => {
+                        setPreviewFile(file);
+                        onOpened?.(file);
+                      }}
+                      aria-label={`Preview ${file.name}`}
                     >
-                      <span className="block truncate text-sm font-medium">
+                      <span className="block truncate text-sm font-medium hover:underline">
                         {file.name}
                       </span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -218,7 +228,7 @@ export function DocumentFilesPanel({
                           .filter(Boolean)
                           .join(" · ")}
                       </span>
-                    </a>
+                    </button>
                     <Button
                       type="button"
                       size="icon-sm"
