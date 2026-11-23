@@ -434,6 +434,9 @@ export function JobRecord({
   const showInsurance = canViewInsurance(seatRole);
   const showPayAtClose = canViewPayAtClose(seatRole);
   const allowPayAtCloseRequest = canRequestPayAtClose(seatRole);
+  const payAtClose = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
+  // The tab and overview card only appear once a request has been started from New.
+  const payAtCloseStarted = showPayAtClose && payAtClose != null;
   const allowEstimates = canCreateEstimates(seatRole);
   const allowPages = canCreatePages(seatRole);
   const editPages = canEditPages(seatRole);
@@ -447,7 +450,7 @@ export function JobRecord({
     (requestedTab === "financials" && !showFinancials) ||
     (requestedTab === "paper" && !showPaper) ||
     (requestedTab === "insurance" && !showInsurance) ||
-    (requestedTab === "pay-at-close" && !showPayAtClose) ||
+    (requestedTab === "pay-at-close" && !payAtCloseStarted) ||
     (requestedTab === "closeout" && !showCloseout)
       ? "overview"
       : requestedTab;
@@ -547,7 +550,6 @@ export function JobRecord({
         (opportunity?.referralContactId ? (crm.getContact(opportunity.referralContactId)?.name ?? "") : "")
       : "";
   const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === job.id);
-  const payAtClose = (crm.jobPayAtClose ?? []).find((item) => item.jobId === job.id);
   const payAtCloseHighFlags = (payAtClose?.report?.flags ?? []).filter((flag) => flag.severity === "high").length;
   const claimMath = claim ? claimTotals(claim) : null;
   const client = crm.getClient(job.clientId);
@@ -1073,7 +1075,7 @@ export function JobRecord({
                 ) : null}
               </TabsTrigger>
             ) : null}
-            {showPayAtClose ? (
+            {payAtCloseStarted ? (
               <TabsTrigger value="pay-at-close" className="flex-none px-0 after:bg-primary">
                 Pay at close
                 {payAtClose && payAtCloseAwaitingApproval(payAtClose) ? (
@@ -1528,28 +1530,18 @@ export function JobRecord({
                 onClick={() => setJobTab("insurance")}
               />
             ) : null}
-            {showPayAtClose ? (
+            {payAtCloseStarted && payAtClose ? (
               <SummaryCard
                 eyebrow="Pay at close"
-                title={
-                  payAtClose
-                    ? PAY_AT_CLOSE_STATUS_LABELS[payAtClose.status]
-                    : "Not a pay-at-close job"
-                }
-                detail={
-                  payAtClose
-                    ? [
-                        payAtClose.contractValue ? `${formatCurrencyFull(payAtClose.contractValue)} due at closing` : null,
-                        payAtClose.expectedCloseDate ? `closes ${formatDate(payAtClose.expectedCloseDate)}` : "no closing date",
-                        payAtClose.report
-                          ? `${RECOMMENDATION_LABELS[payAtClose.report.recommendation]} · score ${payAtClose.report.score}`
-                          : "not reviewed yet",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : "Repairs paid from seller proceeds at closing. Pull public records and score the equity."
-                }
-                action={payAtClose ? "Open file" : "Start review"}
+                title={PAY_AT_CLOSE_STATUS_LABELS[payAtClose.status]}
+                detail={[
+                  payAtClose.contractValue ? `${formatCurrencyFull(payAtClose.contractValue)} due at closing` : null,
+                  payAtClose.expectedCloseDate ? `closes ${formatDate(payAtClose.expectedCloseDate)}` : "no closing date",
+                  payAtClose.report ? `${RECOMMENDATION_LABELS[payAtClose.report.recommendation]} · score ${payAtClose.report.score}` : "not reviewed yet",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                action="Open file"
                 onClick={() => setJobTab("pay-at-close")}
               />
             ) : null}
@@ -1970,7 +1962,7 @@ export function JobRecord({
           </TabsContent>
         ) : null}
 
-        {showPayAtClose ? (
+        {payAtCloseStarted ? (
           <TabsContent value="pay-at-close" className="mt-0">
             <JobPayAtClosePanel job={job} readOnly={deleted} />
           </TabsContent>
