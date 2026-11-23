@@ -56,6 +56,7 @@ import {
   paperEstimateMeta,
   paperFooterLeft,
   paperInvoiceBand,
+  paperInvoiceBillTo,
   paperInvoiceFooterRight,
   paperInvoicePaymentCopy,
   paperInvoiceQuestionsCopy,
@@ -70,6 +71,7 @@ import {
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
+  type PaperInvoiceHomeowner,
   type PaperKind,
   type PaperMetaItem,
 } from "@/lib/document-paper";
@@ -1529,7 +1531,12 @@ function writeInvoiceBand(doc: Doc, items: PaperMetaItem[], y: number) {
   return y + height;
 }
 
-type InvoiceParty = { label: string; name: string; lines: string[] };
+type InvoicePerson = { name: string; lines: string[] };
+type InvoiceParty = { label: string; people: InvoicePerson[]; lines: string[] };
+
+function invoiceParty(label: string, name: string, lines: string[]): InvoiceParty {
+  return { label, people: [{ name, lines: [] }], lines };
+}
 
 function writeInvoiceParties(doc: Doc, cards: InvoiceParty[], y: number) {
   const right = contentRight(doc);
@@ -1537,23 +1544,11 @@ function writeInvoiceParties(doc: Doc, cards: InvoiceParty[], y: number) {
   const count = Math.max(cards.length, 1);
   const colW = (right - PAPER_INSET - gap * (count - 1)) / count;
   let bottom = y;
-  cards.forEach((card, index) => {
-    const x = PAPER_INSET + index * (colW + gap);
-    writeInvoiceLabel(doc, card.label, x, y);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    ink(doc, INVOICE_INK);
-    const name = doc.splitTextToSize(card.name || "—", colW);
-    const nameLines = Array.isArray(name) ? name : [name];
-    let cy = y + 15;
-    for (const line of nameLines) {
-      doc.text(line, x, cy);
-      cy += 13;
-    }
+  const writeBodyLines = (lines: string[], x: number, cy: number) => {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     ink(doc, INVOICE_BODY);
-    for (const line of card.lines.filter(Boolean).slice(0, 4)) {
+    for (const line of lines.filter(Boolean)) {
       const wrapped = doc.splitTextToSize(line, colW);
       const pieces = Array.isArray(wrapped) ? wrapped : [wrapped];
       for (const piece of pieces) {
@@ -1561,6 +1556,26 @@ function writeInvoiceParties(doc: Doc, cards: InvoiceParty[], y: number) {
         cy += 14;
       }
     }
+    return cy;
+  };
+  cards.forEach((card, index) => {
+    const x = PAPER_INSET + index * (colW + gap);
+    writeInvoiceLabel(doc, card.label, x, y);
+    let cy = y + 15;
+    for (const person of card.people) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      ink(doc, INVOICE_INK);
+      const name = doc.splitTextToSize(person.name || "—", colW);
+      const nameLines = Array.isArray(name) ? name : [name];
+      for (const line of nameLines) {
+        doc.text(line, x, cy);
+        cy += 13;
+      }
+      cy = writeBodyLines(person.lines, x, cy);
+      if (card.people.length > 1) cy += 2;
+    }
+    cy = writeBodyLines(card.lines.slice(0, 4), x, cy);
     bottom = Math.max(bottom, cy - 14);
   });
   return bottom;
@@ -1750,6 +1765,8 @@ export async function buildInvoicePdf(input: {
   payments: Payment[];
   company: CompanySettings;
   customer: string;
+  /** Homeowners on the job. Each prints under Bill to with their phone. */
+  homeowners?: PaperInvoiceHomeowner[] | null;
   projectManager?: ProjectManagerContact | null;
   jobCode?: string | null;
   site?: {
@@ -1790,22 +1807,22 @@ export async function buildInvoicePdf(input: {
 
   const addressLines = [street, site.locality].filter(Boolean);
   const parties: InvoiceParty[] = [
-    { label: "Bill to", name: input.customer, lines: addressLines },
+    paperInvoiceBillTo({ customer: input.customer, homeowners: input.homeowners, addressLines }),
   ];
   if (addressLines.length) {
-    parties.push({
-      label: "Project address",
-      name: street || site.title,
-      lines: street ? [site.locality].filter(Boolean) : addressLines,
-    });
+    parties.push(
+      invoiceParty(
+        "Project address",
+        street || site.title,
+        street ? [site.locality].filter(Boolean) : addressLines,
+      ),
+    );
   }
   const managerName = input.projectManager?.name.trim() || "";
   if (managerName) {
-    parties.push({
-      label: "Project manager",
-      name: managerName,
-      lines: invoiceManagerLines(input.projectManager, input.company.phone),
-    });
+    parties.push(
+      invoiceParty("Project manager", managerName, invoiceManagerLines(input.projectManager, input.company.phone)),
+    );
   }
   y = writeInvoiceParties(doc, parties, y + 25);
 

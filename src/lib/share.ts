@@ -309,8 +309,19 @@ export type SharedInvoicePayload = {
     postingStatus?: "pending" | "posted" | "rejected";
     estimateId?: string | null;
   }>;
+  /** Homeowners on the job, primary first. Printed under Bill to. */
+  homeowners?: Array<{ name: string; phone: string }>;
   projectManager?: ProjectManagerContact | null;
 };
+
+function parseSharedHomeowners(raw: unknown): SharedInvoicePayload["homeowners"] {
+  if (!Array.isArray(raw)) return undefined;
+  const people = raw
+    .filter(isRecord)
+    .map((person) => ({ name: asString(person.name), phone: asString(person.phone) }))
+    .filter((person) => person.name.trim());
+  return people.length ? people : undefined;
+}
 
 function parseCompany(raw: unknown): SharedCompany {
   const data = isRecord(raw) ? raw : {};
@@ -553,6 +564,7 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
       sortOrder: asNumber(line.sortOrder, index),
     })),
     payments: parseSharedPayments(raw.payments, asString(invoice.id)),
+    homeowners: parseSharedHomeowners(raw.homeowners),
     projectManager: parseProjectManager(raw.projectManager),
   };
 }

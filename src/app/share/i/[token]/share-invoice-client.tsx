@@ -15,6 +15,7 @@ import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { derivedInvoiceStatus } from "@/lib/money";
+import { homeownersOnJob } from "@/lib/parties";
 import type { InvoiceStatus } from "@/lib/types";
 import { parseSharedInvoice, type ShareSender, type SharedInvoicePayload } from "@/lib/share";
 import { useRemoteShare } from "@/lib/use-remote-share";
@@ -93,6 +94,7 @@ export function ShareInvoiceClient({
                 payments,
                 company: letterhead,
                 customer,
+                homeowners: homeownersOnJob(job, crm.contacts),
                 projectManager,
                 jobCode: job?.code,
                 site: job
@@ -149,6 +151,7 @@ export function ShareInvoiceClient({
               payments: remote.payments,
               company: remote.company,
               customer: remote.customer,
+              homeowners: remote.homeowners,
               projectManager: remote.projectManager,
             }).catch(() => toast.error("Could not build the PDF."))
           }

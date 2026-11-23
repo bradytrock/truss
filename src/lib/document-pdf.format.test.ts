@@ -283,7 +283,11 @@ async function main() {
         postalCode: "75022",
         phone: "4697947701",
       },
-      customer: "Anthony Leonardo",
+      customer: "Leonardo — 1825 Brook Lane",
+      homeowners: [
+        { name: "Anthony Leonardo", phone: "4695550142" },
+        { name: "Maria Leonardo", phone: "4695550199" },
+      ],
       projectManager: {
         name: "Brady Jones",
         title: "Project Manager",
@@ -295,6 +299,20 @@ async function main() {
     }),
   );
   const templateFront = pageText(templatePages[0]!);
+  assert.match(templateFront, /Maria Leonardo/);
+  assert.match(templateFront, /\(469\) 555-0142/);
+  assert.match(templateFront, /\(469\) 555-0199/);
+  assert.doesNotMatch(templateFront, /Leonardo — 1825|Leonardo - 1825/, "homeowners replace the lead label");
+  const billToItems = templatePages[0]!.filter((item) =>
+    /^(BILL TO|Anthony Leonardo|\(469\) 555-0142|Maria Leonardo|\(469\) 555-0199|1825 Brook Lane)$/.test(item.str),
+  );
+  const billToX = billToItems.find((item) => item.str === "BILL TO")!.x;
+  const column = billToItems.filter((item) => Math.abs(item.x - billToX) < 1).sort((a, b) => b.y - a.y);
+  assert.deepEqual(
+    column.map((item) => item.str),
+    ["BILL TO", "Anthony Leonardo", "(469) 555-0142", "Maria Leonardo", "(469) 555-0199", "1825 Brook Lane"],
+    "Bill to lists each homeowner with their phone, then the address",
+  );
   for (const label of ["INVOICE DATE", "DUE DATE", "JOB", "AMOUNT DUE", "BILL TO", "PROJECT ADDRESS", "PROJECT MANAGER", "DESCRIPTION", "QTY", "RATE", "AMOUNT", "BALANCE DUE", "PAYMENT", "QUESTIONS?"]) {
     assert.ok(templateFront.includes(label), `invoice front page carries the ${label} label`);
   }

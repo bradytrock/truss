@@ -150,6 +150,34 @@ export function paperInvoiceBand(input: {
   ];
 }
 
+export type PaperInvoiceHomeowner = { name: string; phone?: string | null };
+
+/**
+ * Bill to card on an invoice: every homeowner on the job with their phone,
+ * then the property address. Falls back to the customer label when the job
+ * has no homeowner contacts.
+ */
+export function paperInvoiceBillTo(input: {
+  customer: string;
+  homeowners?: PaperInvoiceHomeowner[] | null;
+  addressLines?: string[];
+}) {
+  const seen = new Set<string>();
+  const people = (input.homeowners ?? [])
+    .map((person) => ({ name: person.name.trim(), lines: [paperPhone(person.phone)].filter(Boolean) }))
+    .filter((person) => {
+      const key = person.name.toLowerCase();
+      if (!person.name || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  return {
+    label: "Bill to",
+    people: people.length ? people : [{ name: input.customer.trim() || "—", lines: [] as string[] }],
+    lines: (input.addressLines ?? []).filter(Boolean),
+  };
+}
+
 /** Small line under BALANCE DUE in the invoice pill. */
 export function paperBalanceDueNote(input: { balance: number; total: number; dueAt?: string | null }) {
   if (input.total > 0 && input.balance <= 0.005) return "Paid in full";

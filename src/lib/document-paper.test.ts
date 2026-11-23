@@ -5,6 +5,7 @@ import {
   paperEstimateMeta,
   paperFooterLeft,
   paperInvoiceBand,
+  paperInvoiceBillTo,
   paperInvoiceFooterRight,
   paperInvoiceMeta,
   paperInvoicePaymentCopy,
@@ -158,6 +159,28 @@ assert.equal(band[2]?.value, "BJ091426-A");
 assert.equal(band[3]?.value, "$22,779.00");
 assert.equal(paperInvoiceBand({ amountDue: "$0.00" })[1]?.value, "—");
 assert.equal(paperInvoiceBand({ amountDue: "$0.00" })[2]?.value, "—");
+
+const billTo = paperInvoiceBillTo({
+  customer: "Leonardo — 1825 Brook Lane",
+  homeowners: [
+    { name: "Anthony Leonardo", phone: "4695550142" },
+    { name: "Maria Leonardo", phone: "" },
+    { name: " anthony leonardo ", phone: "4695550142" },
+    { name: "  ", phone: "2145550000" },
+  ],
+  addressLines: ["1825 Brook Lane", "", "Flower Mound, TX 75028"],
+});
+assert.equal(billTo.label, "Bill to");
+assert.deepEqual(billTo.people, [
+  { name: "Anthony Leonardo", lines: ["(469) 555-0142"] },
+  { name: "Maria Leonardo", lines: [] },
+]);
+assert.deepEqual(billTo.lines, ["1825 Brook Lane", "Flower Mound, TX 75028"]);
+assert.deepEqual(paperInvoiceBillTo({ customer: "Shawn Gregory" }).people, [{ name: "Shawn Gregory", lines: [] }]);
+assert.deepEqual(paperInvoiceBillTo({ customer: "Shawn Gregory", homeowners: [] }).people, [
+  { name: "Shawn Gregory", lines: [] },
+]);
+assert.equal(paperInvoiceBillTo({ customer: "  " }).people[0]?.name, "—");
 
 assert.equal(paperBalanceDueNote({ balance: 22779, total: 22779, dueAt: "2026-12-23" }), "by Dec 23, 2026");
 assert.equal(paperBalanceDueNote({ balance: 0, total: 22779, dueAt: "2026-12-23" }), "Paid in full");
