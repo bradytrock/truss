@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import {
   canAddSecondHomeowner,
+  contactsOnJob,
   customerContactDetails,
+  homeownersOnJob,
   isCompanyCustomerName,
   isJobHomeowner,
   relatedContactIdsWithHomeowner,
@@ -127,5 +129,19 @@ assert.deepEqual(
 jordan.email = "jordan@home.test";
 jordan.phone = "4695550199";
 assert.equal(customerContactDetails({ contactId: dana.id, secondContactId: jordan.id }, book).secondEmail, "jordan@home.test");
+
+const everyone = [dana, jordan, adjuster, manager];
+assert.deepEqual(
+  contactsOnJob(undefined, everyone).map((person) => person.id),
+  [],
+);
+assert.deepEqual(
+  homeownersOnJob(undefined, everyone, [dana.id]).map((person) => person.id),
+  [dana.id],
+);
+assert.deepEqual(
+  homeownersOnJob(job({ id: "j1", primaryContactId: dana.id }), everyone).map((person) => person.id),
+  [dana.id],
+);
 
 console.log("parties.test.ts ok");
