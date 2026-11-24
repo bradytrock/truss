@@ -16,7 +16,9 @@ import {
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
-import { estimateTotals, fillEstimate, linesForEstimate } from "@/lib/estimate-totals";
+import { estimateTotals, fillEstimate, linesForEstimate, toClientFacingProposal } from "@/lib/estimate-totals";
+import { formatMoney } from "@/lib/format";
+import { formatJobSite } from "@/lib/leads";
 import { collectedTowardDeposit } from "@/lib/payment-posting";
 import {
   homeownerHasSigned,
@@ -208,6 +210,18 @@ export function ShareEstimateClient({
       (fromStore.secondContactId ? crm.getContact(fromStore.secondContactId)?.name : null) ||
       coOwnerContact(job, crm.contacts, fromStore.contactId)?.name ||
       null;
+    const facing = toClientFacingProposal(billingEstimate(fromStore, workMarket(job, opportunity)), lines);
+    const signTotal = formatMoney(estimateTotals(facing.estimate, facing.lines).total);
+    const signAddress =
+      formatJobSite({
+        street: fromStore.street,
+        city: fromStore.city,
+        state: fromStore.state,
+        postalCode: fromStore.postalCode,
+      }) ||
+      job?.location?.trim() ||
+      "";
+    const signName = storeSigner === "second" ? secondName || "" : primaryName === "—" ? "" : primaryName;
     return (
       <ShareFrame
         wide={isGbbEstimate(fromStore)}
@@ -293,6 +307,9 @@ export function ShareEstimateClient({
               ? secondName || ""
               : fromStore.signatureName || (primaryName === "—" ? "" : primaryName)
           }
+          homeownerName={signName}
+          propertyAddress={signAddress}
+          totalLabel={signTotal}
           estimateNumber={fromStore.number}
           pending={signing}
           onSubmit={signFromStore}
@@ -318,6 +335,14 @@ export function ShareEstimateClient({
     viewer === "second"
       ? remote.secondCustomer || estimate.secondSignatureName
       : remote.primaryCustomer || remote.estimate.signatureName || remote.customer;
+  const facing = toClientFacingProposal(billingEstimate(estimate, remote.market), remote.lines);
+  const signTotal = formatMoney(estimateTotals(facing.estimate, facing.lines).total);
+  const signAddress = formatJobSite({
+    street: estimate.street,
+    city: estimate.city,
+    state: estimate.state,
+    postalCode: estimate.postalCode,
+  });
 
   return (
     <ShareFrame
@@ -390,6 +415,9 @@ export function ShareEstimateClient({
         open={signOpen}
         onOpenChange={setSignOpen}
         defaultName={signerName || remote.customer}
+        homeownerName={signerName}
+        propertyAddress={signAddress}
+        totalLabel={signTotal}
         estimateNumber={remote.estimate.number}
         pending={signing}
         onSubmit={signRemote}

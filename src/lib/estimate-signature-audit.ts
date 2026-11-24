@@ -1,10 +1,15 @@
 import { estimateTotals } from "@/lib/estimate-totals";
 import type { Estimate, EstimateLine, EstimateSignatureEvent, SignatureEventKind, SignatureEventRole } from "@/lib/types";
 
-export const ESIGN_CONSENT_VERSION = "2026-09-28";
+export const ESIGN_CONSENT_VERSION = "2026-11-24";
 
-export const ESIGN_CONSENT_TEXT =
-  "I agree to use electronic records and signatures. Drawing or typing my signature and tapping Sign and approve is my legal signature on this proposal, the same as signing on paper.";
+export const ESIGN_CONSENT_HEADING = "I agree to sign electronically";
+
+export const ESIGN_CONSENT_DETAIL =
+  "This counts as my legal signature on the proposal, the same as signing on paper.";
+
+/** Stored with the signature audit. Matches the checkbox the homeowner actually checks. */
+export const ESIGN_CONSENT_TEXT = `${ESIGN_CONSENT_HEADING}. ${ESIGN_CONSENT_DETAIL}`;
 
 export type { EstimateSignatureEvent, SignatureEventKind, SignatureEventRole };
 

@@ -90,6 +90,7 @@ import {
   estimateTotals,
   groupEstimateLines,
   linesForEstimate,
+  toClientFacingProposal,
   type AdjustmentKind,
 } from "@/lib/estimate-totals";
 import { formatDate, formatMoney, localYmdPlusDays } from "@/lib/format";
@@ -347,6 +348,8 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
   const residential = isResidentialMarket(market);
   const billed = billingEstimate(estimate, market);
   const totals = estimateTotals(billed, lines);
+  const clientFacing = toClientFacingProposal(billed, lines);
+  const signTotalLabel = formatMoney(estimateTotals(clientFacing.estimate, clientFacing.lines).total);
   const lineOnlyTotals = estimateTotals(billed, lines, { ignoreSubtotalOverride: true });
   const scopedLines = scopedEstimateLines(estimate, lines);
   const gbb = isGbbEstimate(estimate);
@@ -1636,6 +1639,9 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
         open={signOpen}
         onOpenChange={setSignOpen}
         defaultName={customer === "—" ? "" : customer}
+        homeownerName={customer === "—" ? "" : customer}
+        propertyAddress={site}
+        totalLabel={signTotalLabel}
         estimateNumber={estimate.number}
         pending={pending}
         onSubmit={async ({ name, image }) => {
