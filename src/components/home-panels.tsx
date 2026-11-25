@@ -498,7 +498,7 @@ export function PipelinePath({
   stages: Array<{ key: string; label: string; value: string; active?: boolean }>;
 }) {
   return (
-    <ol className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+    <ol className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       {stages.map((stage) => (
         <li
           key={stage.key}

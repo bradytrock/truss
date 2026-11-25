@@ -112,6 +112,7 @@ import { amountForEstimate, featuredEstimateForJob, jobSoldAmount } from "@/lib/
 import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { workMarket } from "@/lib/market";
+import { nextStepFor, readNextStepFacts } from "@/lib/next-steps";
 import { WORK_COLUMNS, WORK_COLUMN_LABELS, workColumnFor, type WorkColumn } from "@/lib/work-board";
 import { COURSE } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
@@ -646,13 +647,34 @@ export function JobRecord({
     .slice()
     .sort((left, right) => (left.dueAt || "z").localeCompare(right.dueAt || "z"))[0];
   const pipelineColumn = workColumnFor(job, opportunity);
-  const nextStepTitle = nextTask?.title.trim() || WORK_COLUMN_LABELS[pipelineColumn];
+  const step = nextStepFor(
+    readNextStepFacts({
+      job,
+      opportunity: opportunity ?? null,
+      estimates,
+      events: crm.events ?? [],
+      messages: crm.messages ?? [],
+      activities,
+      claimStatus: claim?.status ?? null,
+      photoCount: photos.length,
+      firstName: (primary?.name || "").trim().split(/\s+/)[0] || "",
+      address: job.street || address,
+    }),
+  );
+  const nextStepTitle = step?.title || WORK_COLUMN_LABELS[pipelineColumn];
   const nextStepDetail = nextTask?.dueAt
-    ? formatDate(nextTask.dueAt)
-    : pipelineColumn === "lead"
-      ? "No inspection date set"
-      : "Due this week · no date set";
-  const nextStepAction = nextTask ? "Open tasks" : pipelineColumn === "lead" ? "Set inspection" : "Set date";
+    ? [nextTask.title.trim(), formatDate(nextTask.dueAt)].filter(Boolean).join(" · ")
+    : step?.detail || "";
+  const nextStepAction = deleted || !step?.action ? undefined : step.action;
+  const phoneHref = (primary?.phone || "").replace(/[^\d+]/g, "");
+  const nextStepHref =
+    deleted || !step
+      ? undefined
+      : step.id === "text" && primary
+        ? `/messages?job=${job.id}&contact=${primary.id}`
+        : step.id === "call" && phoneHref
+          ? `tel:${phoneHref}`
+          : undefined;
   const hasWork = estimates.length + invoices.length + tasks.length + materialOrders.length > 0;
   const dateRange = formatJobRange(job.startDate, job.substantialCompletion);
   const homeownerName = primary?.name || client?.name || crm.customerName(job) || "Add a homeowner";
@@ -1549,11 +1571,31 @@ export function JobRecord({
               eyebrow="Next step"
               title={nextStepTitle}
               detail={nextStepDetail}
-              action={deleted ? undefined : nextStepAction}
+              action={nextStepAction}
+              href={nextStepHref}
               onClick={
-                deleted
+                deleted || nextStepHref || !nextStepAction
                   ? undefined
                   : () => {
+                      if (step?.column) {
+                        void crm.moveWork(job.id, step.column);
+                        toast.success(step.title);
+                        return;
+                      }
+                      if (step?.stage && opportunity) {
+                        void crm.moveOpportunity(opportunity.id, step.stage);
+                        toast.success(step.title);
+                        return;
+                      }
+                      if (step?.id === "estimate" || step?.id === "send") {
+                        const draft = estimates.find((estimate) => estimate.status === "draft");
+                        if (step.id === "send" && draft) {
+                          router.push(`/estimates/${draft.id}`);
+                          return;
+                        }
+                        promptJobEstimate();
+                        return;
+                      }
                       if (nextTask && showPaper && !hasWork) setJobTab("paper");
                       else setTaskOpen(true);
                     }

@@ -1,6 +1,7 @@
 import { localYmd } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
 import { phoneKey, type MessageThread } from "@/lib/job-messages";
+import { nextStepFor, type NextStepFacts } from "@/lib/next-steps";
 import { firstName } from "@/lib/phone";
 import type {
   Activity,
@@ -18,7 +19,7 @@ import type {
   ScheduleEvent,
   TextMessage,
 } from "@/lib/types";
-import { CLIENT_TYPE_LABELS, EVENT_KIND_LABELS, JOB_STATUS_LABELS, STAGE_LABELS } from "@/lib/types";
+import { CLIENT_TYPE_LABELS, EVENT_KIND_LABELS, JOB_STATUS_LABELS, PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import type { WorkColumn } from "@/lib/work-board";
 
 export type InboxScope = "mine" | "all" | "unread" | "unassigned";
@@ -219,106 +220,90 @@ export function jobsForPeople(jobs: Job[], opportunities: Opportunity[], contact
   });
 }
 
-const NEXT_JOB: Record<JobStatus, string> = {
-  precon: "Start production",
-  in_progress: "Punch next",
-  punch: "Close out",
-  complete: "Warranty",
-  on_hold: "Resume",
-};
+function knownStage(stage: string | null | undefined): stage is PipelineStage {
+  return Boolean(stage && (PIPELINE_STAGES as readonly string[]).includes(stage));
+}
 
-const NEXT_STAGE: Record<PipelineStage, string> = {
-  pursuing: "Estimate next",
-  estimating: "Proposal next",
-  bid_submitted: "Follow-up next",
-  interview: "Decision next",
-  supplementing: "Award next",
-  awarded: "Schedule next",
-  lost: "Closed",
-  unqualified: "Closed",
-};
+function inboxFacts(input: {
+  job?: { status: JobStatus; contractValue?: number } | null;
+  opportunity?: { stage: string; nextStep?: string } | null;
+  inspected?: boolean;
+  hasSentEstimate?: boolean;
+  facts?: Partial<NextStepFacts>;
+}): NextStepFacts {
+  const sent =
+    input.hasSentEstimate === true
+      ? { hasSent: true, hasDraft: false, hasSigned: false }
+      : input.hasSentEstimate === false
+        ? { hasSent: false, hasDraft: false, hasSigned: false }
+        : {};
+  return {
+    ...input.facts,
+    ...sent,
+    status: input.job?.status ?? input.facts?.status ?? null,
+    stage: knownStage(input.opportunity?.stage) ? input.opportunity.stage : input.facts?.stage ?? null,
+    contractValue: input.job?.contractValue ?? input.facts?.contractValue,
+    inspected: input.inspected ?? input.facts?.inspected,
+  };
+}
 
 export function inboxStage(input: {
   job?: { status: JobStatus } | null;
-  opportunity?: { stage: PipelineStage; nextStep?: string } | null;
+  opportunity?: { stage: PipelineStage | string; nextStep?: string } | null;
   inspected?: boolean;
   hasSentEstimate?: boolean;
 }) {
-  const nextStep = input.opportunity?.nextStep?.trim() || "";
-  const shortStep = nextStep.length > 0 && nextStep.length <= 42 ? nextStep : "";
-  const detail = nextStep.length > 42 ? nextStep : "";
-  if (input.inspected && !input.hasSentEstimate) {
-    return { current: "Inspected", next: shortStep || "Estimate next", detail };
-  }
-  if (input.job) {
-    return {
-      current: JOB_STATUS_LABELS[input.job.status] || "Job",
-      next: shortStep || NEXT_JOB[input.job.status] || "",
-      detail,
-    };
-  }
-  if (input.opportunity) {
-    return {
-      current: STAGE_LABELS[input.opportunity.stage] || "Lead",
-      next: shortStep || NEXT_STAGE[input.opportunity.stage] || "",
-      detail,
-    };
-  }
-  return { current: "New", next: "", detail };
+  const saved = input.opportunity?.nextStep?.trim() || "";
+  const shortStep = saved.length > 0 && saved.length <= 42 ? saved : "";
+  const detail = saved.length > 42 ? saved : "";
+  const step = nextStepFor(inboxFacts(input));
+  const current =
+    input.inspected && !input.hasSentEstimate
+      ? "Inspected"
+      : input.job
+        ? JOB_STATUS_LABELS[input.job.status] || "Job"
+        : knownStage(input.opportunity?.stage)
+          ? STAGE_LABELS[input.opportunity.stage]
+          : "New";
+  return { current, next: shortStep || step?.title || "", detail };
 }
 
 export type InboxNextAction = {
   title: string;
   stage: string;
   action: string;
-  /** Work-board column the action moves the job to. Empty when the action opens the record. */
+  /** Work-board column the action moves the job to. Null when the action opens the record. */
   column: WorkColumn | null;
-};
-
-const NEXT_WORK: Partial<Record<JobStatus, { action: string; column: WorkColumn; verb: string }>> = {
-  in_progress: { action: "Start punch", column: "punch", verb: "punch next" },
-  punch: { action: "Close out", column: "complete", verb: "close out" },
-  on_hold: { action: "Resume", column: "in_progress", verb: "resume" },
+  /** Opportunity stage to write when the action does not move a board column. */
+  stageMove: PipelineStage | null;
 };
 
 /** The green next-step card: where this job is, and the one move that follows. */
 export function inboxNextAction(input: {
   job?: { status: JobStatus; contractValue?: number } | null;
-  opportunity?: { stage: PipelineStage } | null;
+  opportunity?: { stage: PipelineStage | string; nextStep?: string } | null;
+  inspected?: boolean;
+  hasSentEstimate?: boolean;
+  facts?: Partial<NextStepFacts>;
 }): InboxNextAction | null {
-  const job = input.job;
-  const opportunity = input.opportunity;
-  if (job?.status === "precon") {
-    const sold = opportunity?.stage === "awarded" || (job.contractValue ?? 0) > 0;
-    return {
-      title: sold ? "Job sold → start precon" : "Preconstruction → start production",
-      stage: "Preconstruction",
-      action: sold ? "Start precon" : "Start production",
-      column: sold ? null : "in_progress",
-    };
-  }
-  if (job) {
-    const next = NEXT_WORK[job.status];
-    const stage = JOB_STATUS_LABELS[job.status] || "Job";
-    if (!next) return { title: stage, stage, action: "", column: null };
-    return {
-      title: `${stage} → ${next.verb}`,
-      stage,
-      action: next.action,
-      column: next.column,
-    };
-  }
-  if (opportunity) {
-    const stage = STAGE_LABELS[opportunity.stage] || "Lead";
-    const verb = (NEXT_STAGE[opportunity.stage] || "").replace(/\s+next$/, "").toLowerCase();
-    return {
-      title: verb ? `${stage} → ${verb}` : stage,
-      stage,
-      action: verb ? verb.charAt(0).toUpperCase() + verb.slice(1) : "",
-      column: null,
-    };
-  }
-  return null;
+  const saved = input.opportunity?.nextStep?.trim() || "";
+  const shortStep = saved.length > 0 && saved.length <= 42 ? saved : "";
+  const step = nextStepFor(inboxFacts(input));
+  if (!step) return null;
+  const stage = input.opportunity?.stage === "awarded"
+    ? STAGE_LABELS.awarded
+    : input.job
+      ? JOB_STATUS_LABELS[input.job.status] || "Job"
+      : knownStage(input.opportunity?.stage)
+        ? STAGE_LABELS[input.opportunity.stage]
+        : step.title;
+  return {
+    title: shortStep || step.title,
+    stage,
+    action: step.action,
+    column: step.column,
+    stageMove: step.stage,
+  };
 }
 
 export function inboxMoney(value: number) {

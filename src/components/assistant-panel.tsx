@@ -19,6 +19,7 @@ import {
   Maximize2,
   MessageSquare,
   Mic,
+  Phone,
   Minimize2,
   Paperclip,
   Plus,
@@ -1390,8 +1391,9 @@ function ReceiptBlock({
 
 function StepIcon({ id }: { id: LeadNextStep["id"] }) {
   const className = "size-4 shrink-0 text-primary";
-  if (id === "inspect") return <Calendar className={className} />;
+  if (id === "call") return <Phone className={className} />;
   if (id === "text") return <MessageSquare className={className} />;
+  if (id === "schedule") return <Calendar className={className} />;
   return <FileText className={className} />;
 }
 

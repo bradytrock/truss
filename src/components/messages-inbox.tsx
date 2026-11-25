@@ -77,6 +77,7 @@ import { jobRecordHref } from "@/lib/job-record";
 import { estimateTotals } from "@/lib/estimate-totals";
 import { uploadViaApi } from "@/lib/storage/client-upload";
 import { cn } from "@/lib/utils";
+import { readNextStepFacts } from "@/lib/next-steps";
 import { fallbackChatReplies, type WebsiteChatThread } from "@/lib/website-chat";
 import { IMESSAGE_EFFECTS, IMESSAGE_TAPBACKS } from "@/lib/imessage";
 import {
@@ -2137,8 +2138,9 @@ function JobContext({
     (estimate) => estimate.status === "sent" || estimate.status === "viewed" || estimate.status === "accepted",
   );
   const upcoming = nextAppointment(events, job?.id);
-  const recentPhotos = photos
-    .filter((photo) => job && photo.jobId === job.id && !photo.deletedAt && photo.imageUrl)
+  const jobPhotos = photos.filter((photo) => job && photo.jobId === job.id && !photo.deletedAt && photo.imageUrl);
+  const recentPhotos = jobPhotos
+    .slice()
     .sort((a, b) => (b.takenAt || "").localeCompare(a.takenAt || ""))
     .slice(0, 3);
   const rep = job?.salesRep || opportunity?.estimator || "";
@@ -2174,7 +2176,23 @@ function JobContext({
     rep.trim() ? "" : "rep",
     upcoming ? "" : "appointment",
   ].filter(Boolean);
-  const next = inboxNextAction({ job, opportunity });
+  const firstName = (contactName || "").trim().split(/\s+/)[0] || "";
+  const next = inboxNextAction({
+    job,
+    opportunity,
+    facts: readNextStepFacts({
+      job,
+      opportunity: opportunity ?? null,
+      estimates,
+      events,
+      messages: book?.messages ?? [],
+      activities: book?.activities ?? [],
+      claimStatus: claim?.status ?? null,
+      photoCount: jobPhotos.length,
+      firstName,
+      address: address.street,
+    }),
+  });
   const [moving, setMoving] = useState(false);
   const recordHref = job ? jobRecordHref(job.id) : opportunity ? `/opportunities/${opportunity.id}` : "/jobs";
 
@@ -2210,6 +2228,21 @@ function JobContext({
                 if (!column) return;
                 setMoving(true);
                 void crm.moveWork(job.id, column).finally(() => setMoving(false));
+              }}
+            >
+              {next.action}
+            </Button>
+          ) : next.action && next.stageMove && opportunity ? (
+            <Button
+              type="button"
+              size="sm"
+              className="mt-3 bg-[#1f6b45] text-white hover:bg-[#185838]"
+              disabled={moving}
+              onClick={() => {
+                const stage = next.stageMove;
+                if (!stage) return;
+                setMoving(true);
+                void crm.moveOpportunity(opportunity.id, stage).finally(() => setMoving(false));
               }}
             >
               {next.action}

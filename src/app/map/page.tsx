@@ -795,7 +795,7 @@ function CrewCard({
 }
 
 function Legend() {
-  const items: WorkColumn[] = ["lead", "supplementing", "proposal_sent", "in_progress", "complete"];
+  const items: WorkColumn[] = ["lead", "proposal_sent", "supplementing", "in_progress", "complete"];
   return (
     <div className="pointer-events-none rounded-full border bg-background/95 px-3 py-1.5 shadow-sm">
       <ul className="flex items-center gap-x-3 text-[11px] whitespace-nowrap text-[#706e6b]">
