@@ -195,11 +195,9 @@ export function contactsOnJob(
   push(job?.primaryContactId);
   for (const id of job?.relatedContactIds ?? []) push(id);
   for (const id of extraIds) push(id);
-  const found = ids
+  return ids
     .map((id) => contacts.find((contact) => contact.id === id))
     .filter((contact): contact is Contact => Boolean(contact));
-  if (job) return found;
-  return contacts;
 }
 
 export function homeownersOnJob(

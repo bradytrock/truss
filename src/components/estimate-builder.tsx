@@ -67,6 +67,7 @@ import {
   setAmountToken,
 } from "@/lib/document-terms";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
+import { jobForEstimate } from "@/lib/estimate-job";
 import {
   groupHasMixedPackages,
   isGbbEstimate,
@@ -234,20 +235,17 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
   const contact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;
   const secondContact = estimate.secondContactId ? crm.getContact(estimate.secondContactId) : undefined;
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
-  const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+  const job = jobForEstimate(estimate, crm.jobs);
   const inferredCoOwner =
     estimate.status === "accepted" || estimate.status === "declined"
       ? null
       : coOwnerContact(job, crm.contacts, estimate.contactId);
   const secondSignerName = secondContact?.name || inferredCoOwner?.name || null;
   const jobPhotos = useMemo(
-    () =>
-      estimate.jobId
-        ? crm.photos.filter((photo) => photo.jobId === estimate.jobId && !photo.deletedAt)
-        : [],
-    [crm.photos, estimate.jobId],
+    () => (job ? crm.photos.filter((photo) => photo.jobId === job.id && !photo.deletedAt) : []),
+    [crm.photos, job],
   );
-  const galleryHint = estimate.jobId
+  const galleryHint = job
     ? jobPhotos.length === 0
       ? "This job does not have photos yet. Add them on the job record, then attach them here."
       : undefined
@@ -256,7 +254,7 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
     ? `${job.primaryContactId}:${(job.relatedContactIds ?? []).join(",")}:${job.street}:${job.city}:${job.state}:${job.postalCode}:${job.location}`
     : "";
   useEffect(() => {
-    if (!job) return;
+    if (!job || !estimate.jobId) return;
     if (estimate.status === "accepted" || estimate.status === "declined") return;
     const fromJob = jobHomeownersForEstimate(job, crm.contacts);
     const site = {
@@ -1621,7 +1619,7 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
         onTexted={(sent) =>
           crm.logOutboundText({
             ...sent,
-            jobId: estimate.jobId,
+            jobId: job?.id ?? estimate.jobId,
             opportunityId: estimate.opportunityId,
             contactId: sent.contactId || estimate.contactId,
           })
@@ -1629,7 +1627,7 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
         onEmailed={(sent) =>
           crm.logOutboundEmail({
             ...sent,
-            jobId: estimate.jobId,
+            jobId: job?.id ?? estimate.jobId,
             opportunityId: estimate.opportunityId,
             contactId: sent.contactId || estimate.contactId,
           })

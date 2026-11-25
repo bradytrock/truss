@@ -108,6 +108,7 @@ import { livePhotos, primaryJobPhoto } from "@/lib/photo-trash";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
+import { estimatesOnJob } from "@/lib/estimate-job";
 import { amountForEstimate, featuredEstimateForJob, jobSoldAmount } from "@/lib/estimate-totals";
 import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
@@ -565,7 +566,7 @@ export function JobRecord({
   const cityLine = [job.city, [job.state, job.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   const jobFiles = (crm.jobFiles ?? []).filter((file) => file.jobId === job.id);
   const fileCount = jobFiles.length + reports.length;
-  const jobEstimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
+  const jobEstimates = estimatesOnJob(job, crm.estimates);
   const jobInvoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
   const jobMaterialOrders = (crm.materialOrders ?? []).filter((order) => order.jobId === job.id);
   const estimates = livePaper(jobEstimates);
