@@ -7,13 +7,22 @@ import { Button } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
 import { EMAIL_CAMPAIGN_AUDIENCE_LABELS, type EmailCampaignRecord } from "@/lib/marketing/email-campaigns";
 import { useEmailDocuments } from "@/lib/marketing/email-document";
+import { useMarketingLists } from "@/lib/marketing/lists-store";
 import { RESEND_FROM_DOMAIN } from "@/lib/resend-from";
 
 export default function MarketingCampaignsPage() {
   const crm = useCrm();
   const [campaigns, setCampaigns] = useState<EmailCampaignRecord[]>([]);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const lists = useMarketingLists(crm.user.companyId || "local");
   const drafts = useEmailDocuments(crm.user.companyId || "local").filter((doc) => doc.status !== "sent");
+  const audienceText = (kind: EmailCampaignRecord["audienceKind"], zip: string, listId: string | null) => {
+    if (kind === "list") {
+      const name = lists.find((list) => list.id === listId)?.name;
+      return name ? `List · ${name}` : "List";
+    }
+    return `${EMAIL_CAMPAIGN_AUDIENCE_LABELS[kind]}${zip ? ` · ${zip}` : ""}`;
+  };
   const sent = campaigns.reduce((sum, campaign) => sum + campaign.sentCount, 0);
 
   useEffect(() => {
@@ -69,7 +78,7 @@ export default function MarketingCampaignsPage() {
                   <p className="text-xs text-[#8a8680]">{draft.subject}</p>
                 </td>
                 <td className="px-4 py-3"><ToneBadge tone="stone">{draft.status}</ToneBadge></td>
-                <td className="px-4 py-3">{EMAIL_CAMPAIGN_AUDIENCE_LABELS[draft.audienceKind]}</td>
+                <td className="px-4 py-3">{audienceText(draft.audienceKind, draft.zip, draft.listId)}</td>
                 <td className="px-4 py-3 text-[#6f6a64]">{new Date(draft.updatedAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3">—</td>
                 <td className="px-4 py-3 text-right">
@@ -84,7 +93,7 @@ export default function MarketingCampaignsPage() {
                   <p className="text-xs text-[#8a8680]">{campaign.subject}</p>
                 </td>
                 <td className="px-4 py-3"><ToneBadge tone={campaign.status === "sent" ? "green" : "stone"}>{campaign.status}</ToneBadge></td>
-                <td className="px-4 py-3">{EMAIL_CAMPAIGN_AUDIENCE_LABELS[campaign.audienceKind]}{campaign.audienceZip ? ` · ${campaign.audienceZip}` : ""}</td>
+                <td className="px-4 py-3">{audienceText(campaign.audienceKind, campaign.audienceZip, campaign.audienceListId)}</td>
                 <td className="px-4 py-3 text-[#6f6a64]">{campaign.sentAt ? new Date(campaign.sentAt).toLocaleString() : "—"}</td>
                 <td className="px-4 py-3">{campaign.sentCount}</td>
                 <td className="px-4 py-3 text-right">
