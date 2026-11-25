@@ -673,8 +673,10 @@ export function StormMap({
   const hailDock = fullscreen ? "top-16 left-48" : "top-[22rem] left-3 lg:top-3 lg:left-48";
 
   return (
-    <div className={`relative h-full min-h-0 w-full ${embedded && !fullscreen ? "" : "bg-[#0e1116] text-white"}`}>
-      <div ref={el} className={`project-map-leaflet h-full min-h-0 w-full ${embedded && !fullscreen ? "" : "storm-map-leaflet"}`} />
+    <div className={`relative h-full min-h-0 w-full ${embedded && !fullscreen ? "" : "storm-map-leaflet bg-[#0e1116] text-white"}`}>
+      {/* Leaflet owns this node's class list after mount; a changing className would wipe
+          leaflet-container and collapse every tile to zero width. Keep it constant. */}
+      <div ref={el} className="project-map-leaflet h-full min-h-0 w-full" />
       {desk && onToggleFullscreen && onLayer ? (
         <RadarDeskChrome
           fullscreen={fullscreen}
