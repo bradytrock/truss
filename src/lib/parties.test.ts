@@ -128,4 +128,45 @@ jordan.email = "jordan@home.test";
 jordan.phone = "4695550199";
 assert.equal(customerContactDetails({ contactId: dana.id, secondContactId: jordan.id }, book).secondEmail, "jordan@home.test");
 
+assert.equal(
+  resolveCustomerName(
+    { contactId: dana.id, jobId: "j-home" },
+    {
+      clients: [],
+      contacts: [dana, jordan],
+      jobs: [job({ id: "j-home", primaryContactId: dana.id, relatedContactIds: [jordan.id] })],
+      opportunities: [],
+    },
+  ),
+  "Dana Alvarez and Jordan Alvarez",
+);
+
+const riley = contact({
+  id: "riley",
+  name: "Riley Chen",
+  title: "Property manager",
+  clientId: "llc",
+});
+const spouse = contact({ id: "spouse", name: "Alex Chen", title: "Homeowner" });
+const llc = {
+  id: "llc",
+  name: "Maple Street Holdings LLC",
+  type: "owner" as const,
+  city: "",
+  state: "",
+  notes: "",
+};
+assert.equal(
+  resolveCustomerName(
+    { clientId: llc.id, contactId: riley.id, jobId: "j-llc" },
+    {
+      clients: [llc],
+      contacts: [riley, spouse],
+      jobs: [job({ id: "j-llc", primaryContactId: riley.id, relatedContactIds: [spouse.id] })],
+      opportunities: [],
+    },
+  ),
+  "Maple Street Holdings LLC",
+);
+
 console.log("parties.test.ts ok");

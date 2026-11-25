@@ -10,7 +10,7 @@ assert.deepEqual(
 assert.deepEqual(
   full[0]?.items.map((item) => [item.label, item.description, item.shortcut]),
   [
-    ["New lead", "Homeowner, address, roof issue", "L"],
+    ["New lead", "Homeowner or LLC, address, trades", "L"],
     ["New contact", "Adjuster, sub, supplier, referral", "C"],
     ["Schedule event", "Inspection, estimate, install day", "E"],
     ["New task", "Follow-up or to-do with a due date", "T"],
