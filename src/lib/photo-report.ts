@@ -5,12 +5,20 @@ import type {
   LetterheadKind,
   Opportunity,
   PageTemplateId,
+  PhotoCaptionTag,
+  PhotoPageFrame,
   PhotoPageLayout,
   PhotoReport,
   PhotoReportPage,
   PhotoReportPhotosPage,
 } from "@/lib/types";
-import { LETTERHEAD_KIND_LABELS, LETTERHEAD_KINDS, PHOTO_CATEGORY_LABELS } from "@/lib/types";
+import {
+  LETTERHEAD_KIND_LABELS,
+  LETTERHEAD_KINDS,
+  PHOTO_CAPTION_TAG_LABELS,
+  PHOTO_CAPTION_TAGS,
+  PHOTO_CATEGORY_LABELS,
+} from "@/lib/types";
 import { emptyWorkOrderPage, parseWorkOrderPage } from "@/lib/work-order";
 
 export const PHOTO_REPORTS_SQL = "supabase/migrations/20260821140000_photo_reports.sql";
@@ -179,6 +187,98 @@ export function photoSheetMeta(page: PhotoReportPhotosPage, photo: JobPhoto | un
   return meta.join(" · ");
 }
 
+export const CAPTION_LIMIT = 280;
+
+export function pageFrame(page: PhotoReportPhotosPage): PhotoPageFrame {
+  return page.frame === "before_after" ? "before_after" : "grid";
+}
+
+export function photoFrameColumns(page: PhotoReportPhotosPage) {
+  if (pageFrame(page) === "before_after") return 2;
+  return photoPageColumns(page.layout);
+}
+
+export function photoFrameRows(page: PhotoReportPhotosPage) {
+  if (pageFrame(page) === "before_after") return 1;
+  return photoPageRows(page.layout);
+}
+
+export function parseCaptionTags(value: unknown): PhotoCaptionTag[] {
+  if (!Array.isArray(value)) return [];
+  const picked = new Set<PhotoCaptionTag>();
+  for (const entry of value) {
+    if (typeof entry === "string" && (PHOTO_CAPTION_TAGS as readonly string[]).includes(entry)) {
+      picked.add(entry as PhotoCaptionTag);
+    }
+  }
+  return PHOTO_CAPTION_TAGS.filter((tag) => picked.has(tag));
+}
+
+export function captionTagLine(tags: readonly PhotoCaptionTag[] | undefined) {
+  if (!tags?.length) return "";
+  return tags.map((tag) => PHOTO_CAPTION_TAG_LABELS[tag]).join(" · ");
+}
+
+export function draftCaptionFromTags(tags: readonly PhotoCaptionTag[], heading: string) {
+  const ordered = parseCaptionTags(tags);
+  if (ordered.length === 0) return "";
+  const place = heading.trim();
+  const details = ordered.filter((tag) => tag !== "overview").map((tag) => tagPhrase(tag));
+  let sentence: string;
+  if (details.length === 0) {
+    sentence = place ? `${place} overview.` : "Overview of this area.";
+  } else if (ordered.includes("overview") && place) {
+    sentence = `${place} overview, with ${details.join(", ")}.`;
+  } else if (details.length === 1) {
+    sentence = `${capitalize(details[0])}.`;
+  } else {
+    const [first, ...rest] = details;
+    sentence = `${capitalize(first)}, with ${rest.join(", ")}.`;
+  }
+  return sentence.length <= CAPTION_LIMIT ? sentence : sentence.slice(0, CAPTION_LIMIT);
+}
+
+function tagPhrase(tag: PhotoCaptionTag) {
+  if (tag === "hail") return "hail impact";
+  if (tag === "wind") return "wind damage";
+  if (tag === "missing") return "missing material";
+  if (tag === "lifted") return "lifted shingles";
+  if (tag === "granule_loss") return "granule loss";
+  if (tag === "wear") return "wear";
+  return "overview";
+}
+
+function capitalize(value: string) {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+export function missingCaptionCount(pages: PhotoReportPage[]) {
+  let count = 0;
+  for (const page of pages) {
+    if (page.type !== "photos") continue;
+    for (const item of page.items) {
+      if (!item.caption.trim()) count += 1;
+    }
+  }
+  return count;
+}
+
+/** Photo pages are the numbered sections. Index is -1 when the page is not a photo page. */
+export function photoSection(pages: PhotoReportPage[], pageId: string) {
+  const sections = pages.filter((page) => page.type === "photos");
+  return {
+    index: sections.findIndex((page) => page.id === pageId),
+    total: sections.length,
+  };
+}
+
+export function photoFileLabel(photo: Pick<JobPhoto, "id" | "storagePath">) {
+  const file = photo.storagePath?.split("/").pop()?.replace(/\.[a-z0-9]+$/i, "") ?? "";
+  if (file && !/^[0-9a-f-]{8,}$/i.test(file)) return file;
+  const tail = photo.id.replace(/[^a-z0-9]/gi, "").slice(-4).toUpperCase();
+  return `IMG_${tail || "0000"}`;
+}
+
 export function newPageId() {
   return crypto.randomUUID();
 }
@@ -210,6 +310,7 @@ export function emptyPhotosPage(layout: PhotoPageLayout = "two"): PhotoReportPho
     heading: "",
     notes: "",
     layout,
+    frame: "grid",
     showCaptions: true,
     showTakenAt: true,
     showCategory: true,
@@ -401,6 +502,7 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
             .map((item) => ({
               photoId: asString(item.photoId),
               caption: asString(item.caption),
+              tags: parseCaptionTags(item.tags),
             }))
             .filter((item) => item.photoId)
         : [];
@@ -410,6 +512,7 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
         heading: asString(row.heading),
         notes: asString(row.notes),
         layout: parseLayout(row.layout),
+        frame: row.frame === "before_after" ? "before_after" : "grid",
         showCaptions: asBool(row.showCaptions, true),
         showTakenAt: asBool(row.showTakenAt, true),
         showCategory: asBool(row.showCategory, true),

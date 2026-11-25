@@ -1302,6 +1302,32 @@ export const PHOTO_PAGE_LAYOUT_LABELS: Record<PhotoPageLayout, string> = {
   four: "4 photos",
 };
 
+/** Tags that print under a photo caption. Order is the chip order in the editor. */
+export const PHOTO_CAPTION_TAGS = [
+  "hail",
+  "wind",
+  "missing",
+  "lifted",
+  "granule_loss",
+  "wear",
+  "overview",
+] as const;
+
+export type PhotoCaptionTag = (typeof PHOTO_CAPTION_TAGS)[number];
+
+export const PHOTO_CAPTION_TAG_LABELS: Record<PhotoCaptionTag, string> = {
+  hail: "Hail",
+  wind: "Wind",
+  missing: "Missing",
+  lifted: "Lifted",
+  granule_loss: "Granule loss",
+  wear: "Wear",
+  overview: "Overview",
+};
+
+export const PHOTO_PAGE_FRAMES = ["grid", "before_after"] as const;
+export type PhotoPageFrame = (typeof PHOTO_PAGE_FRAMES)[number];
+
 export const LETTERHEAD_KINDS = [
   "blank",
   "introduction",
@@ -1341,6 +1367,8 @@ export interface PhotoReportCoverPage {
 export interface PhotoReportPhotoItem {
   photoId: string;
   caption: string;
+  /** Damage and view tags that print under the caption. */
+  tags?: PhotoCaptionTag[];
 }
 
 export interface PhotoReportPhotosPage {
@@ -1349,6 +1377,8 @@ export interface PhotoReportPhotosPage {
   heading: string;
   notes: string;
   layout: PhotoPageLayout;
+  /** Photo grid, or a before/after pair. Missing means photo grid. */
+  frame?: PhotoPageFrame;
   showCaptions: boolean;
   showTakenAt: boolean;
   showCategory: boolean;

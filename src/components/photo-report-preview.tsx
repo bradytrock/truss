@@ -8,11 +8,12 @@ import { formatDate } from "@/lib/format";
 import { jobAddress } from "@/lib/job-record";
 import { photoReportCoverModel } from "@/lib/photo-report-cover";
 import {
+  captionTagLine,
   layoutCapacity,
   photoById,
+  photoFrameColumns,
+  photoFrameRows,
   photoIndexStart,
-  photoPageColumns,
-  photoPageRows,
   photoSheetMeta,
 } from "@/lib/photo-report";
 import {
@@ -371,8 +372,8 @@ function PhotosPreview({
   startNumber: number;
 }) {
   const cap = layoutCapacity(page.layout);
-  const cols = photoPageColumns(page.layout);
-  const rows = photoPageRows(page.layout);
+  const cols = photoFrameColumns(page);
+  const rows = photoFrameRows(page);
   const filled = page.items.slice(0, cap);
   const cells = Array.from({ length: cap }, (_, index) => filled[index] ?? null);
 
@@ -402,6 +403,16 @@ function PhotosPreview({
       ) : page.heading.trim() ? (
         <h2 className="mb-2 shrink-0 text-sm font-medium">{page.heading}</h2>
       ) : null}
+      {edit ? (
+        <textarea
+          value={page.notes ?? ""}
+          onChange={(event) => edit.onChange({ notes: event.target.value })}
+          placeholder="Section summary — prints above the photos"
+          className="mb-2 max-h-24 min-h-12 shrink-0 resize-none border-0 bg-transparent text-xs leading-relaxed text-neutral-700 outline-none placeholder:text-neutral-300"
+        />
+      ) : page.notes.trim() ? (
+        <p className="mb-2 line-clamp-4 shrink-0 whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">{page.notes}</p>
+      ) : null}
       <div
         className={cn("grid min-h-0 flex-1 gap-2", cols === 2 ? "grid-cols-2" : "grid-cols-1")}
         style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
@@ -422,6 +433,7 @@ function PhotosPreview({
             );
           }
           const photo = photoById(photos, item.photoId);
+          const tags = captionTagLine(item.tags);
           return (
             <figure key={`${item.photoId}-${index}`} className="relative flex min-h-0 flex-col">
               {edit?.onRemovePhoto ? (
@@ -433,6 +445,11 @@ function PhotosPreview({
                 >
                   <XIcon className="size-3" />
                 </button>
+              ) : null}
+              {page.frame === "before_after" ? (
+                <p className="shrink-0 text-[9px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">
+                  {index === 0 ? "Before" : "After"}
+                </p>
               ) : null}
               {photo ? (
                 <div className="flex min-h-0 flex-1 items-center justify-center bg-neutral-100">
@@ -461,6 +478,9 @@ function PhotosPreview({
               ) : page.showCaptions && item.caption.trim() ? (
                 <figcaption className="mt-1 shrink-0 text-[10px] leading-snug text-neutral-700">{item.caption}</figcaption>
               ) : null}
+              {tags ? (
+                <p className="shrink-0 text-[9px] font-semibold tracking-[0.12em] text-neutral-500 uppercase">{tags}</p>
+              ) : null}
               {(page.showTakenAt || page.showCategory) && photo ? (
                 <p className="shrink-0 text-[10px] text-neutral-500">
                   {[page.showCategory ? PHOTO_CATEGORY_LABELS[photo.category] : "", page.showTakenAt ? formatDate(photo.takenAt) : ""]
@@ -472,16 +492,6 @@ function PhotosPreview({
           );
         })}
       </div>
-      {edit ? (
-        <textarea
-          value={page.notes ?? ""}
-          onChange={(event) => edit.onChange({ notes: event.target.value })}
-          placeholder="Describe this page — what we found, what to do next…"
-          className="mt-2 max-h-24 min-h-12 shrink-0 resize-none border-0 bg-transparent text-xs leading-relaxed text-neutral-700 outline-none placeholder:text-neutral-300"
-        />
-      ) : page.notes.trim() ? (
-        <p className="mt-2 line-clamp-4 shrink-0 whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">{page.notes}</p>
-      ) : null}
     </div>
   );
 }
@@ -521,6 +531,16 @@ function QuadPhotosPreview({
       ) : page.heading.trim() ? (
         <h2 className="mb-1.5 shrink-0 text-[11px] font-semibold">{page.heading}</h2>
       ) : null}
+      {edit ? (
+        <input
+          value={page.notes ?? ""}
+          onChange={(event) => edit.onChange({ notes: event.target.value })}
+          placeholder="Section summary"
+          className="mb-1.5 w-full shrink-0 border-0 bg-transparent text-[10px] text-neutral-700 outline-none placeholder:text-neutral-300"
+        />
+      ) : page.notes.trim() ? (
+        <p className="mb-1.5 line-clamp-2 shrink-0 text-[10px] leading-snug text-neutral-700">{page.notes}</p>
+      ) : null}
       <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-x-2 gap-y-1.5">
         {cells.map((item, index) => {
           const number = startNumber + index;
@@ -544,7 +564,7 @@ function QuadPhotosPreview({
             );
           }
           const photo = photoById(photos, item.photoId);
-          const meta = photoSheetMeta(page, photo);
+          const meta = [photoSheetMeta(page, photo), captionTagLine(item.tags)].filter(Boolean).join(" · ");
           return (
             <figure key={`${item.photoId}-${index}`} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
               <div className="flex h-4 items-center gap-1 overflow-hidden">
@@ -602,16 +622,6 @@ function QuadPhotosPreview({
           );
         })}
       </div>
-      {edit ? (
-        <input
-          value={page.notes ?? ""}
-          onChange={(event) => edit.onChange({ notes: event.target.value })}
-          placeholder="Page note"
-          className="mt-1.5 w-full shrink-0 border-0 bg-transparent text-[10px] text-neutral-700 outline-none placeholder:text-neutral-300"
-        />
-      ) : page.notes.trim() ? (
-        <p className="mt-1.5 line-clamp-2 shrink-0 text-[10px] leading-snug text-neutral-700">{page.notes}</p>
-      ) : null}
     </div>
   );
 }
