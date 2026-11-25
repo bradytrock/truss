@@ -11,13 +11,14 @@ function emptyMetrics(): BoardScrollMetrics {
 export function KanbanScroller({
   children,
   fill = false,
-  clipVertical = false,
 }: {
   children: ReactNode;
-  /** Fill the parent height so columns can scroll under a fixed header. */
+  /**
+   * Fill the parent and scroll both axes. Column headers stick to this
+   * scroller, so it has to be the vertical scrollport too. A horizontal-only
+   * scroller treats `top` as an inset and covers the first card.
+   */
   fill?: boolean;
-  /** Keep horizontal scrolling without trapping sticky column headers. */
-  clipVertical?: boolean;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [metrics, setMetrics] = useState<BoardScrollMetrics>(emptyMetrics);
@@ -49,13 +50,12 @@ export function KanbanScroller({
   }
 
   return (
-    <div className={cn("relative", fill && "h-full min-h-0")}>
+    <div className={cn("relative", fill && "flex min-h-0 flex-1 flex-col")}>
       <div
         ref={scrollerRef}
         className={cn(
           "w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          fill && "h-full overflow-y-hidden",
-          !fill && clipVertical && "overflow-y-clip",
+          fill && "min-h-0 flex-1 overflow-y-auto",
         )}
       >
         {children}
