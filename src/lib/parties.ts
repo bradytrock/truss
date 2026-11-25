@@ -178,7 +178,8 @@ export function jobsForContact(contact: Contact, jobs: Job[]) {
   });
 }
 
-/** Homeowners on a job: primary plus related contacts. Trades are not included. */
+/** People named on a job: primary, related contacts, and any extra ids.
+ *  With no job, only the extra ids are returned. */
 export function contactsOnJob(
   job: Pick<Job, "primaryContactId" | "relatedContactIds"> | undefined,
   contacts: Contact[],
@@ -195,11 +196,9 @@ export function contactsOnJob(
   push(job?.primaryContactId);
   for (const id of job?.relatedContactIds ?? []) push(id);
   for (const id of extraIds) push(id);
-  const found = ids
+  return ids
     .map((id) => contacts.find((contact) => contact.id === id))
     .filter((contact): contact is Contact => Boolean(contact));
-  if (job) return found;
-  return contacts;
 }
 
 export function homeownersOnJob(

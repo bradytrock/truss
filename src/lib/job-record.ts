@@ -427,6 +427,15 @@ function isSyntheticLeadJob(job: Pick<Job, "id">) {
   return job.id.startsWith("job_lead_");
 }
 
+/** Costing job for a lead. Trashed rows stay out. Two live rows keep the real job. */
+export function jobForLead(jobs: readonly Job[], opportunityId: string | null | undefined): Job | undefined {
+  const id = opportunityId?.trim() ?? "";
+  if (!id) return undefined;
+  const matches = jobs.filter((job) => job.opportunityId === id && !isDeletedJob(job));
+  if (matches.length === 0) return undefined;
+  return matches.reduce(preferLeadJob);
+}
+
 export function preferLeadJob(a: Job, b: Job) {
   const aSynth = isSyntheticLeadJob(a) ? 1 : 0;
   const bSynth = isSyntheticLeadJob(b) ? 1 : 0;

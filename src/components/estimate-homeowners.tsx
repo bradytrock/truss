@@ -45,8 +45,8 @@ export function EstimateHomeowners({
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const people = homeownersOnJob(job, crm.contacts);
   const primary = (primaryId || job?.primaryContactId || "").trim();
+  const people = homeownersOnJob(job, crm.contacts, job ? [] : [primary]);
   const ordered = [...people].sort((left, right) => {
     if (left.id === primary && right.id !== primary) return -1;
     if (right.id === primary && left.id !== primary) return 1;

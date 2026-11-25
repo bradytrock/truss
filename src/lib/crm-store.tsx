@@ -5538,10 +5538,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }) => {
       const opportunityId = await ensureLeadForEstimate(input);
       const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
-      const pipelineJobId =
+      const supabase = maybeClient();
+      let pipelineJobId =
         input.jobId ||
         state.jobs.find((job) => job.opportunityId === opportunityId)?.id ||
         null;
+      if (!pipelineJobId && opportunityId && supabase) {
+        const { data: leadJob } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("company_id", user.companyId)
+          .eq("opportunity_id", opportunityId)
+          .is("deleted_at", null)
+          .limit(1)
+          .maybeSingle();
+        pipelineJobId = leadJob?.id ?? null;
+      }
       const linked = siteFromLinked(pipelineJobId, opportunityId, state.jobs, state.opportunities);
       const template = input.templateId
         ? state.estimateTemplates.find((item) => item.id === input.templateId)
@@ -5600,7 +5612,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const copiedLines = template
         ? estimateLinesFromTemplate(template.id, estimate.id, state.estimateTemplateLines)
         : [];
-      const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({
           ...prev,

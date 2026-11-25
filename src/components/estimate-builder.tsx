@@ -94,7 +94,7 @@ import {
   type AdjustmentKind,
 } from "@/lib/estimate-totals";
 import { formatDate, formatMoney, localYmdPlusDays } from "@/lib/format";
-import { jobPaperHref } from "@/lib/job-record";
+import { jobForLead, jobPaperHref } from "@/lib/job-record";
 import { formatJobSite } from "@/lib/leads";
 import {
   billingEstimate,
@@ -234,7 +234,8 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
   const contact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;
   const secondContact = estimate.secondContactId ? crm.getContact(estimate.secondContactId) : undefined;
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
-  const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+  const linkedJob = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+  const job = linkedJob ?? (estimate.jobId ? undefined : jobForLead(crm.jobs, estimate.opportunityId));
   const inferredCoOwner =
     estimate.status === "accepted" || estimate.status === "declined"
       ? null
@@ -257,7 +258,12 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
     : "";
   useEffect(() => {
     if (!job) return;
-    if (estimate.status === "accepted" || estimate.status === "declined") return;
+    const jobLinked = (estimate.jobId || null) === job.id;
+    const locked = estimate.status === "accepted" || estimate.status === "declined";
+    if (locked) {
+      if (!jobLinked) void crm.updateEstimate(estimate.id, { jobId: job.id });
+      return;
+    }
     const fromJob = jobHomeownersForEstimate(job, crm.contacts);
     const site = {
       street: job.street.trim(),
@@ -272,7 +278,10 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
       estimate.city === site.city &&
       estimate.state === site.state &&
       estimate.postalCode === site.postalCode;
-    if (contactMatches && secondMatches && siteMatches) return;
+    if (contactMatches && secondMatches && siteMatches) {
+      if (!jobLinked) void crm.updateEstimate(estimate.id, { jobId: job.id });
+      return;
+    }
     const nextContact = fromJob.contactId
       ? crm.contacts.find((item) => item.id === fromJob.contactId)
       : undefined;
@@ -289,6 +298,7 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
       state?: string;
       postalCode?: string;
       name?: string;
+      jobId?: string;
     } = {
       contactId: fromJob.contactId,
       secondContactId: fromJob.secondContactId,
@@ -297,6 +307,7 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
       state: site.state,
       postalCode: site.postalCode,
     };
+    if (!jobLinked) patch.jobId = job.id;
     if (siteLabel) patch.name = siteLabel;
     if (nextContact?.clientId) patch.clientId = nextContact.clientId;
     if (!secondMatches) {
@@ -316,6 +327,7 @@ export function EstimateBuilder({ estimate }: { estimate: Estimate }) {
     estimate,
     estimate.contactId,
     estimate.id,
+    estimate.jobId,
     estimate.secondContactId,
     estimate.status,
     estimate.street,
