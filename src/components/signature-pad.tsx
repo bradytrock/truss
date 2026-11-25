@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseEstimateSignature } from "@/lib/estimate-signature";
-import { ESIGN_CONSENT_DETAIL, ESIGN_CONSENT_HEADING } from "@/lib/estimate-signature-audit";
+import { ESIGN_CONSENT_TEXT } from "@/lib/estimate-signature-audit";
 import { renderTypedSignaturePng } from "@/lib/typed-signature";
 import { cn } from "@/lib/utils";
 
@@ -266,7 +266,6 @@ function CollectSignatureForm({
   onReview?: () => void;
   onSubmit: (input: { name: string; image: string; consented: true }) => Promise<void> | void;
 }) {
-  const [name, setName] = useState(() => realPersonName(defaultName));
   const [mode, setMode] = useState<"draw" | "type">("draw");
   const [image, setImage] = useState<string | null>(null);
   const [inked, setInked] = useState(false);
@@ -274,12 +273,11 @@ function CollectSignatureForm({
   const [padKey, setPadKey] = useState(0);
   const [consented, setConsented] = useState(false);
   const [error, setError] = useState("");
-  const summaryName = realPersonName(homeownerName) || realPersonName(defaultName);
+  const signerName = realPersonName(homeownerName) || realPersonName(defaultName);
   const address = propertyAddress.trim();
   const total = totalLabel.trim();
-  const nameReady = name.trim().length >= 2;
   const signatureReady = mode === "draw" ? Boolean(image) : typed.trim().length >= 2;
-  const stepsLeft = [nameReady, signatureReady, consented].filter((ready) => !ready).length;
+  const stepsLeft = [signatureReady, consented].filter((ready) => !ready).length;
   const ready = stepsLeft === 0;
   const markStarted = mode === "draw" ? inked || Boolean(image) : typed.trim().length > 0;
 
@@ -292,8 +290,8 @@ function CollectSignatureForm({
   }
 
   async function handleSubmit() {
-    if (!nameReady) {
-      setError("Enter the homeowner’s full name.");
+    if (!signerName) {
+      setError("Add the homeowner on the job before collecting a signature.");
       return;
     }
     if (!signatureReady) {
@@ -305,7 +303,7 @@ function CollectSignatureForm({
       return;
     }
     const png = mode === "type" ? await renderTypedSignaturePng(typed) : image;
-    const parsed = parseEstimateSignature({ name, image: png ?? "" });
+    const parsed = parseEstimateSignature({ name: signerName, image: png ?? "" });
     if (!parsed.ok) {
       setError(mode === "type" ? "Type your name to sign." : parsed.error);
       return;
@@ -317,7 +315,7 @@ function CollectSignatureForm({
   const actionLabel = pending
     ? "Saving…"
     : ready
-      ? "Approve & sign"
+      ? "Sign and approve"
       : `${stepsLeft} step${stepsLeft === 1 ? "" : "s"} left`;
 
   return (
@@ -347,11 +345,11 @@ function CollectSignatureForm({
           <div className="rounded-xl bg-[#efece8] px-4 py-3.5 dark:bg-muted">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                {summaryName ? (
-                  <p className="text-[15px] leading-snug font-semibold">{summaryName}</p>
+                {signerName ? (
+                  <p className="text-[15px] leading-snug font-semibold">{signerName}</p>
                 ) : null}
                 {address ? (
-                  <p className={cn("text-[13px] leading-snug text-[#8a8a8a]", summaryName && "mt-0.5")}>{address}</p>
+                  <p className={cn("text-[13px] leading-snug text-[#8a8a8a]", signerName && "mt-0.5")}>{address}</p>
                 ) : null}
               </div>
               {total ? (
@@ -375,33 +373,9 @@ function CollectSignatureForm({
           </div>
 
           <div className="mt-5">
-            <div className="flex items-center gap-2.5">
-              <StepMark n={1} />
-              <label htmlFor="signer-name" className="text-[15px] font-semibold">
-                Homeowner&rsquo;s full name
-              </label>
-            </div>
-            <Input
-              id="signer-name"
-              value={name}
-              disabled={pending}
-              onChange={(event) => {
-                setName(event.target.value);
-                setError("");
-              }}
-              placeholder="e.g. Jane Smith"
-              autoComplete="name"
-              className="mt-2.5 h-11 rounded-[10px] border-[#e3e1dc] bg-white px-3.5 text-[15px] shadow-none placeholder:text-[#b5b5b5] dark:bg-card"
-            />
-            <p className="mt-2 text-[13px] leading-snug text-[#8a8a8a]">
-              The person approving the work — not the sales rep.
-            </p>
-          </div>
-
-          <div className="mt-5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <StepMark n={2} />
+                <StepMark n={1} />
                 <h2 className="text-[15px] font-semibold">Signature</h2>
               </div>
               <div className="flex rounded-[10px] bg-[#eceae6] p-0.5 dark:bg-muted" role="tablist" aria-label="Signature method">
@@ -483,8 +457,8 @@ function CollectSignatureForm({
             </div>
           </div>
 
-          <div className="mt-5 flex items-center gap-2.5">
-            <StepMark n={3} />
+          <div className="mt-5 flex items-start gap-2.5">
+            <StepMark n={2} />
             <label className="flex min-w-0 flex-1 items-start gap-3 rounded-xl border border-[#e4e2de] bg-white px-3.5 py-3 dark:border-border dark:bg-card">
               <Checkbox
                 className="mt-0.5 size-[18px] rounded-[4px]"
@@ -495,12 +469,7 @@ function CollectSignatureForm({
                   setError("");
                 }}
               />
-              <span>
-                <span className="block text-[15px] leading-snug font-semibold">{ESIGN_CONSENT_HEADING}</span>
-                <span className="mt-0.5 block text-[13px] leading-snug text-[#6f6f6f] dark:text-muted-foreground">
-                  {ESIGN_CONSENT_DETAIL}
-                </span>
-              </span>
+              <span className="text-[13px] leading-snug">{ESIGN_CONSENT_TEXT}</span>
             </label>
           </div>
           {error ? <p className="mt-3 text-sm text-destructive">{error}</p> : null}
