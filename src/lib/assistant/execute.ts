@@ -9,7 +9,8 @@ import {
 } from "@/lib/leads";
 import { isDeletedJob, jobRecordHref, uniqueIds } from "@/lib/job-record";
 import { localYmd } from "@/lib/format";
-import { estimateTotals, allPackageTotals, jobSoldAmount } from "@/lib/estimate-totals";
+import { estimateTotals, allPackageTotals } from "@/lib/estimate-totals";
+import { soldWithChangeOrders } from "@/lib/change-orders";
 import { assigneeSignatureReady, estimateAssigneeNames, staffCanSignEstimate } from "@/lib/estimate-signers";
 import { isGbbEstimate, parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
@@ -454,7 +455,13 @@ async function runTool(
       const estimates = crm.estimates
         .filter((estimate) => estimate.jobId === job.id && !estimate.archivedAt)
         .map((estimate) => ({ id: estimate.id, number: estimate.number, name: estimate.name, status: estimate.status }));
-      const soldFor = jobSoldAmount(job, crm.estimates, crm.estimateLines);
+      const soldFor = soldWithChangeOrders(
+        job,
+        crm.estimates,
+        crm.estimateLines,
+        crm.changeOrders ?? [],
+        crm.changeOrderLines ?? [],
+      );
       return ok({
         id: job.id,
         code: job.code,

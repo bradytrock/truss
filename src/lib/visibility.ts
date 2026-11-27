@@ -508,6 +508,8 @@ export function scopeBook(
   });
   const materialOrders = (state.materialOrders ?? []).filter((order) => jobIds.has(order.jobId));
   const materialOrderIds = new Set(materialOrders.map((order) => order.id));
+  const changeOrders = (state.changeOrders ?? []).filter((item) => jobIds.has(item.jobId));
+  const changeOrderIds = new Set(changeOrders.map((item) => item.id));
   const photos = state.photos;
   const photoAuditEvents = (state.photoAuditEvents ?? []).filter(
     (event) => !event.jobId || jobIds.has(event.jobId),
@@ -557,6 +559,8 @@ export function scopeBook(
     jobInsurance,
     commissionCloseouts: (state.commissionCloseouts ?? []).filter((item) => jobIds.has(item.jobId)),
     refundRequests: (state.refundRequests ?? []).filter((item) => jobIds.has(item.jobId)),
+    changeOrders,
+    changeOrderLines: (state.changeOrderLines ?? []).filter((line) => changeOrderIds.has(line.changeOrderId)),
     materialOrders,
     materialOrderLines: (state.materialOrderLines ?? []).filter((line) =>
       materialOrderIds.has(line.materialOrderId),

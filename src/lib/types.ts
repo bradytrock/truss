@@ -1559,6 +1559,9 @@ export interface CrmState {
   commissionCloseouts: import("@/lib/commission-closeout").CommissionCloseout[];
   /** Refunds requested from a job and processed in Accounting. */
   refundRequests: import("@/lib/refunds").RefundRequest[];
+  /** Signed amendments to the original estimate. The sold proposal stays put. */
+  changeOrders: import("@/lib/change-orders").ChangeOrder[];
+  changeOrderLines: import("@/lib/change-orders").ChangeOrderLine[];
   materialOrders: MaterialOrder[];
   materialOrderLines: MaterialOrderLine[];
   materialOrderTemplates: MaterialOrderTemplate[];

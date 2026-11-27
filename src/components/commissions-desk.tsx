@@ -14,7 +14,7 @@ import {
   type CommissionSheet,
 } from "@/lib/commission-closeout";
 import { expensesForJob, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
-import { jobSoldAmount } from "@/lib/estimate-totals";
+import { soldWithChangeOrders } from "@/lib/change-orders";
 import { jobRecordHref } from "@/lib/job-record";
 import { formatDate, formatMoney } from "@/lib/format";
 import { canViewProjectFinancials } from "@/lib/visibility";
@@ -154,7 +154,13 @@ export function CommissionsDesk() {
                   <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Sold for</p>
                   <p className="mt-1 text-2xl font-medium tabular-nums">
                     {formatMoney(
-                      jobSoldAmount(selected.job, crm.estimates, crm.estimateLines) || selected.sheet.jobSold,
+                      soldWithChangeOrders(
+                        selected.job,
+                        crm.estimates,
+                        crm.estimateLines,
+                        crm.changeOrders ?? [],
+                        crm.changeOrderLines ?? [],
+                      ) || selected.sheet.jobSold,
                     )}
                   </p>
                 </div>

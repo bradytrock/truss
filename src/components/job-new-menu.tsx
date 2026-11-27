@@ -5,6 +5,7 @@ import {
   ArrowUp,
   ChevronDown,
   FileText,
+  FilePlus,
   Landmark,
   Phone,
   Plus,
@@ -51,12 +52,14 @@ const shortcutClass =
 export function JobNewMenu({
   pending = false,
   showEstimate,
+  showChangeOrder = false,
   showInvoice,
   showMaterialOrder,
   showExpense,
   showPayAtClose = false,
   payAtCloseStarted = false,
   onEstimate,
+  onChangeOrder,
   onInvoice,
   onMaterialOrder,
   onMaterialTemplate,
@@ -66,6 +69,7 @@ export function JobNewMenu({
 }: {
   pending?: boolean;
   showEstimate: boolean;
+  showChangeOrder?: boolean;
   showInvoice: boolean;
   showMaterialOrder: boolean;
   showExpense: boolean;
@@ -73,6 +77,7 @@ export function JobNewMenu({
   /** A request already exists on this job, so the row opens it instead of starting another. */
   payAtCloseStarted?: boolean;
   onEstimate: () => void;
+  onChangeOrder?: () => void;
   onInvoice: () => void;
   onMaterialOrder: () => void;
   onMaterialTemplate: () => void;
@@ -91,6 +96,16 @@ export function JobNewMenu({
       icon: FileText,
       shortcut: "E",
       onSelect: onEstimate,
+    });
+  }
+  if (showChangeOrder && onChangeOrder) {
+    sales.push({
+      id: "change-order",
+      title: "Change order",
+      detail: "Add or credit scope after the estimate is signed",
+      icon: FilePlus,
+      shortcut: "C",
+      onSelect: onChangeOrder,
     });
   }
   if (showInvoice) {

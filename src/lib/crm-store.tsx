@@ -102,6 +102,19 @@ import {
   fillCatalogItem,
 } from "@/lib/catalog-margin";
 import { invoiceLineDescription } from "@/lib/line-format";
+import {
+  baseTotalForJob,
+  changeOrderSellPrice,
+  changeOrderTotals,
+  invoiceLinesFromChangeOrder,
+  linesForChangeOrder,
+  nextChangeOrderNumber,
+  revisedContractTotal,
+  signedEstimateForJob,
+  type ChangeOrder,
+  type ChangeOrderLine,
+} from "@/lib/change-orders";
+import { isMissingChangeOrders, missingChangeOrdersMessage } from "@/lib/supabase/schema-errors";
 import { nextLineSortOrders, selectedCatalogItems } from "@/lib/catalog-pick";
 import {
   catalogForList,
@@ -167,7 +180,7 @@ import {
 } from "@/lib/accounts";
 import { isPublicAppPath } from "@/lib/auth-paths";
 import { DEMO_SCHEDULE_URL, companySubscriptionActive } from "@/lib/subscription";
-import { defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
+import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { logoExtension, validateLogoFile } from "@/lib/company-logo";
 import { deleteViaApi, uploadViaApi } from "@/lib/storage/client-upload";
 import { copyCompanyFileViaApi, documentFileRelativePath } from "@/lib/document-file-copy";
@@ -226,6 +239,10 @@ import {
   mapForecastedExpense,
   mapCommissionCloseout,
   mapRefundRequest,
+  mapChangeOrder,
+  mapChangeOrderLine,
+  changeOrderPatch,
+  changeOrderLinePatch,
   mapJobInsurance,
   mapJobPayAtClose,
   expensePatch,
@@ -534,6 +551,8 @@ const emptyState: CrmState = {
   jobPayAtClose: [],
   commissionCloseouts: [],
   refundRequests: [],
+  changeOrders: [],
+  changeOrderLines: [],
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],
@@ -1414,6 +1433,22 @@ type CrmContextValue = CrmState & {
   removeEstimateLine: (id: string) => Promise<void>;
   reorderEstimateLine: (id: string, direction: "up" | "down") => Promise<void>;
   convertEstimateToInvoice: (estimateId: string) => Promise<Invoice>;
+  getChangeOrder: (id: string) => ChangeOrder | undefined;
+  addChangeOrder: (jobId: string) => Promise<ChangeOrder>;
+  updateChangeOrder: (id: string, patch: Partial<ChangeOrder>) => Promise<void>;
+  addChangeOrderLine: (
+    changeOrderId: string,
+    input?: Partial<Pick<ChangeOrderLine, "title" | "description" | "quantity" | "unit" | "unitCost" | "taxable" | "catalogItemId">>,
+  ) => Promise<ChangeOrderLine | null>;
+  addChangeOrderLineFromCatalog: (changeOrderId: string, catalogItemId: string) => Promise<ChangeOrderLine | null>;
+  updateChangeOrderLine: (id: string, patch: Partial<ChangeOrderLine>) => Promise<void>;
+  removeChangeOrderLine: (id: string) => Promise<void>;
+  sendChangeOrder: (id: string) => Promise<string | null>;
+  acceptChangeOrder: (id: string, signature: { name: string; image: string }) => Promise<boolean>;
+  declineChangeOrder: (id: string) => Promise<void>;
+  voidChangeOrder: (id: string) => Promise<void>;
+  reopenChangeOrder: (id: string) => Promise<void>;
+  convertChangeOrderToInvoice: (id: string) => Promise<Invoice | null>;
   addInvoice: (input: {
     name: string;
     clientId: string | null;
@@ -2053,6 +2088,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...refund,
             jobId: remapDroppedJobId(refund.jobId, pruned.dropped) ?? refund.jobId,
           })),
+          changeOrders: (book.state.changeOrders ?? []).map((order) => ({
+            ...order,
+            jobId: remapDroppedJobId(order.jobId, pruned.dropped) ?? order.jobId,
+          })),
+          changeOrderLines: book.state.changeOrderLines ?? [],
           materialOrderLines: book.state.materialOrderLines ?? [],
         };
         if (!loadedFullBook || book.messagesError) {
@@ -2106,6 +2146,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               refundRequests: (merged.refundRequests ?? []).map((refund) => ({
                 ...refund,
                 jobId: remapDroppedJobId(refund.jobId, dropped) ?? refund.jobId,
+              })),
+              changeOrders: (merged.changeOrders ?? []).map((order) => ({
+                ...order,
+                jobId: remapDroppedJobId(order.jobId, dropped) ?? order.jobId,
               })),
             };
           });
@@ -2439,6 +2483,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const getInvoice = useCallback(
     (id: string) => scoped.invoices.find((invoice) => invoice.id === id),
     [scoped.invoices]
+  );
+  const getChangeOrder = useCallback(
+    (id: string) => (scoped.changeOrders ?? []).find((order) => order.id === id),
+    [scoped.changeOrders],
   );
   const getMaterialOrder = useCallback(
     (id: string) => (scoped.materialOrders ?? []).find((order) => order.id === id),
@@ -11095,6 +11143,622 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, addTask, effectiveStaff, persistRefund, state.refundRequests],
   );
 
+  const placeChangeOrder = useCallback(
+    (record: ChangeOrder) => (current: CrmState) => ({
+      ...current,
+      changeOrders: [record, ...(current.changeOrders ?? []).filter((item) => item.id !== record.id)],
+    }),
+    [],
+  );
+
+  const writeJobContract = useCallback(
+    async (jobId: string, total: number) => {
+      const job = state.jobs.find((item) => item.id === jobId);
+      setState((current) => ({
+        ...current,
+        jobs: current.jobs.map((item) => (item.id === jobId ? { ...item, contractValue: total } : item)),
+        opportunities: current.opportunities.map((item) =>
+          job?.opportunityId && item.id === job.opportunityId ? { ...item, value: total } : item,
+        ),
+      }));
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(jobId)) return;
+      const { error } = await supabase.from("jobs").update({ contract_value: total }).eq("id", jobId);
+      if (error) toast.error(error.message);
+      if (job?.opportunityId && looksLikeUuid(job.opportunityId)) {
+        const { error: leadError } = await supabase
+          .from("opportunities")
+          .update({ value: total })
+          .eq("id", job.opportunityId);
+        if (leadError) toast.error(leadError.message);
+      }
+    },
+    [state.jobs],
+  );
+
+  const addChangeOrder = useCallback(
+    async (jobId: string) => {
+      const job = state.jobs.find((item) => item.id === jobId);
+      if (!job) throw new Error("Job not found.");
+      const estimate = signedEstimateForJob(job, state.estimates);
+      if (!estimate) {
+        toast.error("Accept the estimate before writing a change order.");
+        throw new Error("No signed estimate.");
+      }
+      const prior = (state.changeOrders ?? []).find((item) => item.jobId === jobId && item.baseTotal > 0);
+      const market = marketForEstimate(estimate, state.jobs, state.opportunities);
+      const billed = billingEstimate(estimate, market);
+      const order: ChangeOrder = {
+        id: crypto.randomUUID(),
+        number: nextChangeOrderNumber(
+          (state.changeOrders ?? []).filter((item) => item.jobId === jobId).map((item) => item.number),
+        ),
+        jobId,
+        estimateId: estimate.id,
+        opportunityId: job.opportunityId,
+        clientId: estimate.clientId,
+        reason: "",
+        notes: "",
+        status: "draft",
+        taxRate: billed.taxRate,
+        baseTotal: prior?.baseTotal || baseTotalForJob(job, state.estimates, state.estimateLines),
+        shareToken: newShareToken(),
+        sentAt: null,
+        viewedAt: null,
+        acceptedAt: null,
+        signatureName: "",
+        signatureImage: "",
+        invoiceId: null,
+        createdBy: user.staffId || user.id,
+        createdAt: new Date().toISOString(),
+      };
+      setState(placeChangeOrder(order));
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(user.companyId)) return order;
+      const { data, error } = await supabase
+        .from("change_orders")
+        .insert({
+          id: order.id,
+          company_id: user.companyId,
+          job_id: order.jobId,
+          estimate_id: order.estimateId,
+          opportunity_id: looksLikeUuid(order.opportunityId) ? order.opportunityId : null,
+          client_id: looksLikeUuid(order.clientId) ? order.clientId : null,
+          number: order.number,
+          reason: order.reason,
+          notes: order.notes,
+          status: order.status,
+          tax_rate: order.taxRate,
+          base_total: order.baseTotal,
+          share_token: order.shareToken,
+          created_by: order.createdBy,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (error && isMissingChangeOrders(error)) {
+          toast.message(missingChangeOrdersMessage());
+          return order;
+        }
+        setState((current) => ({
+          ...current,
+          changeOrders: (current.changeOrders ?? []).filter((item) => item.id !== order.id),
+        }));
+        toast.error(error?.message ?? "Could not save the change order.");
+        throw error ?? new Error("Could not save the change order.");
+      }
+      const mapped = mapChangeOrder(data);
+      setState(placeChangeOrder(mapped));
+      void recordCompanyAudit({
+        entityType: "job",
+        entityId: jobId,
+        action: "created",
+        after: mapped,
+        label: mapped.number,
+        detail: `Started change order ${mapped.number} on ${estimate.number}`,
+        relatedJobId: jobId,
+        relatedOpportunityId: job.opportunityId,
+      });
+      return mapped;
+    },
+    [
+      placeChangeOrder,
+      recordCompanyAudit,
+      state.changeOrders,
+      state.estimateLines,
+      state.estimates,
+      state.jobs,
+      state.opportunities,
+      user.companyId,
+      user.id,
+      user.staffId,
+    ],
+  );
+
+  const updateChangeOrder = useCallback(
+    async (id: string, patch: Partial<ChangeOrder>) => {
+      const current = (state.changeOrders ?? []).find((item) => item.id === id);
+      if (!current || current.status === "accepted" || current.status === "void") return;
+      const next = { ...current, ...patch, id: current.id, jobId: current.jobId, estimateId: current.estimateId };
+      setState(placeChangeOrder(next));
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(id)) return;
+      const { error } = await supabase.from("change_orders").update(changeOrderPatch(patch)).eq("id", id);
+      if (error && isMissingChangeOrders(error)) {
+        toast.message(missingChangeOrdersMessage());
+        return;
+      }
+      if (error) {
+        setState(placeChangeOrder(current));
+        toast.error(error.message);
+      }
+    },
+    [placeChangeOrder, state.changeOrders],
+  );
+
+  const addChangeOrderLine = useCallback(
+    async (
+      changeOrderId: string,
+      input?: Partial<Pick<ChangeOrderLine, "title" | "description" | "quantity" | "unit" | "unitCost" | "taxable" | "catalogItemId">>,
+    ) => {
+      const order = (state.changeOrders ?? []).find((item) => item.id === changeOrderId);
+      if (!order || order.status !== "draft") {
+        toast.error("This change order is locked.");
+        return null;
+      }
+      const existing = linesForChangeOrder(state.changeOrderLines ?? [], changeOrderId);
+      const line: ChangeOrderLine = {
+        id: crypto.randomUUID(),
+        changeOrderId,
+        catalogItemId: input?.catalogItemId ?? null,
+        title: input?.title?.trim() || "Change",
+        description: input?.description ?? "",
+        quantity: Number.isFinite(input?.quantity) ? Number(input?.quantity) : 1,
+        unit: input?.unit?.trim() || "EA",
+        unitCost: Number.isFinite(input?.unitCost) ? Number(input?.unitCost) : 0,
+        taxable: input?.taxable !== false,
+        sortOrder: existing.length,
+      };
+      setState((current) => ({
+        ...current,
+        changeOrderLines: [...(current.changeOrderLines ?? []), line],
+      }));
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(user.companyId) || !looksLikeUuid(changeOrderId)) return line;
+      const { data, error } = await supabase
+        .from("change_order_lines")
+        .insert({
+          id: line.id,
+          company_id: user.companyId,
+          change_order_id: changeOrderId,
+          catalog_item_id: looksLikeUuid(line.catalogItemId) ? line.catalogItemId : null,
+          title: line.title,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          taxable: line.taxable,
+          sort_order: line.sortOrder,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (error && isMissingChangeOrders(error)) {
+          toast.message(missingChangeOrdersMessage());
+          return line;
+        }
+        setState((current) => ({
+          ...current,
+          changeOrderLines: (current.changeOrderLines ?? []).filter((item) => item.id !== line.id),
+        }));
+        toast.error(error?.message ?? "Could not add the line.");
+        return null;
+      }
+      const mapped = mapChangeOrderLine(data);
+      setState((current) => ({
+        ...current,
+        changeOrderLines: (current.changeOrderLines ?? []).map((item) => (item.id === line.id ? mapped : item)),
+      }));
+      return mapped;
+    },
+    [state.changeOrderLines, state.changeOrders, user.companyId],
+  );
+
+  const addChangeOrderLineFromCatalog = useCallback(
+    async (changeOrderId: string, catalogItemId: string) => {
+      const item = state.catalog.find((entry) => entry.id === catalogItemId);
+      if (!item) return null;
+      return addChangeOrderLine(changeOrderId, {
+        catalogItemId: item.id,
+        title: item.name,
+        description: item.description,
+        quantity: 1,
+        unit: item.unit,
+        unitCost: changeOrderSellPrice(item, companySettings),
+        taxable: true,
+      });
+    },
+    [addChangeOrderLine, companySettings, state.catalog],
+  );
+
+  const updateChangeOrderLine = useCallback(
+    async (id: string, patch: Partial<ChangeOrderLine>) => {
+      const current = (state.changeOrderLines ?? []).find((item) => item.id === id);
+      if (!current) return;
+      const order = (state.changeOrders ?? []).find((item) => item.id === current.changeOrderId);
+      if (!order || order.status !== "draft") return;
+      const next = { ...current, ...patch, id: current.id, changeOrderId: current.changeOrderId };
+      setState((prev) => ({
+        ...prev,
+        changeOrderLines: (prev.changeOrderLines ?? []).map((item) => (item.id === id ? next : item)),
+      }));
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(id)) return;
+      const { error } = await supabase.from("change_order_lines").update(changeOrderLinePatch(patch)).eq("id", id);
+      if (error && isMissingChangeOrders(error)) {
+        toast.message(missingChangeOrdersMessage());
+        return;
+      }
+      if (error) {
+        setState((prev) => ({
+          ...prev,
+          changeOrderLines: (prev.changeOrderLines ?? []).map((item) => (item.id === id ? current : item)),
+        }));
+        toast.error(error.message);
+      }
+    },
+    [state.changeOrderLines, state.changeOrders],
+  );
+
+  const removeChangeOrderLine = useCallback(
+    async (id: string) => {
+      const current = (state.changeOrderLines ?? []).find((item) => item.id === id);
+      if (!current) return;
+      const order = (state.changeOrders ?? []).find((item) => item.id === current.changeOrderId);
+      if (!order || order.status !== "draft") return;
+      setState((prev) => ({
+        ...prev,
+        changeOrderLines: (prev.changeOrderLines ?? []).filter((item) => item.id !== id),
+      }));
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(id)) return;
+      const { error } = await supabase.from("change_order_lines").delete().eq("id", id);
+      if (error && isMissingChangeOrders(error)) return;
+      if (error) {
+        setState((prev) => ({
+          ...prev,
+          changeOrderLines: [...(prev.changeOrderLines ?? []), current],
+        }));
+        toast.error(error.message);
+      }
+    },
+    [state.changeOrderLines, state.changeOrders],
+  );
+
+  const sendChangeOrder = useCallback(
+    async (id: string) => {
+      const current = (state.changeOrders ?? []).find((item) => item.id === id);
+      if (!current) return null;
+      const lines = linesForChangeOrder(state.changeOrderLines ?? [], id);
+      if (lines.length === 0) {
+        toast.error("Add a line before sending.");
+        return null;
+      }
+      if (current.status === "accepted" || current.status === "void" || current.status === "declined") {
+        toast.error("This change order can’t be sent.");
+        return null;
+      }
+      const shareToken = current.shareToken || newShareToken();
+      const sending = current.status === "draft";
+      const next: ChangeOrder = sending
+        ? { ...current, status: "sent", sentAt: new Date().toISOString(), shareToken }
+        : { ...current, shareToken };
+      setState(placeChangeOrder(next));
+      const supabase = maybeClient();
+      if (supabase && looksLikeUuid(id)) {
+        const { error } = await supabase
+          .from("change_orders")
+          .update(changeOrderPatch({ status: next.status, sentAt: next.sentAt, shareToken }))
+          .eq("id", id);
+        if (error && isMissingChangeOrders(error)) toast.message(missingChangeOrdersMessage());
+        else if (error) {
+          setState(placeChangeOrder(current));
+          toast.error(error.message);
+          return null;
+        }
+      }
+      if (sending) {
+        await addActivity({
+          entityType: "job",
+          entityId: current.jobId,
+          type: "note",
+          body: `Sent change order ${current.number} for signature.`,
+        });
+      }
+      return shareUrl("c", shareToken);
+    },
+    [addActivity, placeChangeOrder, state.changeOrderLines, state.changeOrders],
+  );
+
+  const acceptChangeOrder = useCallback(
+    async (id: string, signature: { name: string; image: string }) => {
+      const current = (state.changeOrders ?? []).find((item) => item.id === id);
+      if (!current) return false;
+      const name = signature.name.trim();
+      if (
+        name.length < 2 ||
+        !signature.image.startsWith("data:image/png;base64,") ||
+        signature.image.length < 100 ||
+        signature.image.length > 200000
+      ) {
+        toast.error("A name and a drawn signature are required.");
+        return false;
+      }
+      if (current.status === "void" || current.status === "declined") return false;
+      const next: ChangeOrder = {
+        ...current,
+        status: "accepted",
+        acceptedAt: current.acceptedAt ?? new Date().toISOString(),
+        signatureName: name,
+        signatureImage: signature.image,
+      };
+      const orders = [next, ...(state.changeOrders ?? []).filter((item) => item.id !== id)];
+      const total = revisedContractTotal(current.jobId, orders, state.changeOrderLines ?? []);
+      setState((prev) => {
+        const placed = placeChangeOrder(next)(prev);
+        return {
+          ...placed,
+          jobs: placed.jobs.map((item) =>
+            item.id === current.jobId ? { ...item, contractValue: total } : item,
+          ),
+          opportunities: placed.opportunities.map((item) =>
+            current.opportunityId && item.id === current.opportunityId ? { ...item, value: total } : item,
+          ),
+        };
+      });
+      const supabase = maybeClient();
+      if (supabase && looksLikeUuid(id)) {
+        const { error } = await supabase
+          .from("change_orders")
+          .update(
+            changeOrderPatch({
+              status: "accepted",
+              acceptedAt: next.acceptedAt,
+              signatureName: name,
+              signatureImage: signature.image,
+            }),
+          )
+          .eq("id", id);
+        if (error && isMissingChangeOrders(error)) toast.message(missingChangeOrdersMessage());
+        else if (error) {
+          setState(placeChangeOrder(current));
+          toast.error(error.message);
+          return false;
+        }
+      }
+      await writeJobContract(current.jobId, total);
+      const delta = changeOrderTotals(next, linesForChangeOrder(state.changeOrderLines ?? [], id)).total;
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "note",
+        body: `${name} signed change order ${current.number}. Contract is now ${total.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
+      });
+      void recordCompanyAudit({
+        entityType: "job",
+        entityId: current.jobId,
+        action: "status_changed",
+        before: current,
+        after: next,
+        label: current.number,
+        detail: `Signed change order ${current.number} (${delta.toLocaleString("en-US", { style: "currency", currency: "USD" })}).`,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
+      return true;
+    },
+    [
+      addActivity,
+      placeChangeOrder,
+      recordCompanyAudit,
+      state.changeOrderLines,
+      state.changeOrders,
+      writeJobContract,
+    ],
+  );
+
+  const declineChangeOrder = useCallback(
+    async (id: string) => {
+      const current = (state.changeOrders ?? []).find((item) => item.id === id);
+      if (!current || current.status === "accepted" || current.status === "void") return;
+      await updateChangeOrder(id, { status: "declined" });
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "note",
+        body: `Change order ${current.number} was declined.`,
+      });
+    },
+    [addActivity, state.changeOrders, updateChangeOrder],
+  );
+
+  const voidChangeOrder = useCallback(
+    async (id: string) => {
+      const current = (state.changeOrders ?? []).find((item) => item.id === id);
+      if (!current || current.status === "void") return;
+      const wasAccepted = current.status === "accepted";
+      const next: ChangeOrder = { ...current, status: "void" };
+      const orders = [next, ...(state.changeOrders ?? []).filter((item) => item.id !== id)];
+      setState(placeChangeOrder(next));
+      const supabase = maybeClient();
+      if (supabase && looksLikeUuid(id)) {
+        const { error } = await supabase.from("change_orders").update({ status: "void", updated_at: new Date().toISOString() }).eq("id", id);
+        if (error && isMissingChangeOrders(error)) toast.message(missingChangeOrdersMessage());
+        else if (error) {
+          setState(placeChangeOrder(current));
+          toast.error(error.message);
+          return;
+        }
+      }
+      if (wasAccepted) {
+        const total = revisedContractTotal(current.jobId, orders, state.changeOrderLines ?? []);
+        await writeJobContract(current.jobId, total);
+      }
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "note",
+        body: `Voided change order ${current.number}.`,
+      });
+    },
+    [addActivity, placeChangeOrder, state.changeOrderLines, state.changeOrders, writeJobContract],
+  );
+
+  const reopenChangeOrder = useCallback(
+    async (id: string) => {
+      const current = (state.changeOrders ?? []).find((item) => item.id === id);
+      if (!current || current.status === "accepted" || current.status === "void" || current.status === "draft") return;
+      await updateChangeOrder(id, { status: "draft", sentAt: null, viewedAt: null });
+    },
+    [state.changeOrders, updateChangeOrder],
+  );
+
+  const convertChangeOrderToInvoice = useCallback(
+    async (id: string) => {
+      const order = (state.changeOrders ?? []).find((item) => item.id === id);
+      if (!order) return null;
+      if (order.status !== "accepted") {
+        toast.error("Sign the change order before billing it.");
+        return null;
+      }
+      if (order.invoiceId) {
+        const existing = state.invoices.find((item) => item.id === order.invoiceId);
+        if (existing) return existing;
+      }
+      const billed = invoiceLinesFromChangeOrder(order, state.changeOrderLines ?? []);
+      if (billed.length === 0) {
+        toast.error("Add at least one line before billing.");
+        return null;
+      }
+      const job = state.jobs.find((item) => item.id === order.jobId);
+      const clientId = order.clientId || job?.clientId || null;
+      if (!clientId) {
+        toast.error("This job needs a customer before it can be billed.");
+        return null;
+      }
+      const number = nextNumber("INV", state.invoices.map((invoice) => invoice.number));
+      const issuedAt = new Date().toISOString().slice(0, 10);
+      const due = new Date();
+      due.setDate(due.getDate() + 30);
+      const dueAt = due.toISOString().slice(0, 10);
+      const name = `${order.number} · ${job?.name || "Change order"}`;
+      const notes = order.reason.trim();
+      const supabase = maybeClient();
+      if (!supabase) {
+        const invoice = {
+          id: crypto.randomUUID(),
+          number,
+          name,
+          clientId,
+          jobId: order.jobId,
+          estimateId: null,
+          status: "draft" as const,
+          issuedAt,
+          dueAt,
+          notes,
+          terms: "",
+          shareToken: newShareToken(),
+          qbStatus: "not_in_qb" as const,
+        };
+        const mappedLines = billed.map((line) => ({
+          id: crypto.randomUUID(),
+          invoiceId: invoice.id,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unitCost: line.unitCost,
+          sortOrder: line.sortOrder,
+        }));
+        setState((prev) => ({
+          ...placeChangeOrder({ ...order, invoiceId: invoice.id })(prev),
+          invoices: [invoice, ...prev.invoices],
+          invoiceLines: [...prev.invoiceLines, ...mappedLines],
+        }));
+        return invoice;
+      }
+      const { data, error } = await insertInvoiceRow(supabase, {
+        company_id: user.companyId,
+        number,
+        name,
+        client_id: clientId,
+        job_id: order.jobId,
+        estimate_id: null,
+        status: "draft",
+        issued_at: issuedAt,
+        due_at: dueAt,
+        notes,
+        terms: "",
+        share_token: newShareToken(),
+        qb_status: "not_in_qb",
+      });
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not bill the change order.");
+        return null;
+      }
+      const { error: lineError } = await supabase.from("invoice_lines").insert(
+        billed.map((line) => ({
+          company_id: user.companyId,
+          invoice_id: data.id,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          sort_order: line.sortOrder,
+        })),
+      );
+      if (lineError) {
+        toast.error(lineError.message);
+        return null;
+      }
+      const invoice = mapInvoice(data);
+      setState((prev) => ({
+        ...placeChangeOrder({ ...order, invoiceId: invoice.id })(prev),
+        invoices: [invoice, ...prev.invoices],
+        invoiceLines: [
+          ...prev.invoiceLines,
+          ...billed.map((line) => ({
+            id: crypto.randomUUID(),
+            invoiceId: invoice.id,
+            description: line.description,
+            quantity: line.quantity,
+            unit: line.unit,
+            unitCost: line.unitCost,
+            sortOrder: line.sortOrder,
+          })),
+        ],
+      }));
+      if (looksLikeUuid(order.id)) {
+        await supabase.from("change_orders").update({ invoice_id: invoice.id }).eq("id", order.id);
+      }
+      await addActivity({
+        entityType: "job",
+        entityId: order.jobId,
+        type: "note",
+        body: `Billed change order ${order.number} on ${invoice.number}.`,
+      });
+      return invoice;
+    },
+    [
+      addActivity,
+      placeChangeOrder,
+      state.changeOrderLines,
+      state.changeOrders,
+      state.invoices,
+      state.jobs,
+      user.companyId,
+    ],
+  );
+
   const addMaterialOrder = useCallback(
     async (input: {
       jobId: string;
@@ -16727,6 +17391,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimate,
       getEstimateTemplate,
       getInvoice,
+      getChangeOrder,
       getMaterialOrder,
       getMaterialOrderTemplate,
       jobForOpportunity,
@@ -16819,6 +17484,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeTemplateLine,
       reorderTemplateLine,
       convertEstimateToInvoice,
+      addChangeOrder,
+      updateChangeOrder,
+      addChangeOrderLine,
+      addChangeOrderLineFromCatalog,
+      updateChangeOrderLine,
+      removeChangeOrderLine,
+      sendChangeOrder,
+      acceptChangeOrder,
+      declineChangeOrder,
+      voidChangeOrder,
+      reopenChangeOrder,
+      convertChangeOrderToInvoice,
       addInvoice,
       updateInvoice,
       sendInvoice,
@@ -16952,6 +17629,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimate,
       getEstimateTemplate,
       getInvoice,
+      getChangeOrder,
       getMaterialOrder,
       getMaterialOrderTemplate,
       jobForOpportunity,
@@ -17044,6 +17722,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeTemplateLine,
       reorderTemplateLine,
       convertEstimateToInvoice,
+      addChangeOrder,
+      updateChangeOrder,
+      addChangeOrderLine,
+      addChangeOrderLineFromCatalog,
+      updateChangeOrderLine,
+      removeChangeOrderLine,
+      sendChangeOrder,
+      acceptChangeOrder,
+      declineChangeOrder,
+      voidChangeOrder,
+      reopenChangeOrder,
+      convertChangeOrderToInvoice,
       addInvoice,
       updateInvoice,
       sendInvoice,

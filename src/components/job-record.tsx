@@ -108,7 +108,13 @@ import { livePhotos, primaryJobPhoto } from "@/lib/photo-trash";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
-import { amountForEstimate, featuredEstimateForJob, jobSoldAmount } from "@/lib/estimate-totals";
+import { amountForEstimate, featuredEstimateForJob } from "@/lib/estimate-totals";
+import {
+  CHANGE_ORDER_STATUS_LABELS,
+  changeOrderTotals,
+  linesForChangeOrder,
+  soldWithChangeOrders,
+} from "@/lib/change-orders";
 import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { workMarket } from "@/lib/market";
@@ -428,6 +434,7 @@ export function JobRecord({
   const startEstimateFlow = useStartEstimate();
   const { prompt: startEstimate, pending: estimatePending } = startEstimateFlow;
   const { start: startMaterialOrder, pending: materialPending } = useStartMaterialOrder();
+  const [changePending, setChangePending] = useState(false);
   const seatRole = crm.effectiveStaff?.role;
   const showFinancials = canViewProjectFinancials(seatRole);
   const showPaper = canViewJobPaper(seatRole);
@@ -500,6 +507,19 @@ export function JobRecord({
       contactId: job.primaryContactId,
       clientId: job.clientId,
     });
+  }
+
+  async function startChangeOrder() {
+    if (deleted || changePending) return;
+    setChangePending(true);
+    try {
+      const created = await crm.addChangeOrder(job.id);
+      router.push(`/change-orders/${created.id}`);
+    } catch {
+      // The store already explains a missing signed estimate.
+    } finally {
+      setChangePending(false);
+    }
   }
 
   function openNew(kind: "estimate" | "invoice" | "interaction" | "expense" | "materials" | "pay-at-close") {
@@ -633,7 +653,14 @@ export function JobRecord({
         basis: "accrual",
       })
     : null;
-  const soldFor = jobSoldAmount(job, crm.estimates, crm.estimateLines);
+  const soldFor = soldWithChangeOrders(
+    job,
+    crm.estimates,
+    crm.estimateLines,
+    crm.changeOrders ?? [],
+    crm.changeOrderLines ?? [],
+  );
+  const jobChangeOrders = (crm.changeOrders ?? []).filter((order) => order.jobId === job.id);
   const draftEstimateTotal = estimates
     .filter((estimate) => estimate.status === "draft")
     .reduce(
@@ -653,7 +680,8 @@ export function JobRecord({
       ? "No inspection date set"
       : "Due this week · no date set";
   const nextStepAction = nextTask ? "Open tasks" : pipelineColumn === "lead" ? "Set inspection" : "Set date";
-  const hasWork = estimates.length + invoices.length + tasks.length + materialOrders.length > 0;
+  const hasWork =
+    estimates.length + invoices.length + tasks.length + materialOrders.length + jobChangeOrders.length > 0;
   const dateRange = formatJobRange(job.startDate, job.substantialCompletion);
   const homeownerName = primary?.name || client?.name || crm.customerName(job) || "Add a homeowner";
   const partyLabel = client && primary ? "Contact" : client ? "Customer" : "Homeowner";
@@ -822,8 +850,10 @@ export function JobRecord({
 
   const newMenu = !deleted ? (
     <JobNewMenu
-      pending={estimatePending || materialPending}
+      pending={estimatePending || materialPending || changePending}
       showEstimate={allowEstimates}
+      showChangeOrder={allowEstimates}
+      onChangeOrder={() => void startChangeOrder()}
       showInvoice={showFinancials}
       showMaterialOrder={showPaper}
       showExpense={showFinancials}
@@ -1612,6 +1642,48 @@ export function JobRecord({
                   </ul>
                 )}
               </WorkRow>
+              <WorkRow
+                label={jobChangeOrders.length ? `Change orders ${jobChangeOrders.length}` : "Change orders"}
+                action={
+                  allowEstimates && !deleted ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="bg-card"
+                      disabled={changePending}
+                      onClick={() => void startChangeOrder()}
+                    >
+                      <Plus data-icon="inline-start" />
+                      New
+                    </Button>
+                  ) : null
+                }
+              >
+                {jobChangeOrders.length === 0 ? (
+                  <span className="text-muted-foreground">
+                    None yet. A change order amends the signed estimate.
+                  </span>
+                ) : (
+                  <ul className="space-y-2">
+                    {jobChangeOrders.map((order) => {
+                      const total = changeOrderTotals(order, linesForChangeOrder(crm.changeOrderLines ?? [], order.id)).total;
+                      return (
+                        <li key={order.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <Link href={`/change-orders/${order.id}`} className="font-medium hover:underline">
+                            {order.number}
+                          </Link>
+                          <span className="text-muted-foreground">{CHANGE_ORDER_STATUS_LABELS[order.status]}</span>
+                          <span className="ml-auto tabular-nums">
+                            {total < 0 ? "−" : "+"}
+                            {formatCurrencyFull(Math.abs(total))}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </WorkRow>
               {showFinancials ? (
                 <WorkRow
                   label="Invoices"
@@ -2069,6 +2141,42 @@ export function JobRecord({
                     </p>
                   </li>
                 ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Change orders</p>
+              {allowEstimates && !deleted ? (
+                <Button size="sm" variant="ghost" disabled={changePending} onClick={() => void startChangeOrder()}>
+                  New
+                </Button>
+              ) : null}
+            </div>
+            {jobChangeOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">None yet. Sign the estimate, then add a change.</p>
+            ) : (
+              <ul className="space-y-2">
+                {jobChangeOrders.map((order) => {
+                  const total = changeOrderTotals(order, linesForChangeOrder(crm.changeOrderLines ?? [], order.id)).total;
+                  return (
+                    <li key={order.id}>
+                      <div className="flex items-center justify-between gap-2">
+                        <Link href={`/change-orders/${order.id}`} className="text-sm font-medium hover:underline">
+                          {order.number}
+                        </Link>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {total < 0 ? "−" : "+"}
+                          {formatCurrencyFull(Math.abs(total))}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {CHANGE_ORDER_STATUS_LABELS[order.status]}
+                        {order.reason.trim() ? ` · ${order.reason.trim()}` : ""}
+                      </p>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

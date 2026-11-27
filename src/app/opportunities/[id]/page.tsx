@@ -20,7 +20,8 @@ import { EmptyState, LoadingScreen, RecordCode } from "@/components/page-chrome"
 import { EstimateStatusBadge, MarketBadge, StageBadge, TypeBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrencyFull, formatDate } from "@/lib/format";
-import { amountForEstimate, jobSoldAmount } from "@/lib/estimate-totals";
+import { amountForEstimate } from "@/lib/estimate-totals";
+import { soldWithChangeOrders } from "@/lib/change-orders";
 import { StartEstimateButton } from "@/components/start-estimate-button";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { parseMarket } from "@/lib/market";
@@ -79,7 +80,9 @@ export default function OpportunityDetailPage() {
   const assignees = companyLeadAssignees(crm.viewer, crm.book.staff, opportunity.ownerStaffId);
   const canReassign =
     assignees.length > 1 || assignees.some((member) => member.id !== opportunity.ownerStaffId);
-  const soldFor = job ? jobSoldAmount(job, crm.estimates, crm.estimateLines) : 0;
+  const soldFor = job
+    ? soldWithChangeOrders(job, crm.estimates, crm.estimateLines, crm.changeOrders ?? [], crm.changeOrderLines ?? [])
+    : 0;
   const showFinancials = canViewProjectFinancials(crm.effectiveStaff?.role);
 
   function handleStage(stage: PipelineStage) {

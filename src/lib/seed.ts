@@ -82,6 +82,8 @@ export const seedState: CrmState = {
   jobPayAtClose: [],
   commissionCloseouts: [],
   refundRequests: [],
+  changeOrders: [],
+  changeOrderLines: [],
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],
