@@ -3,7 +3,7 @@
  * `share.ts` and `share-text.ts` re-export everything here.
  */
 
-export type ShareKind = "e" | "i" | "p" | "f" | "q";
+export type ShareKind = "e" | "i" | "p" | "f" | "q" | "c";
 
 /**
  * The homeowner application lives at the short root path (`/q/8Fk2Qx`) so the link fits in a

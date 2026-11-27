@@ -31,6 +31,8 @@ import {
   mapForecastedExpense,
   mapCommissionCloseout,
   mapRefundRequest,
+  mapChangeOrder,
+  mapChangeOrderLine,
   mapJobInsurance,
   mapJobPayAtClose,
   mapQbVendor,
@@ -221,6 +223,8 @@ const DEFERRED_ID_KEYS = [
   "commissionCloseouts",
   "refundRequests",
   "jobPayAtClose",
+  "changeOrders",
+  "changeOrderLines",
 ] as const satisfies readonly (keyof CrmState)[];
 
 /** Merge photos, mail, files, and the rest onto a book that already painted. */
@@ -494,6 +498,16 @@ function queryDeferred(
     selectAllRows(() =>
       supabase.from("qb_chart_accounts").select("*").eq("company_id", companyId).order("account_number"),
     ),
+    selectAllRows(() =>
+      supabase
+        .from("change_orders")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+    ),
+    selectAllRows(() =>
+      supabase.from("change_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    ),
   ]);
 }
 
@@ -503,7 +517,7 @@ type DeferredRows = Awaited<ReturnType<typeof queryDeferred>>;
 // Typed against the Promise.all tuple: adding a deferred query without bumping
 // this fails to compile, instead of leaving the tail of assembleBook's
 // destructure undefined on the first paint.
-const DEFERRED_QUERY_COUNT: DeferredRows["length"] = 42;
+const DEFERRED_QUERY_COUNT: DeferredRows["length"] = 44;
 
 function emptyDeferred(): DeferredRows {
   const blank = { data: [] as never[], error: null };
@@ -575,6 +589,8 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     jobPayAtCloseRes,
     expenseCategoriesRes,
     chartAccountsRes,
+    changeOrdersRes,
+    changeOrderLinesRes,
   ] = deferred;
   const missingTeams = Boolean(teamsRes.error);
   requireTable("clients", clientsRes);
@@ -655,6 +671,10 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
       ? []
       : (commissionCloseoutsRes.data ?? []).map(mapCommissionCloseout),
     refundRequests: refundRequestsRes.error ? [] : (refundRequestsRes.data ?? []).map(mapRefundRequest),
+    changeOrders: changeOrdersRes.error ? [] : (changeOrdersRes.data ?? []).map(mapChangeOrder),
+    changeOrderLines: changeOrderLinesRes.error
+      ? []
+      : (changeOrderLinesRes.data ?? []).map(mapChangeOrderLine),
     jobPayAtClose: jobPayAtCloseRes.error
       ? []
       : (jobPayAtCloseRes.data ?? []).map((row) => mapJobPayAtClose(row, jobStateById.get(row.job_id) ?? "")),

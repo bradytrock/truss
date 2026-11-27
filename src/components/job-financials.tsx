@@ -87,6 +87,8 @@ export function JobFinancials({ job }: { job: Job }) {
           estimateLines: crm.estimateLines,
           catalog: crm.catalog,
           opportunities: crm.opportunities,
+          changeOrders: crm.changeOrders ?? [],
+          changeOrderLines: crm.changeOrderLines ?? [],
         }),
         {
           forecasts,
@@ -94,7 +96,7 @@ export function JobFinancials({ job }: { job: Job }) {
           categories: expenseCategoriesOrDefaults(crm.expenseCategories),
         },
       ),
-    [crm.catalog, crm.estimateLines, crm.estimates, crm.expenseCategories, crm.opportunities, forecasts, job, statement],
+    [crm.catalog, crm.changeOrderLines, crm.changeOrders, crm.estimateLines, crm.estimates, crm.expenseCategories, crm.opportunities, forecasts, job, statement],
   );
   const companyAverage = useMemo(
     () =>

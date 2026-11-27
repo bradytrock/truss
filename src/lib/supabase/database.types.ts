@@ -1509,6 +1509,88 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["refund_requests"]["Insert"]>;
         Relationships: [];
       };
+      change_orders: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          estimate_id: string;
+          opportunity_id: string | null;
+          client_id: string | null;
+          number: string;
+          reason: string;
+          notes: string;
+          status: string;
+          tax_rate: number;
+          base_total: number;
+          share_token: string;
+          sent_at: string | null;
+          viewed_at: string | null;
+          accepted_at: string | null;
+          signature_name: string;
+          signature_image: string;
+          invoice_id: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          estimate_id: string;
+          opportunity_id?: string | null;
+          client_id?: string | null;
+          number: string;
+          reason?: string;
+          notes?: string;
+          status?: string;
+          tax_rate?: number;
+          base_total?: number;
+          share_token?: string;
+          sent_at?: string | null;
+          viewed_at?: string | null;
+          accepted_at?: string | null;
+          signature_name?: string;
+          signature_image?: string;
+          invoice_id?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["change_orders"]["Insert"]>;
+        Relationships: [];
+      };
+      change_order_lines: {
+        Row: {
+          id: string;
+          company_id: string;
+          change_order_id: string;
+          catalog_item_id: string | null;
+          title: string;
+          description: string;
+          quantity: number;
+          unit: string;
+          unit_cost: number;
+          taxable: boolean;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          change_order_id: string;
+          catalog_item_id?: string | null;
+          title?: string;
+          description?: string;
+          quantity?: number;
+          unit?: string;
+          unit_cost?: number;
+          taxable?: boolean;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["change_order_lines"]["Insert"]>;
+        Relationships: [];
+      };
       job_insurance: {
         Row: {
           id: string;
@@ -4131,6 +4213,18 @@ export type Database = {
         Returns: Json;
       };
       shared_invoice: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      shared_change_order: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      sign_shared_change_order: {
+        Args: { p_token: string; p_signer_name: string; p_signature: string };
+        Returns: Json;
+      };
+      decline_shared_change_order: {
         Args: { p_token: string };
         Returns: Json;
       };

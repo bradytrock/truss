@@ -348,6 +348,25 @@ export function missingRefundRequestsMessage() {
   return `Saved in this browser. Run ${REFUND_REQUESTS_SQL} in the SQL editor so refund requests stay on the job.`;
 }
 
+export const CHANGE_ORDERS_SQL = "supabase/migrations/20261126120000_change_orders.sql";
+
+export function isMissingChangeOrders(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("change_orders") ||
+    message.includes("change_order_lines")
+  );
+}
+
+export function missingChangeOrdersMessage() {
+  return `Saved in this browser. Run ${CHANGE_ORDERS_SQL} in the SQL editor so change orders stay on the job and the homeowner can sign them.`;
+}
+
 export function isMissingOriginator(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = error.message ?? "";

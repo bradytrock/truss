@@ -24,6 +24,12 @@ import {
 } from "@/lib/estimate-totals";
 import { scopedEstimateLines } from "@/lib/estimate-packages";
 import { marketForEstimate } from "@/lib/market";
+import {
+  acceptedChangeOrderCost,
+  acceptedChangeOrderDelta,
+  type ChangeOrder,
+  type ChangeOrderLine,
+} from "@/lib/change-orders";
 import type { JobBooksBasis } from "@/lib/job-financials";
 import { expensesForJob, jobProfitAndLoss, paymentsForJob } from "@/lib/job-financials";
 import { jobRecordHref } from "@/lib/job-record";
@@ -506,21 +512,39 @@ export function compareJobProfitAndLoss(input: {
   estimateLines: EstimateLine[];
   catalog?: CatalogItem[];
   opportunities?: Opportunity[];
+  changeOrders?: ChangeOrder[];
+  changeOrderLines?: ChangeOrderLine[];
 }): JobPnlComparison | null {
   const estimate = preferredEstimateForJob(input.job, input.estimates);
   const market = estimate
     ? marketForEstimate(estimate, [input.job], input.opportunities ?? [])
     : undefined;
-  const projectedIncome = estimate
-    ? amountForEstimate(estimate, input.estimateLines, market)
-    : Math.max(0, Number(input.job.contractValue) || 0);
+  const signedIncome = estimate ? amountForEstimate(estimate, input.estimateLines, market) : 0;
+  const delta = acceptedChangeOrderDelta(
+    input.job.id,
+    input.changeOrders ?? [],
+    input.changeOrderLines ?? [],
+  );
+  const projectedIncome =
+    signedIncome > 0
+      ? roundMoney(signedIncome + delta)
+      : Math.max(0, Number(input.job.contractValue) || 0);
   if (projectedIncome <= 0 && !estimate) return null;
 
   const lines = estimate
     ? includedLines(scopedEstimateLines(estimate, linesForEstimate(input.estimateLines, estimate.id)))
     : [];
   const lineCosts = lines.map((line) => projectedLineCost(line, input.catalog ?? []));
-  const projectedCostOfSales = lines.length > 0 ? roundMoney(lineCosts.reduce((sum, cost) => sum + cost, 0)) : null;
+  const changeCost = acceptedChangeOrderCost(
+    input.job.id,
+    input.changeOrders ?? [],
+    input.changeOrderLines ?? [],
+    input.catalog ?? [],
+  );
+  const projectedCostOfSales =
+    lines.length > 0 || changeCost !== 0
+      ? roundMoney(lineCosts.reduce((sum, cost) => sum + cost, 0) + changeCost)
+      : null;
   const linesUncosted = lines.length > 0 && lineCosts.every((cost) => cost === 0);
   const override = estimate?.subtotalOverride;
   const contractPrice = override != null && Number.isFinite(Number(override));

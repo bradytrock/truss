@@ -33,6 +33,7 @@ import { parseMarket } from "@/lib/market";
 import { storedPhone } from "@/lib/phone";
 import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
+import { parseChangeOrderStatus, type ChangeOrder, type ChangeOrderLine } from "@/lib/change-orders";
 import { taskAssignees } from "@/lib/task-desk";
 import { encodeStoredTrades, otherTradeNameFrom, parseQbStatus, parseTrades } from "@/lib/types";
 import { storedExpenseAccount } from "@/lib/expense-categories";
@@ -2220,5 +2221,81 @@ export function automationRunInsertPayload(run: AutomationRun) {
     decided_at: run.decidedAt,
     dry_run: run.dryRun,
   };
+}
+
+export function mapChangeOrder(row: Database["public"]["Tables"]["change_orders"]["Row"]): ChangeOrder {
+  return {
+    id: row.id,
+    number: row.number,
+    jobId: row.job_id,
+    estimateId: row.estimate_id,
+    opportunityId: row.opportunity_id,
+    clientId: row.client_id,
+    reason: row.reason ?? "",
+    notes: row.notes ?? "",
+    status: parseChangeOrderStatus(row.status),
+    taxRate: Number(row.tax_rate) || 0,
+    baseTotal: Number(row.base_total) || 0,
+    shareToken: row.share_token ?? "",
+    sentAt: row.sent_at,
+    viewedAt: row.viewed_at,
+    acceptedAt: row.accepted_at,
+    signatureName: row.signature_name ?? "",
+    signatureImage: row.signature_image ?? "",
+    invoiceId: row.invoice_id,
+    createdBy: row.created_by ?? "",
+    createdAt: row.created_at,
+  };
+}
+
+export function changeOrderPatch(patch: Partial<ChangeOrder>) {
+  const row: Database["public"]["Tables"]["change_orders"]["Update"] = {};
+  if (patch.number !== undefined) row.number = patch.number;
+  if (patch.reason !== undefined) row.reason = patch.reason;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
+  if (patch.baseTotal !== undefined) row.base_total = patch.baseTotal;
+  if (patch.shareToken !== undefined) row.share_token = patch.shareToken;
+  if (patch.sentAt !== undefined) row.sent_at = patch.sentAt;
+  if (patch.viewedAt !== undefined) row.viewed_at = patch.viewedAt;
+  if (patch.acceptedAt !== undefined) row.accepted_at = patch.acceptedAt;
+  if (patch.signatureName !== undefined) row.signature_name = patch.signatureName;
+  if (patch.signatureImage !== undefined) row.signature_image = patch.signatureImage;
+  if (patch.invoiceId !== undefined) row.invoice_id = patch.invoiceId;
+  if (patch.opportunityId !== undefined) row.opportunity_id = patch.opportunityId;
+  if (patch.clientId !== undefined) row.client_id = patch.clientId;
+  row.updated_at = new Date().toISOString();
+  return row;
+}
+
+export function mapChangeOrderLine(
+  row: Database["public"]["Tables"]["change_order_lines"]["Row"],
+): ChangeOrderLine {
+  return {
+    id: row.id,
+    changeOrderId: row.change_order_id,
+    catalogItemId: row.catalog_item_id,
+    title: row.title ?? "",
+    description: row.description ?? "",
+    quantity: Number(row.quantity),
+    unit: row.unit || "EA",
+    unitCost: Number(row.unit_cost) || 0,
+    taxable: row.taxable !== false,
+    sortOrder: row.sort_order ?? 0,
+  };
+}
+
+export function changeOrderLinePatch(patch: Partial<ChangeOrderLine>) {
+  const row: Database["public"]["Tables"]["change_order_lines"]["Update"] = {};
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.quantity !== undefined) row.quantity = patch.quantity;
+  if (patch.unit !== undefined) row.unit = patch.unit;
+  if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.taxable !== undefined) row.taxable = patch.taxable;
+  if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+  if (patch.catalogItemId !== undefined) row.catalog_item_id = patch.catalogItemId;
+  return row;
 }
 
